@@ -31,11 +31,14 @@ with st.sidebar:
     complexity = st.selectbox(
         "Complexity",
         options=complexity_options,
-        index=complexity_options.index("light"),
-        help=(
-            "Centred on light cleanup. fine = a little less merge, "
-            "medium = a little more. raw = 16 colours only; simple = strongest merge."
-        ),
+        index=complexity_options.index("fine"),
+        help="fine is preferred after subject isolation.",
+    )
+    subject_mode = st.selectbox(
+        "Subject engine",
+        options=["isolate", "off"],
+        index=0,
+        help="isolate uses rembg/U²-Net to cut out the subject and crop it.",
     )
     max_size = st.slider(
         "Max image edge (px)", min_value=400, max_value=1400, value=900, step=50
@@ -89,6 +92,7 @@ if source_mode == "Web search":
                         n_colours=n_colours,
                         max_size=max_size,
                         complexity=complexity,
+                        subject_mode=subject_mode,
                         source_hit=hit,
                     )
                     st.session_state.result = result
@@ -111,6 +115,7 @@ else:
                     n_colours=n_colours,
                     max_size=max_size,
                     complexity=complexity,
+                    subject_mode=subject_mode,
                 )
                 st.session_state.result = result
 
@@ -122,7 +127,7 @@ if result is not None:
     if result.page.simplification is not None:
         stats = result.page.simplification
         st.caption(
-            f"Complexity “{result.complexity}”: "
+            f"Complexity “{result.complexity}” · subject “{result.subject_mode}”: "
             f"{stats.regions_before} regions → {stats.regions_after} "
             f"({result.quantized.n_colours} colours)"
         )
@@ -131,11 +136,19 @@ if result is not None:
         st.caption("Source")
         st.image(result.source, use_container_width=True)
     with c2:
-        st.caption(f"Simplified palette ({result.quantized.n_colours} colours)")
-        st.image(result.quantized.preview, use_container_width=True)
+        label = "Subject plate" if result.prepared is not None else "Simplified palette"
+        st.caption(f"{label} ({result.quantized.n_colours} colours)")
+        st.image(
+            result.prepared if result.prepared is not None else result.quantized.preview,
+            use_container_width=True,
+        )
     with c3:
         st.caption("Numbered outline")
         st.image(result.page.outline, use_container_width=True)
+
+    if result.prepared is not None:
+        st.caption(f"16-colour preview ({result.quantized.n_colours} colours)")
+        st.image(result.quantized.preview, use_container_width=True)
 
     st.caption("Printable page (outline + colour key)")
     st.image(result.printable, use_container_width=True)

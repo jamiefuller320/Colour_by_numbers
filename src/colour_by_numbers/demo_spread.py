@@ -1,4 +1,4 @@
-"""Build labeled comparison spreads: original + 16-colour simplification settings."""
+"""Build labeled comparison spreads for colour-by-numbers demos."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from .pipeline import DEMO_SPREAD_SETTINGS, create_colour_by_numbers
+from .pipeline import DEMO_SUBJECT_COMPARE, create_colour_by_numbers
 from .quantize import resize_for_processing
 from .simplify import count_regions
 
@@ -43,16 +43,29 @@ def _captioned_tile(
     title: str,
     subtitle: str,
     tile_size: tuple[int, int],
-    caption_height: int = 52,
+    caption_height: int = 56,
 ) -> Image.Image:
     width, height = tile_size
     tile = Image.new("RGB", (width, height + caption_height), "white")
     tile.paste(_fit(image, tile_size), (0, caption_height))
     draw = ImageDraw.Draw(tile)
     draw.rectangle([0, 0, width, caption_height], fill=(245, 245, 245))
-    draw.text((10, 8), title, fill="black", font=_font(18))
-    draw.text((10, 30), subtitle, fill=(60, 60, 60), font=_font(13))
+    draw.text((10, 8), title, fill="black", font=_font(17))
+    draw.text((10, 32), subtitle, fill=(60, 60, 60), font=_font(12))
     return tile
+
+
+def _row(tiles: list[Image.Image]) -> Image.Image:
+    gap = 12
+    pad = 16
+    width = pad * 2 + sum(t.width for t in tiles) + gap * (len(tiles) - 1)
+    height = pad * 2 + max(t.height for t in tiles)
+    sheet = Image.new("RGB", (width, height), (255, 255, 255))
+    x = pad
+    for tile in tiles:
+        sheet.paste(tile, (x, pad))
+        x += tile.width + gap
+    return sheet
 
 
 def build_demo_spread(
@@ -60,13 +73,14 @@ def build_demo_spread(
     *,
     n_colours: int = 16,
     max_size: int = 700,
-    settings: tuple[str, ...] = DEMO_SPREAD_SETTINGS,
+    complexity: str = "fine",
+    subject_modes: tuple[str, ...] = DEMO_SUBJECT_COMPARE,
     tile_width: int = 320,
-) -> tuple[Image.Image, Image.Image, dict[str, dict[str, int]]]:
-    """Return (colour_spread, outline_spread, stats) for one source image.
+) -> tuple[Image.Image, Image.Image, dict[str, dict[str, object]]]:
+    """Return (colour_spread, outline_spread, stats).
 
-    The colour spread shows the original plus the 16-colour preview at each
-    simplification setting. The outline spread shows the matching numbered pages.
+    Panels: original, then ``complexity`` at each subject mode (typically
+    off vs isolate).
     """
     source_fit = resize_for_processing(source.convert("RGB"), max_size=max_size)
     aspect = source_fit.height / max(source_fit.width, 1)
@@ -89,14 +103,20 @@ def build_demo_spread(
             tile_size=tile_size,
         )
     ]
-    stats: dict[str, dict[str, int]] = {}
+    stats: dict[str, dict[str, object]] = {}
 
-    for setting in settings:
+    labels = {
+        "off": f"{complexity} (no subject AI)",
+        "isolate": f"{complexity} + subject isolate",
+    }
+
+    for mode in subject_modes:
         result = create_colour_by_numbers(
             source_fit,
             n_colours=n_colours,
             max_size=max_size,
-            complexity=setting,
+            complexity=complexity,
+            subject_mode=mode,
         )
         regions = (
             result.page.simplification.regions_after
@@ -104,23 +124,35 @@ def build_demo_spread(
             else count_regions(result.page.labels)
         )
         colours = result.quantized.n_colours
-        stats[setting] = {
+        fg = (
+            round(100 * result.subject_mask.foreground_fraction, 1)
+            if result.subject_mask is not None
+            else None
+        )
+        stats[mode] = {
             "regions": int(regions),
             "colours": int(colours),
-            "regions_before": int(
-                result.page.simplification.regions_before
-                if result.page.simplification is not None
-                else regions
-            ),
+            "foreground_pct": fg,
+            "complexity": complexity,
         }
-        markers = {"fine": "− vs light", "light": "preferred", "medium": "+ vs light"}
-        marker = markers.get(setting, "")
-        title = f"{setting}" + (f"  ({marker})" if marker else "")
-        subtitle = f"{n_colours}-colour · {regions} regions · {colours} used"
+        subtitle = f"{n_colours}-colour · {regions} regions"
+        if fg is not None:
+            subtitle += f" · fg {fg}%"
+        preview = result.prepared if result.prepared is not None else result.quantized.preview
+        # Show prepared subject plate beside quantized result for isolate mode.
+        if mode == "isolate" and result.prepared is not None:
+            colour_tiles.append(
+                _captioned_tile(
+                    result.prepared,
+                    title="Subject plate",
+                    subtitle="U²-Net isolate + crop",
+                    tile_size=tile_size,
+                )
+            )
         colour_tiles.append(
             _captioned_tile(
                 result.quantized.preview,
-                title=title,
+                title=labels.get(mode, mode),
                 subtitle=subtitle,
                 tile_size=tile_size,
             )
@@ -128,23 +160,11 @@ def build_demo_spread(
         outline_tiles.append(
             _captioned_tile(
                 result.page.outline,
-                title=title,
+                title=labels.get(mode, mode),
                 subtitle=subtitle,
                 tile_size=tile_size,
             )
         )
-
-    def _row(tiles: list[Image.Image]) -> Image.Image:
-        gap = 12
-        pad = 16
-        width = pad * 2 + sum(t.width for t in tiles) + gap * (len(tiles) - 1)
-        height = pad * 2 + max(t.height for t in tiles)
-        sheet = Image.new("RGB", (width, height), (255, 255, 255))
-        x = pad
-        for tile in tiles:
-            sheet.paste(tile, (x, pad))
-            x += tile.width + gap
-        return sheet
 
     return _row(colour_tiles), _row(outline_tiles), stats
 
@@ -155,6 +175,7 @@ def write_demo_spreads(
     *,
     n_colours: int = 16,
     max_size: int = 700,
+    complexity: str = "fine",
 ) -> dict[str, Path]:
     """Generate colour + outline spreads for each named source image."""
     out = Path(output_dir)
@@ -164,7 +185,10 @@ def write_demo_spreads(
     for name, path in sources.items():
         image = Image.open(path).convert("RGB")
         colours, outlines, stats = build_demo_spread(
-            image, n_colours=n_colours, max_size=max_size
+            image,
+            n_colours=n_colours,
+            max_size=max_size,
+            complexity=complexity,
         )
         colour_path = out / f"{name}_spread_colours.png"
         outline_path = out / f"{name}_spread_outlines.png"
@@ -172,7 +196,6 @@ def write_demo_spreads(
         outlines.save(outline_path)
         written[f"{name}_colours"] = colour_path
         written[f"{name}_outlines"] = outline_path
-        # Also keep the original copy next to the spreads.
         source_path = out / f"{name}_original.png"
         resize_for_processing(image, max_size=max_size).save(source_path)
         written[f"{name}_original"] = source_path
