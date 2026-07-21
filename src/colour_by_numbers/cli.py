@@ -45,12 +45,31 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--complexity",
         choices=["raw", "fine", "light", "medium", "simple", "detailed", "balanced"],
-        default="light",
+        default="fine",
         help=(
-            "Region complexity centred on light (default). "
-            "fine / medium are − / + vs light; raw = 16-colour only; "
+            "Region complexity (default: fine). "
+            "fine / light / medium increase merging; raw = 16-colour only; "
             "simple = strongest merge. detailed→light, balanced→medium."
         ),
+    )
+    parser.add_argument(
+        "--subject",
+        choices=["isolate", "off"],
+        default="isolate",
+        help=(
+            "Subject engine (default: isolate). Uses rembg/U²-Net to cut out "
+            "the foreground, place it on a flat background, and crop tightly."
+        ),
+    )
+    parser.add_argument(
+        "--subject-model",
+        default="u2net",
+        help="rembg model name (default: u2net)",
+    )
+    parser.add_argument(
+        "--no-subject-crop",
+        action="store_true",
+        help="Keep full frame after subject isolation (no autocrop)",
     )
     parser.add_argument(
         "--max-size",
@@ -92,6 +111,9 @@ def main(argv: list[str] | None = None) -> int:
         n_colours=args.colours,
         max_size=args.max_size,
         complexity=args.complexity,
+        subject_mode=args.subject,
+        subject_model=args.subject_model,
+        subject_autocrop=not args.no_subject_crop,
         line_width=args.line_width,
         max_regions=args.max_regions,
     )
@@ -111,6 +133,12 @@ def main(argv: list[str] | None = None) -> int:
 
     paths = result.save(output_dir, stem=stem)
     print(f"Complexity: {result.complexity}")
+    print(f"Subject mode: {result.subject_mode}")
+    if result.subject_mask is not None:
+        print(
+            f"Subject mask: {result.subject_mask.model} "
+            f"({100 * result.subject_mask.foreground_fraction:.1f}% foreground)"
+        )
     print(f"Palette colours: {result.quantized.n_colours}")
     print(f"Numbered regions: {len(result.page.regions)}")
     if result.page.simplification is not None:

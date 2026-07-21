@@ -4,4 +4,6 @@ scipy>=1.11
 ddgs>=9.0
 requests>=2.31
 streamlit>=1.32
+rembg[cpu]>=2.0.50
+onnxruntime>=1.16
 pytest>=8.0

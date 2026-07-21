@@ -15,10 +15,13 @@ dependencies = [
   "ddgs>=9.0",
   "requests>=2.31",
   "streamlit>=1.32",
+  "rembg[cpu]>=2.0.50",
+  "onnxruntime>=1.16",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+subject = ["rembg[cpu]>=2.0.50", "onnxruntime>=1.16"]
 
 [project.scripts]
 colour-by-numbers = "colour_by_numbers.cli:main"

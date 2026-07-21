@@ -95,7 +95,8 @@ def test_simplification_cuts_noisy_photo_regions(noisy_image: Path) -> None:
         image,
         n_colours=16,
         max_size=280,
-        complexity="light",
+        complexity="fine",
+        subject_mode="off",
     )
     simplified_count = len(result.page.regions)
     assert raw_count > 40
@@ -107,7 +108,11 @@ def test_simplification_cuts_noisy_photo_regions(noisy_image: Path) -> None:
 
 def test_create_from_path_writes_outputs(sample_image: Path, tmp_path: Path) -> None:
     result = create_from_path(
-        sample_image, n_colours=8, max_size=240, complexity="simple"
+        sample_image,
+        n_colours=8,
+        max_size=240,
+        complexity="simple",
+        subject_mode="off",
     )
     paths = result.save(tmp_path / "out", stem="demo")
     for key in ("source", "quantized", "outline", "legend", "page"):
@@ -120,6 +125,8 @@ def test_create_from_path_writes_outputs(sample_image: Path, tmp_path: Path) -> 
 def test_create_colour_by_numbers_defaults() -> None:
     image = Image.new("RGB", (80, 80), (255, 200, 50))
     ImageDraw.Draw(image).rectangle((10, 10, 50, 50), fill=(20, 20, 180))
-    result = create_colour_by_numbers(image, n_colours=4, max_size=80)
+    result = create_colour_by_numbers(
+        image, n_colours=4, max_size=80, subject_mode="off"
+    )
     assert result.quantized.n_colours <= 4
     assert result.printable.size[0] >= result.page.outline.size[0]

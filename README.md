@@ -9,6 +9,7 @@ For each source image the tool writes:
 | File | Purpose |
 |------|---------|
 | `*_source.png` | Original (or downloaded) image |
+| `*_prepared.png` | Subject plate after isolation + crop (when enabled) |
 | `*_quantized.png` | Image reduced to the chosen palette |
 | `*_outline.png` | White page with black region outlines and numbers |
 | `*_legend.png` | Colour key mapping each number to its RGB swatch |
@@ -17,34 +18,38 @@ For each source image the tool writes:
 ## How it works
 
 1. **Search** — Finds candidate photos from a text query using Openverse (open licences) first, then Wikimedia Commons, then DuckDuckGo as a fallback. No API keys are required. You can also supply a local file.
-2. **Cartoon prefilter + quantize** — The image is downscaled to a small “structure” canvas, soft-blurred to kill photo grain, then median-cut reduced to N colours (default 16).
-3. **Simplify regions** — On that structure canvas the pipeline:
-   - majority-filters labels
-   - morphologically opens/closes each colour (removes slivers, fills pinholes)
-   - absorbs regions below a minimum area into the neighbour with the longest shared border
-   - absorbs regions that are too thin to colour (inscribed diameter test)
-   - enforces a hard maximum region count
-   - Gaussian-smooths boundaries, then re-absorbs anything that fractured
-4. **Upsample + outline** — Simplified labels are nearest-neighbour scaled to print size, lightly re-smoothed, and stroked as black outlines on white. Every surviving region gets its colour number at an interior point.
-5. **Legend** — A colour key lists each number with a swatch and hex value.
+2. **Subject isolation (default)** — A neural subject engine (**rembg** / U²-Net) estimates the foreground, places it on a flat background, and crops tightly around it. This keeps small subjects (a distant plane) and busy scenes (a dog in a cluttered room) from being lost in the background.
+3. **Cartoon prefilter + quantize** — The prepared image is soft-blurred and median-cut reduced to N colours (default 16).
+4. **Simplify regions** — Majority filtering, morphological clean-up, small/thin region absorption, and a region cap produce crayon-sized shapes.
+5. **Upsample + outline** — Boundaries become black lines on white with numbered regions and a colour key.
+
+### Subject engine
+
+| Mode | Behaviour |
+|------|-----------|
+| `isolate` (default) | rembg cut-out + flat background + autocrop |
+| `off` | Use the full photograph (previous behaviour) |
+
+```bash
+colour-by-numbers --input plane.jpg --subject isolate --complexity fine
+colour-by-numbers --input plane.jpg --subject off --complexity fine
+```
 
 ### Complexity presets
 
-Centred on **`light`** (preferred for photos):
+Default is **`fine`** (best results so far once the subject is isolated):
 
 | Preset | Intent |
 |--------|--------|
-| `raw` | 16-colour quantize only (no region merging) |
-| `fine` | Slightly less cleanup than light (−) |
-| `light` | Default — gentle cleanup |
-| `medium` | Slightly more cleanup than light (+) |
-| `simple` | Stronger merge — fewer, larger regions |
-
-Aliases: `detailed` → `light`, `balanced` → `medium`.
+| `raw` | 16-colour quantize only |
+| `fine` | Default — light cleanup |
+| `light` | A little more merging |
+| `medium` | More merging |
+| `simple` | Strongest merge |
 
 ### Demo spreads
 
-Compare the original with 16-colour samples just below / at / above light:
+Compare original vs fine cleanup with/without subject isolation:
 
 ```bash
 python scripts/make_demo_spread.py \
@@ -52,9 +57,6 @@ python scripts/make_demo_spread.py \
   --dogs output/dogs_source.png \
   --output output/demo
 ```
-
-This writes `*_original.png`, `*_spread_colours.png`, and `*_spread_outlines.png`
-(panels: original · fine · light · medium).
 
 ## Install
 
@@ -87,7 +89,8 @@ colour-by-numbers --input photo.jpg --output output --colours 12
 
 Useful options:
 
-- `--complexity fine|light|medium` — region simplification (default: light)
+- `--subject isolate|off` — neural subject cut-out (default: isolate)
+- `--complexity fine|light|medium` — region simplification (default: fine)
 - `--max-regions 36` — hard cap on connected regions
 - `--pick N` — choose the Nth search result (0-based)
 - `--max-size 900` — longest edge before processing
@@ -108,19 +111,19 @@ Search or upload an image, adjust the palette size, then download the outline, l
 from colour_by_numbers import create_colour_by_numbers
 from colour_by_numbers.pipeline import create_from_query
 
-result = create_from_query("dogs", n_colours=16)
+result = create_from_query("dogs", n_colours=16, complexity="fine", subject_mode="isolate")
 result.save("output", stem="dogs")
 
 # Or from an existing Pillow image
 from PIL import Image
 image = Image.open("photo.jpg")
-result = create_colour_by_numbers(image, n_colours=16)
+result = create_colour_by_numbers(image, n_colours=16, subject_mode="isolate")
 ```
 
 ## Tips for colouring-book pages
 
-- Simple subjects with clear shapes (animals, vehicles, landmarks) work best.
-- Default `--complexity light` suits most photos; try `fine` / `medium` for small adjustments; use `raw` to inspect unmerged 16-colour output.
+- Clear single subjects work best; the subject engine helps when the background is sky or clutter.
+- Default is subject isolation + `--complexity fine`. Use `--subject off` to process the full frame; try `light` / `medium` if you want fewer regions.
 - Fewer colours (8–12) are easier for younger colourists; 16 suits more detail.
 - Always respect copyright and licensing of source photos before publishing a book.
 - Prefer images you own, public-domain sources, or material with a clear commercial licence.
@@ -131,4 +134,4 @@ result = create_colour_by_numbers(image, n_colours=16)
 pytest
 ```
 
-Tests cover quantization, outlining, and file export offline (no network).
+Offline tests cover quantization, outlining, and export. Subject isolation demos need `rembg` (downloaded on first use).

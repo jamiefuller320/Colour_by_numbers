@@ -15,12 +15,12 @@ from .quantize import (
     resize_for_processing,
 )
 from .search import ImageHit, load_local_image, search_and_download
+from .subject import SubjectMask, prepare_subject_image
 
 
 # Named complexity presets control cartoon prefilter + region absorption.
-# Primary ladder is centred on ``light`` (the preferred photographic default).
+# Primary ladder is centred on ``fine`` after subject isolation.
 COMPLEXITY_PRESETS: dict[str, dict[str, float | int]] = {
-    # 16-colour quantize only — no region absorption (inspection / reference).
     "raw": {
         "blur_radius": 0.0,
         "structure_size": 900,
@@ -32,7 +32,6 @@ COMPLEXITY_PRESETS: dict[str, dict[str, float | int]] = {
         "line_width": 1,
         "simplify": 0,
     },
-    # Slightly less cleanup than light — more regions retained.
     "fine": {
         "blur_radius": 0.6,
         "structure_size": 580,
@@ -44,7 +43,6 @@ COMPLEXITY_PRESETS: dict[str, dict[str, float | int]] = {
         "line_width": 1,
         "simplify": 1,
     },
-    # Preferred photographic default — gentle cleanup.
     "light": {
         "blur_radius": 1.0,
         "structure_size": 520,
@@ -56,7 +54,6 @@ COMPLEXITY_PRESETS: dict[str, dict[str, float | int]] = {
         "line_width": 1,
         "simplify": 1,
     },
-    # Slightly more cleanup than light — fewer, larger regions.
     "medium": {
         "blur_radius": 1.4,
         "structure_size": 460,
@@ -68,7 +65,6 @@ COMPLEXITY_PRESETS: dict[str, dict[str, float | int]] = {
         "line_width": 1,
         "simplify": 1,
     },
-    # Stronger merge — fewer, larger colouring regions.
     "simple": {
         "blur_radius": 2.4,
         "structure_size": 340,
@@ -82,12 +78,12 @@ COMPLEXITY_PRESETS: dict[str, dict[str, float | int]] = {
     },
 }
 
-# Back-compat aliases from earlier docs/UI.
 COMPLEXITY_PRESETS["detailed"] = dict(COMPLEXITY_PRESETS["light"])
 COMPLEXITY_PRESETS["balanced"] = dict(COMPLEXITY_PRESETS["medium"])
 
-# Demo compares original with samples just below / at / just above light.
-DEMO_SPREAD_SETTINGS: tuple[str, ...] = ("fine", "light", "medium")
+# Demo: original vs fine without/with subject isolation.
+DEMO_SPREAD_SETTINGS: tuple[str, ...] = ("fine",)
+DEMO_SUBJECT_COMPARE: tuple[str, ...] = ("off", "isolate")
 
 
 @dataclass(frozen=True)
@@ -99,7 +95,10 @@ class ColourByNumbersResult:
     page: OutlinePage
     printable: Image.Image
     source_hit: ImageHit | None = None
-    complexity: str = "light"
+    complexity: str = "fine"
+    prepared: Image.Image | None = None
+    subject_mask: SubjectMask | None = None
+    subject_mode: str = "isolate"
 
     def save(self, output_dir: str | Path, *, stem: str = "colour_by_numbers") -> dict[str, Path]:
         """Write outline, legend, preview, and composite page to disk."""
@@ -117,6 +116,10 @@ class ColourByNumbersResult:
         self.page.outline.save(paths["outline"])
         self.page.legend.save(paths["legend"])
         self.printable.save(paths["page"])
+        if self.prepared is not None and self.subject_mode not in {"off", "none"}:
+            prepared_path = out / f"{stem}_prepared.png"
+            self.prepared.save(prepared_path)
+            paths["prepared"] = prepared_path
         return paths
 
 
@@ -125,7 +128,10 @@ def create_colour_by_numbers(
     *,
     n_colours: int = 16,
     max_size: int = 900,
-    complexity: str = "light",
+    complexity: str = "fine",
+    subject_mode: str = "isolate",
+    subject_model: str = "u2net",
+    subject_autocrop: bool = True,
     min_region_area: int | None = None,
     max_regions: int | None = None,
     blur_radius: float | None = None,
@@ -136,7 +142,11 @@ def create_colour_by_numbers(
     seed: int = 42,
     source_hit: ImageHit | None = None,
 ) -> ColourByNumbersResult:
-    """Quantize an image, simplify regions, and produce a numbered outline page."""
+    """Quantize an image, simplify regions, and produce a numbered outline page.
+
+    By default, a neural subject mask (rembg / U²-Net) isolates the foreground
+    onto a flat background and crops tightly around it before colour reduction.
+    """
     if complexity not in COMPLEXITY_PRESETS:
         raise ValueError(
             f"Unknown complexity {complexity!r}; "
@@ -154,11 +164,17 @@ def create_colour_by_numbers(
     region_cap = int(preset["max_regions"] if max_regions is None else max_regions)
     do_simplify = bool(int(preset.get("simplify", 1)))
 
-    # Keep a high-res canvas for the final page, but quantize/simplify on a
-    # smaller structure canvas so only large shapes survive.
-    output_image = resize_for_processing(image.convert("RGB"), max_size=max_size)
+    source_rgb = image.convert("RGB")
+    working = resize_for_processing(source_rgb, max_size=max_size)
+    prepared, subject_mask = prepare_subject_image(
+        working,
+        mode=subject_mode,
+        model_name=subject_model,
+        autocrop=subject_autocrop,
+    )
+
     quantized = quantize_colours(
-        output_image,
+        prepared,
         n_colours=n_colours,
         max_size=struct,
         structure_size=struct,
@@ -182,11 +198,10 @@ def create_colour_by_numbers(
         smooth_radius=smooth,
         morph_radius=morph,
         boundary_sigma=boundary,
-        output_size=output_image.size,
+        output_size=prepared.size,
         simplify=do_simplify,
     )
 
-    # Preview should match the simplified (upsampled) regions used for the outline.
     simplified_preview = preview_from_labels(page.labels, page.palette)
     quantized = QuantizedImage(
         labels=page.labels,
@@ -196,12 +211,15 @@ def create_colour_by_numbers(
 
     printable = composite_page(page.outline, page.legend)
     return ColourByNumbersResult(
-        source=image.convert("RGB"),
+        source=source_rgb,
         quantized=quantized,
         page=page,
         printable=printable,
         source_hit=source_hit,
         complexity=complexity,
+        prepared=prepared if subject_mode not in {"off", "none"} else None,
+        subject_mask=subject_mask,
+        subject_mode=subject_mode,
     )
 
 

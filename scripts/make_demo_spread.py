@@ -28,6 +28,7 @@ def main() -> int:
     )
     parser.add_argument("--colours", type=int, default=16)
     parser.add_argument("--max-size", type=int, default=700)
+    parser.add_argument("--complexity", default="fine")
     args = parser.parse_args()
 
     sources = {
@@ -43,6 +44,7 @@ def main() -> int:
         args.output,
         n_colours=args.colours,
         max_size=args.max_size,
+        complexity=args.complexity,
     )
     print("Wrote:")
     for label, path in written.items():

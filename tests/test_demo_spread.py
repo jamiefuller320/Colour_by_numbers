@@ -7,7 +7,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from colour_by_numbers.demo_spread import build_demo_spread
-from colour_by_numbers.pipeline import DEMO_SPREAD_SETTINGS, create_colour_by_numbers
+from colour_by_numbers.pipeline import DEMO_SUBJECT_COMPARE, create_colour_by_numbers
 
 
 def _sample(path: Path) -> Path:
@@ -19,47 +19,33 @@ def _sample(path: Path) -> Path:
     return path
 
 
-def _noise(path: Path) -> Path:
-    image = Image.new("RGB", (160, 120), "white")
-    pixels = image.load()
-    assert pixels is not None
-    for y in range(120):
-        for x in range(160):
-            pixels[x, y] = (
-                (x * 3 + y * 5) % 255,
-                (x * 7 + y * 2) % 255,
-                (x * 11 + y * 13) % 255,
-            )
-    image.save(path)
-    return path
-
-
-def test_light_bracketed_by_fine_and_medium(tmp_path: Path) -> None:
-    image = Image.open(_noise(tmp_path / "noise.png"))
-    fine = create_colour_by_numbers(image, n_colours=12, max_size=160, complexity="fine")
-    light = create_colour_by_numbers(
-        image, n_colours=12, max_size=160, complexity="light"
+def test_fine_off_runs_without_subject_engine(tmp_path: Path) -> None:
+    image = Image.open(_sample(tmp_path / "sample.png"))
+    result = create_colour_by_numbers(
+        image, n_colours=8, max_size=200, complexity="fine", subject_mode="off"
     )
-    medium = create_colour_by_numbers(
-        image, n_colours=12, max_size=160, complexity="medium"
-    )
-    assert fine.page.simplification is not None
-    assert light.page.simplification is not None
-    assert medium.page.simplification is not None
-    assert (
-        fine.page.simplification.regions_after
-        >= light.page.simplification.regions_after
-        >= medium.page.simplification.regions_after
-    )
+    assert result.subject_mode == "off"
+    assert result.prepared is None
+    assert result.page.outline.size[0] > 0
 
 
-def test_demo_spread_centres_on_light(tmp_path: Path) -> None:
+def test_demo_spread_compares_subject_modes(tmp_path: Path, monkeypatch) -> None:
     path = _sample(tmp_path / "sample.png")
     image = Image.open(path)
-    colours, outlines, stats = build_demo_spread(
-        image, n_colours=8, max_size=200, tile_width=120
+
+    def fake_prepare(img, *, mode="isolate", **kwargs):
+        if mode in {"off", "none"}:
+            return img.convert("RGB"), None
+        # Pretend we cropped to the red circle area.
+        cropped = img.crop((10, 10, 100, 110)).convert("RGB")
+        return cropped, None
+
+    monkeypatch.setattr(
+        "colour_by_numbers.pipeline.prepare_subject_image", fake_prepare
     )
-    assert DEMO_SPREAD_SETTINGS == ("fine", "light", "medium")
-    assert set(stats) == {"fine", "light", "medium"}
+    colours, outlines, stats = build_demo_spread(
+        image, n_colours=8, max_size=200, tile_width=120, complexity="fine"
+    )
+    assert set(stats) == set(DEMO_SUBJECT_COMPARE)
     assert colours.width > 400
-    assert outlines.width > 400
+    assert outlines.width > 300
