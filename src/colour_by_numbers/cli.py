@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .pipeline import COMPLEXITY_PRESETS, create_from_path, create_from_query
+from .pipeline import create_from_path, create_from_query
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -44,9 +44,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--complexity",
-        choices=sorted(COMPLEXITY_PRESETS),
+        choices=["raw", "light", "balanced", "simple", "detailed"],
         default="balanced",
-        help="Region complexity preset: simple, balanced, or detailed (default: balanced)",
+        help=(
+            "Region complexity: raw (16-colour only), light, balanced, or simple "
+            "(default: balanced). 'detailed' is an alias for light."
+        ),
     )
     parser.add_argument(
         "--max-size",

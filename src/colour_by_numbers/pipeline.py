@@ -18,41 +18,62 @@ from .search import ImageHit, load_local_image, search_and_download
 
 
 # Named complexity presets control cartoon prefilter + region absorption.
+# Ordered from least → most aggressive for demo spreads.
 COMPLEXITY_PRESETS: dict[str, dict[str, float | int]] = {
-    # Few large shapes — good for young colourists / busy photos.
-    "simple": {
-        "blur_radius": 4.0,
-        "structure_size": 240,
-        "min_area_fraction": 0.035,
-        "max_regions": 16,
-        "smooth_radius": 3,
-        "morph_radius": 2,
-        "boundary_sigma": 1.6,
-        "line_width": 2,
+    # 16-colour quantize only — no region absorption.
+    "raw": {
+        "blur_radius": 0.0,
+        "structure_size": 900,
+        "min_area_fraction": 0.0,
+        "max_regions": 10_000,
+        "smooth_radius": 0,
+        "morph_radius": 0,
+        "boundary_sigma": 0.0,
+        "line_width": 1,
+        "simplify": 0,
+    },
+    # Gentle cleanup — keeps most photographic structure.
+    "light": {
+        "blur_radius": 1.0,
+        "structure_size": 520,
+        "min_area_fraction": 0.003,
+        "max_regions": 80,
+        "smooth_radius": 1,
+        "morph_radius": 1,
+        "boundary_sigma": 0.6,
+        "line_width": 1,
+        "simplify": 1,
     },
     # Default balance of recognisable outline vs segment count.
     "balanced": {
-        "blur_radius": 3.0,
-        "structure_size": 300,
-        "min_area_fraction": 0.022,
-        "max_regions": 22,
-        "smooth_radius": 3,
-        "morph_radius": 2,
-        "boundary_sigma": 1.3,
-        "line_width": 2,
-    },
-    # More detail retained for simple subjects / adults.
-    "detailed": {
-        "blur_radius": 2.0,
-        "structure_size": 380,
-        "min_area_fraction": 0.012,
-        "max_regions": 32,
+        "blur_radius": 1.8,
+        "structure_size": 420,
+        "min_area_fraction": 0.008,
+        "max_regions": 48,
         "smooth_radius": 2,
         "morph_radius": 1,
-        "boundary_sigma": 1.0,
+        "boundary_sigma": 0.9,
         "line_width": 2,
+        "simplify": 1,
+    },
+    # Stronger merge — fewer, larger colouring regions.
+    "simple": {
+        "blur_radius": 2.8,
+        "structure_size": 320,
+        "min_area_fraction": 0.015,
+        "max_regions": 28,
+        "smooth_radius": 2,
+        "morph_radius": 2,
+        "boundary_sigma": 1.2,
+        "line_width": 2,
+        "simplify": 1,
     },
 }
+
+# Back-compat alias used in earlier docs/UI.
+COMPLEXITY_PRESETS["detailed"] = dict(COMPLEXITY_PRESETS["light"])
+
+DEMO_SPREAD_SETTINGS: tuple[str, ...] = ("raw", "light", "balanced", "simple")
 
 
 @dataclass(frozen=True)
@@ -111,11 +132,13 @@ def create_colour_by_numbers(
 
     blur = float(preset["blur_radius"] if blur_radius is None else blur_radius)
     struct = int(preset["structure_size"] if structure_size is None else structure_size)
+    struct = min(struct, max_size)
     smooth = int(preset["smooth_radius"] if smooth_radius is None else smooth_radius)
     morph = int(preset["morph_radius"] if morph_radius is None else morph_radius)
     boundary = float(preset["boundary_sigma"])
     stroke = int(preset["line_width"] if line_width is None else line_width)
     region_cap = int(preset["max_regions"] if max_regions is None else max_regions)
+    do_simplify = bool(int(preset.get("simplify", 1)))
 
     # Keep a high-res canvas for the final page, but quantize/simplify on a
     # smaller structure canvas so only large shapes survive.
@@ -131,8 +154,9 @@ def create_colour_by_numbers(
 
     height, width = quantized.labels.shape
     if min_region_area is None:
-        min_region_area = max(
-            40, int(width * height * float(preset["min_area_fraction"]))
+        fraction = float(preset["min_area_fraction"])
+        min_region_area = (
+            1 if fraction <= 0 else max(20, int(width * height * fraction))
         )
 
     page = build_outline_page(
@@ -145,6 +169,7 @@ def create_colour_by_numbers(
         morph_radius=morph,
         boundary_sigma=boundary,
         output_size=output_image.size,
+        simplify=do_simplify,
     )
 
     # Preview should match the simplified (upsampled) regions used for the outline.

@@ -141,14 +141,26 @@ def build_outline_page(
             morph_radius=morph_radius,
             boundary_sigma=boundary_sigma,
         )
+    else:
+        before = count_regions(labels)
+        stats = SimplificationStats(
+            regions_before=before,
+            regions_after=before,
+            min_region_area=min_region_area or 0,
+            smooth_radius=0,
+            passes=0,
+        )
 
     if output_size is not None:
         working_labels = upsample_labels(working_labels, output_size)
-        # Soften nearest-neighbour stair-steps introduced by upsampling, then
-        # mop up any speckles smaller than ~0.15% of the page.
-        working_labels = smooth_boundaries(working_labels, sigma=max(1.0, boundary_sigma))
-        up_min = max(30, int(working_labels.shape[0] * working_labels.shape[1] * 0.0015))
-        working_labels = absorb_small_regions(working_labels, min_area=up_min)
+        if simplify and boundary_sigma > 0:
+            working_labels = smooth_boundaries(
+                working_labels, sigma=max(0.8, boundary_sigma)
+            )
+            up_min = max(
+                30, int(working_labels.shape[0] * working_labels.shape[1] * 0.0015)
+            )
+            working_labels = absorb_small_regions(working_labels, min_area=up_min)
 
     height, width = working_labels.shape
     edges = _edges_from_labels(working_labels)
@@ -167,15 +179,28 @@ def build_outline_page(
     regions = _find_regions(working_labels)
     colour_numbers = list(range(1, len(working_palette) + 1))
 
-    # Draw numbers largest-first so small regions don't cover big labels.
-    for region in sorted(regions, key=lambda item: item.area, reverse=True):
+    # Avoid painting thousands of unreadable numbers on raw/busy pages.
+    numberable = regions
+    if len(regions) > 100:
+        numberable = sorted(regions, key=lambda item: item.area, reverse=True)[:80]
+
+    for region in sorted(numberable, key=lambda item: item.area, reverse=True):
         x, y = region.centroid
         text = str(region.number)
         bbox = draw.textbbox((0, 0), text, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         tx = int(np.clip(x - tw / 2, 1, width - tw - 1))
         ty = int(np.clip(y - th / 2, 1, height - th - 1))
-        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1), (-1, 1), (1, -1)):
+        for dx, dy in (
+            (-1, 0),
+            (1, 0),
+            (0, -1),
+            (0, 1),
+            (-1, -1),
+            (1, 1),
+            (-1, 1),
+            (1, -1),
+        ):
             draw.text((tx + dx, ty + dy), text, fill="white", font=font)
         draw.text((tx, ty), text, fill="black", font=font)
 

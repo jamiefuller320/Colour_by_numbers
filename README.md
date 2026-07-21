@@ -32,9 +32,25 @@ For each source image the tool writes:
 
 | Preset | Intent |
 |--------|--------|
-| `simple` | Few large shapes (busy photos, younger colourists) |
+| `raw` | 16-colour quantize only (no region merging) |
+| `light` | Gentle cleanup — keeps most photographic structure |
 | `balanced` | Default — recognisable outline with a modest region count |
-| `detailed` | More segments retained for simpler subjects |
+| `simple` | Stronger merge — fewer, larger colouring regions |
+
+`detailed` remains accepted as an alias for `light`.
+
+### Demo spreads
+
+Compare the original photo with 16-colour results at each setting:
+
+```bash
+python scripts/make_demo_spread.py \
+  --aircraft output/aircraft_source.png \
+  --dogs output/dogs_source.png \
+  --output output/demo
+```
+
+This writes `*_original.png`, `*_spread_colours.png`, and `*_spread_outlines.png`.
 
 ## Install
 
@@ -100,7 +116,7 @@ result = create_colour_by_numbers(image, n_colours=16)
 ## Tips for colouring-book pages
 
 - Simple subjects with clear shapes (animals, vehicles, landmarks) work best.
-- Start with `--complexity simple` for busy photos; use `detailed` only for already-simple subjects.
+- Start with `--complexity light` or `balanced` for photos; use `raw` to inspect the unmerged 16-colour image; use `simple` when you want fewer regions.
 - Fewer colours (8–12) are easier for younger colourists; 16 suits more detail.
 - Always respect copyright and licensing of source photos before publishing a book.
 - Prefer images you own, public-domain sources, or material with a clear commercial licence.
