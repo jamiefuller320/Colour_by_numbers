@@ -39,8 +39,37 @@ def build_parser() -> argparse.ArgumentParser:
         "-n",
         "--colours",
         type=int,
-        default=16,
-        help="Number of colours / palette size (default: 16, max useful 16)",
+        default=32,
+        help="Number of colours from the palette (default: 32)",
+    )
+    parser.add_argument(
+        "--palette-mode",
+        choices=["standard", "free"],
+        default="standard",
+        help="standard = fixed 32-colour set; free = adaptive median-cut",
+    )
+    parser.add_argument(
+        "--min-adjacent-delta-e",
+        type=float,
+        default=18.0,
+        help="Merge touching sections closer than this Lab ΔE (default: 18)",
+    )
+    parser.add_argument(
+        "--colour-refine",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Snap subject mask using colour contrast (default: on)",
+    )
+    parser.add_argument(
+        "--min-subject-bg-contrast",
+        type=float,
+        default=None,
+        help="Reject plates below this subject/background ΔE (optional)",
+    )
+    parser.add_argument(
+        "--no-contrast-bias",
+        action="store_true",
+        help="Do not bias web search toward high-contrast subject photos",
     )
     parser.add_argument(
         "--complexity",
@@ -188,6 +217,10 @@ def main(argv: list[str] | None = None) -> int:
 
     common = dict(
         n_colours=args.colours,
+        palette_mode=args.palette_mode,
+        min_adjacent_delta_e=args.min_adjacent_delta_e,
+        colour_refine=args.colour_refine,
+        min_subject_bg_contrast=args.min_subject_bg_contrast,
         max_size=args.max_size,
         complexity=args.complexity,
         subject_mode=args.subject,
@@ -214,6 +247,7 @@ def main(argv: list[str] | None = None) -> int:
         result = create_from_query(
             args.query,
             pick=args.pick,
+            contrast_bias=not args.no_contrast_bias,
             **common,
         )
         stem = args.stem if args.stem != "colour_by_numbers" else (
@@ -239,7 +273,10 @@ def main(argv: list[str] | None = None) -> int:
             f"Subject mask: {result.subject_mask.model} "
             f"({100 * result.subject_mask.foreground_fraction:.1f}% foreground)"
         )
+    print(f"Palette mode: {result.palette_mode}")
     print(f"Palette colours: {result.quantized.n_colours}")
+    if result.subject_bg_contrast is not None:
+        print(f"Subject/bg contrast ΔE: {result.subject_bg_contrast:.1f}")
     print(f"Numbered regions: {len(result.page.regions)}")
     if result.page.simplification is not None:
         stats = result.page.simplification

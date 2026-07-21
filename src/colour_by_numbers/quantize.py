@@ -7,6 +7,12 @@ from dataclasses import dataclass
 import numpy as np
 from PIL import Image, ImageFilter
 
+from .palette import (
+    STANDARD_PALETTE_32,
+    nearest_palette_indices,
+    select_active_palette,
+)
+
 
 @dataclass(frozen=True)
 class QuantizedImage:
@@ -44,7 +50,6 @@ def prefilter_for_regions(
     """Soft-blur before quantization so flat areas dominate over photo noise."""
     if blur_radius <= 0:
         return image
-    # Two passes: box-ish blur via Gaussian approximates a cartoon filter.
     softened = image.filter(ImageFilter.GaussianBlur(radius=blur_radius))
     return softened.filter(ImageFilter.SMOOTH_MORE)
 
@@ -54,27 +59,40 @@ def upsample_labels(labels: np.ndarray, size: tuple[int, int]) -> np.ndarray:
     width, height = size
     if labels.shape[0] == height and labels.shape[1] == width:
         return labels.astype(np.int32, copy=True)
-    label_img = Image.fromarray(labels.astype(np.uint8), mode="L")
+    # Labels may exceed 255 when using a 32-colour palette — use I mode.
+    label_img = Image.fromarray(labels.astype(np.int32), mode="I")
     label_img = label_img.resize((width, height), Image.Resampling.NEAREST)
     return np.asarray(label_img, dtype=np.int32)
+
+
+def _sort_palette_dark_to_light(
+    labels: np.ndarray, palette: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    order = np.argsort(palette.mean(axis=1))
+    remap = np.empty_like(order)
+    remap[order] = np.arange(len(order))
+    return remap[labels], palette[order]
 
 
 def quantize_colours(
     image: Image.Image,
     *,
-    n_colours: int = 16,
+    n_colours: int = 32,
     max_size: int = 900,
     structure_size: int | None = 420,
     blur_radius: float = 2.0,
     seed: int = 42,
+    palette_mode: str = "standard",
+    standard_palette: np.ndarray | None = None,
 ) -> QuantizedImage:
-    """Quantize an RGB image to ``n_colours`` using median-cut.
+    """Quantize an RGB image to a limited palette.
 
-    When ``structure_size`` is set, quantization stays on that smaller canvas
-    so later region simplification can run cheaply on large shapes. Upsample
-    with :func:`upsample_labels` after simplification.
+    ``palette_mode``:
+      - ``standard`` (default): map onto the fixed 32-colour colouring set
+        (or a subset of size ``n_colours``)
+      - ``free``: classic median-cut adaptive palette
     """
-    del seed  # median-cut is deterministic for a given image
+    del seed
     if n_colours < 2 or n_colours > 64:
         raise ValueError("n_colours must be between 2 and 64.")
 
@@ -82,12 +100,35 @@ def quantize_colours(
     struct_limit = structure_size if structure_size is not None else max_size
     working = resize_for_processing(output, max_size=struct_limit)
     working = prefilter_for_regions(working, blur_radius=blur_radius)
+    mode = palette_mode.lower().strip()
+
+    if mode in {"standard", "fixed", "book"}:
+        base = (
+            STANDARD_PALETTE_32
+            if standard_palette is None
+            else np.asarray(standard_palette, dtype=np.uint8)
+        )
+        pixels = np.asarray(working, dtype=np.uint8)
+        active = select_active_palette(base, n_colours=n_colours, image_rgb=pixels)
+        labels = nearest_palette_indices(pixels, active)
+        # Compact to colours actually used.
+        used = np.unique(labels)
+        compact = np.zeros_like(labels)
+        for new_idx, old_idx in enumerate(used):
+            compact[labels == old_idx] = new_idx
+        palette = active[used]
+        labels_sorted, palette = _sort_palette_dark_to_light(compact, palette)
+        preview = Image.fromarray(palette[labels_sorted], mode="RGB")
+        return QuantizedImage(labels=labels_sorted, palette=palette, preview=preview)
+
+    if mode not in {"free", "adaptive", "mediancut"}:
+        raise ValueError(f"Unknown palette_mode {palette_mode!r}")
+
     paletted = working.quantize(
         colors=n_colours,
         method=Image.Quantize.MEDIANCUT,
         dither=Image.Dither.NONE,
     )
-
     raw_palette = paletted.getpalette() or []
     labels = np.asarray(paletted, dtype=np.int32)
     used = np.unique(labels)
@@ -99,13 +140,7 @@ def quantize_colours(
     compact = np.zeros_like(labels)
     for new_idx, old_idx in enumerate(used):
         compact[labels == old_idx] = new_idx
-
-    order = np.argsort(palette_unsorted.mean(axis=1))
-    remap = np.empty_like(order)
-    remap[order] = np.arange(len(order))
-    labels_sorted = remap[compact]
-    palette = palette_unsorted[order]
-
+    labels_sorted, palette = _sort_palette_dark_to_light(compact, palette_unsorted)
     preview = Image.fromarray(palette[labels_sorted], mode="RGB")
     return QuantizedImage(labels=labels_sorted, palette=palette, preview=preview)
 

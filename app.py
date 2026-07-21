@@ -31,7 +31,45 @@ with st.sidebar:
     st.header("Settings")
 
     st.subheader("Palette & frame")
-    n_colours = st.slider("Number of colours", min_value=4, max_value=16, value=16)
+    palette_mode = st.selectbox(
+        "Palette",
+        options=["standard", "free"],
+        index=0,
+        help="standard = fixed 32-colour colouring set; free = adaptive median-cut.",
+    )
+    n_colours = st.slider(
+        "Colours used (from palette)",
+        min_value=8,
+        max_value=32,
+        value=32,
+        help="Standard mode draws from the fixed 32-colour set.",
+    )
+    min_adjacent_delta_e = st.slider(
+        "Min adjacent colour ΔE",
+        min_value=0.0,
+        max_value=40.0,
+        value=18.0,
+        step=1.0,
+        help="Merge touching sections whose paints are closer than this.",
+    )
+    colour_refine = st.checkbox(
+        "Colour-refine subject mask",
+        value=True,
+        help="Snap silhouette using subject vs background colour contrast.",
+    )
+    enforce_contrast = st.checkbox(
+        "Require subject/background colour contrast",
+        value=False,
+        help="Reject plates where subject and background colours are too similar.",
+    )
+    min_subject_bg_contrast = st.slider(
+        "Min subject/bg ΔE",
+        min_value=8.0,
+        max_value=50.0,
+        value=22.0,
+        step=1.0,
+        disabled=not enforce_contrast,
+    )
     max_size = st.slider(
         "Processing max edge (px)",
         min_value=400,
@@ -235,6 +273,10 @@ def _none_if(value, sentinel):
 def _pipeline_kwargs() -> dict:
     return dict(
         n_colours=n_colours,
+        palette_mode=palette_mode,
+        min_adjacent_delta_e=float(min_adjacent_delta_e),
+        colour_refine=colour_refine,
+        min_subject_bg_contrast=float(min_subject_bg_contrast) if enforce_contrast else None,
         max_size=max_size,
         complexity=complexity,
         subject_mode=subject_mode,
@@ -292,6 +334,7 @@ if source_mode == "Web search":
                     query.strip(),
                     max_results=8,
                     min_a4_dpi=float(min_a4_dpi) if enforce_a4 else None,
+                    contrast_bias=True,
                 )
                 st.session_state.query = query.strip()
             except Exception as exc:  # noqa: BLE001
@@ -375,7 +418,7 @@ if result is not None:
             st.caption("Source (no subject crop)")
             st.image(result.source, use_container_width=True)
     with c3:
-        st.caption(f"16-colour preview ({result.quantized.n_colours} colours)")
+        st.caption(f"Colour preview ({result.quantized.n_colours} colours, {result.palette_mode})")
         st.image(result.quantized.preview, use_container_width=True)
 
     with st.expander("Outline / printable page (preview only — demos paused)", expanded=False):

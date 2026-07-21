@@ -9,6 +9,12 @@ import numpy as np
 from PIL import Image
 
 from .outline import OutlinePage, build_outline_page, composite_page
+from .contrast import subject_background_contrast
+from .palette import (
+    DEFAULT_MIN_ADJACENT_DELTA_E,
+    DEFAULT_MIN_SUBJECT_BG_CONTRAST,
+    DEFAULT_N_COLOURS,
+)
 from .print_resolution import evaluate_print_resolution
 from .quantize import (
     QuantizedImage,
@@ -188,6 +194,9 @@ class ColourByNumbersResult:
     background_complexity: str | None = None
     print_dpi: float | None = None
     firm_border: bool = True
+    palette_mode: str = "standard"
+    subject_bg_contrast: float | None = None
+    min_adjacent_delta_e: float = DEFAULT_MIN_ADJACENT_DELTA_E
 
     def save(self, output_dir: str | Path, *, stem: str = "colour_by_numbers") -> dict[str, Path]:
         """Write outline, legend, preview, and composite page to disk."""
@@ -215,7 +224,7 @@ class ColourByNumbersResult:
 def create_colour_by_numbers(
     image: Image.Image,
     *,
-    n_colours: int = 16,
+    n_colours: int = DEFAULT_N_COLOURS,
     max_size: int = 900,
     complexity: str = "fine",
     subject_mode: str = "dual",
@@ -246,6 +255,10 @@ def create_colour_by_numbers(
     background_morph_radius: int | None = None,
     background_boundary_sigma: float | None = None,
     line_width: int | None = None,
+    palette_mode: str = "standard",
+    min_adjacent_delta_e: float = DEFAULT_MIN_ADJACENT_DELTA_E,
+    colour_refine: bool = True,
+    min_subject_bg_contrast: float | None = None,
     seed: int = 42,
     source_hit: ImageHit | None = None,
 ) -> ColourByNumbersResult:
@@ -255,7 +268,7 @@ def create_colour_by_numbers(
       1. rembg subject mask (firm binary by default)
       2. crop full-resolution source so the subject fills ``subject_fill``
       3. reject plates below ``min_a4_dpi`` when printed to A4
-      4. shared palette of at most ``n_colours`` (default 16)
+      4. shared standardised palette of at most ``n_colours`` (default 32)
       5. ``subject_complexity`` on the subject, ``background_complexity`` on bg
     """
     if complexity not in COMPLEXITY_PRESETS:
@@ -282,8 +295,23 @@ def create_colour_by_numbers(
         autocrop=subject_autocrop,
         subject_fill=subject_fill,
         firm_border=firm_border,
+        colour_refine=colour_refine,
     )
     firm_mask = harden_mask(subject_mask) if subject_mask is not None else None
+
+    subject_bg_contrast: float | None = None
+    if subject_mask is not None:
+        subject_bg_contrast = subject_background_contrast(prepared_native, subject_mask)
+        if (
+            min_subject_bg_contrast is not None
+            and min_subject_bg_contrast > 0
+            and subject_bg_contrast < min_subject_bg_contrast
+        ):
+            raise ValueError(
+                f"Subject/background colour contrast ΔE≈{subject_bg_contrast:.1f} "
+                f"is below the minimum {min_subject_bg_contrast:.1f}. "
+                "Choose a photo with a clearer colour difference between subject and background."
+            )
 
     print_dpi: float | None = None
     if min_a4_dpi is not None and min_a4_dpi > 0:
@@ -365,11 +393,12 @@ def create_colour_by_numbers(
 
     quantized = quantize_colours(
         quant_input,
-        n_colours=min(int(n_colours), 16),
+        n_colours=min(int(n_colours), 32),
         max_size=struct,
         structure_size=struct,
         blur_radius=blur,
         seed=seed,
+        palette_mode=palette_mode,
     )
 
     height, width = quantized.labels.shape
@@ -423,6 +452,7 @@ def create_colour_by_numbers(
             subject_params=subject_params,
             background_params=background_params,
             firm_border=firm_border,
+            min_adjacent_delta_e=min_adjacent_delta_e,
         )
         labels = upsample_labels(labels, prepared.size)
         page = build_outline_page(
@@ -475,6 +505,7 @@ def create_colour_by_numbers(
             boundary_sigma=boundary,
             output_size=prepared.size,
             simplify=do_simplify,
+            min_adjacent_delta_e=min_adjacent_delta_e,
         )
         complexity_label = complexity
 
@@ -501,17 +532,22 @@ def create_colour_by_numbers(
         background_complexity=used_background_complexity,
         print_dpi=print_dpi,
         firm_border=firm_border,
+        palette_mode=palette_mode,
+        subject_bg_contrast=subject_bg_contrast,
+        min_adjacent_delta_e=min_adjacent_delta_e,
     )
 
 
 def create_from_query(
     query: str,
     *,
-    n_colours: int = 16,
+    n_colours: int = DEFAULT_N_COLOURS,
     max_size: int = 900,
     pick: int = 0,
     max_results: int = 8,
     min_a4_dpi: float | None = 150.0,
+    min_subject_bg_contrast: float | None = DEFAULT_MIN_SUBJECT_BG_CONTRAST,
+    contrast_bias: bool = True,
     **kwargs,
 ) -> ColourByNumbersResult:
     """Search the web for ``query`` and convert a result to colour-by-numbers."""
@@ -520,6 +556,8 @@ def create_from_query(
         max_results=max_results,
         pick=pick,
         min_a4_dpi=min_a4_dpi,
+        min_subject_bg_contrast=min_subject_bg_contrast,
+        contrast_bias=contrast_bias,
     )
     return create_colour_by_numbers(
         image,
@@ -527,6 +565,7 @@ def create_from_query(
         max_size=max_size,
         source_hit=hit,
         min_a4_dpi=min_a4_dpi,
+        min_subject_bg_contrast=None,  # already filtered at download
         **kwargs,
     )
 
@@ -534,7 +573,7 @@ def create_from_query(
 def create_from_path(
     path: str | Path,
     *,
-    n_colours: int = 16,
+    n_colours: int = DEFAULT_N_COLOURS,
     max_size: int = 900,
     **kwargs,
 ) -> ColourByNumbersResult:

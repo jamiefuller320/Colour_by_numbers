@@ -306,6 +306,72 @@ def compact_palette(
     return new_labels.astype(np.int32), new_palette.astype(np.uint8)
 
 
+def merge_low_contrast_neighbours(
+    labels: np.ndarray,
+    palette: np.ndarray,
+    *,
+    min_delta_e: float = 18.0,
+    max_passes: int = 12,
+    max_merge_fraction: float = 0.06,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Merge touching near-duplicate paints when one side is a small region.
+
+    Large adjacent sections are left alone so major subject/background blocks
+    keep separate crayon colours; only muddy/small transitions collapse.
+    """
+    from .palette import colour_distance_matrix
+
+    if min_delta_e <= 0 or palette.shape[0] < 2:
+        return labels.astype(np.int32, copy=True), palette
+
+    work = labels.astype(np.int32, copy=True)
+    pal = palette.astype(np.uint8, copy=True)
+    area_cap = max(64, int(work.size * max_merge_fraction))
+
+    for _ in range(max_passes):
+        if pal.shape[0] < 2:
+            break
+        dist = colour_distance_matrix(pal)
+        pairs: list[tuple[int, int]] = []
+        for axis in (0, 1):
+            if axis == 0:
+                a, b = work[:, :-1], work[:, 1:]
+            else:
+                a, b = work[:-1, :], work[1:, :]
+            differ = a != b
+            if not differ.any():
+                continue
+            left = a[differ].ravel()
+            right = b[differ].ravel()
+            stacked = np.stack(
+                [np.minimum(left, right), np.maximum(left, right)], axis=1
+            )
+            for ca, cb in np.unique(stacked, axis=0):
+                pairs.append((int(ca), int(cb)))
+
+        unique_pairs = sorted(set(pairs), key=lambda p: dist[p[0], p[1]])
+        merge_pair = None
+        for ca, cb in unique_pairs:
+            if dist[ca, cb] >= min_delta_e:
+                continue
+            count_a = int((work == ca).sum())
+            count_b = int((work == cb).sum())
+            # Only collapse when the smaller paint is a minor muddy patch.
+            if min(count_a, count_b) > area_cap:
+                continue
+            merge_pair = (ca, cb, count_a, count_b)
+            break
+        if merge_pair is None:
+            break
+
+        ca, cb, count_a, count_b = merge_pair
+        keep, drop = (ca, cb) if count_a >= count_b else (cb, ca)
+        work[work == drop] = keep
+        work, pal = compact_palette(work, pal)
+
+    return work, pal
+
+
 def simplify_labels(
     labels: np.ndarray,
     palette: np.ndarray,
@@ -317,6 +383,7 @@ def simplify_labels(
     morph_radius: int = 2,
     boundary_sigma: float = 1.25,
     min_thickness: float | None = None,
+    min_adjacent_delta_e: float = 18.0,
     compact: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, SimplificationStats]:
     """Full simplification pipeline for colour-by-numbers pages.
@@ -346,6 +413,10 @@ def simplify_labels(
     simplified = limit_region_count(simplified, max_regions=max_regions)
     if compact:
         simplified, new_palette = compact_palette(simplified, palette)
+        if min_adjacent_delta_e and min_adjacent_delta_e > 0:
+            simplified, new_palette = merge_low_contrast_neighbours(
+                simplified, new_palette, min_delta_e=min_adjacent_delta_e
+            )
     else:
         new_palette = palette
     after = count_regions(simplified)
@@ -368,6 +439,7 @@ def simplify_dual(
     subject_params: dict,
     background_params: dict,
     firm_border: bool = True,
+    min_adjacent_delta_e: float = 18.0,
 ) -> tuple[np.ndarray, np.ndarray, SimplificationStats, SimplificationStats]:
     """Simplify subject pixels with one preset and background with another.
 
@@ -378,11 +450,19 @@ def simplify_dual(
     if subject_mask.shape != labels.shape:
         raise ValueError("subject_mask must match labels shape")
 
+    subject_params = dict(subject_params)
+    background_params = dict(background_params)
+    # Defer adjacent merge until after dual combine.
+    subject_params["min_adjacent_delta_e"] = 0.0
+    background_params["min_adjacent_delta_e"] = 0.0
+    subject_params["compact"] = False
+    background_params["compact"] = False
+
     subject_labels, _, subject_stats = simplify_labels(
-        labels, palette, compact=False, **subject_params
+        labels, palette, **subject_params
     )
     background_labels, _, background_stats = simplify_labels(
-        labels, palette, compact=False, **background_params
+        labels, palette, **background_params
     )
     if firm_border:
         combined = np.where(subject_mask, subject_labels, background_labels).astype(
@@ -397,4 +477,8 @@ def simplify_dual(
             softened = smooth_boundaries(combined, sigma=0.8)
             combined = np.where(seam, softened, combined).astype(np.int32)
     combined, new_palette = compact_palette(combined, palette)
+    if min_adjacent_delta_e and min_adjacent_delta_e > 0:
+        combined, new_palette = merge_low_contrast_neighbours(
+            combined, new_palette, min_delta_e=min_adjacent_delta_e
+        )
     return combined, new_palette, subject_stats, background_stats

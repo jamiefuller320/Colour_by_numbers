@@ -70,7 +70,7 @@ def _row(tiles: list[Image.Image]) -> Image.Image:
 def build_demo_spread(
     source: Image.Image,
     *,
-    n_colours: int = 16,
+    n_colours: int = 32,
     max_size: int = 700,
     complexity: str = "fine",
     subject_modes: tuple[str, ...] = ("off", "dual"),
@@ -189,7 +189,7 @@ def write_demo_spreads(
     sources: dict[str, Path | str],
     output_dir: Path | str,
     *,
-    n_colours: int = 16,
+    n_colours: int = 32,
     max_size: int = 700,
     complexity: str = "fine",
     include_outlines: bool = False,
