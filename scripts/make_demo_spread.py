@@ -26,7 +26,7 @@ def main() -> int:
         default="output/demo",
         help="Directory for spread images",
     )
-    parser.add_argument("--colours", type=int, default=16)
+    parser.add_argument("--colours", type=int, default=32)
     parser.add_argument("--max-size", type=int, default=700)
     parser.add_argument("--complexity", default="fine")
     parser.add_argument(

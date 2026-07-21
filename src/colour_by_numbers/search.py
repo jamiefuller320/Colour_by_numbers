@@ -235,6 +235,16 @@ def _search_duckduckgo(query: str, *, max_results: int, safesearch: str) -> list
     return hits
 
 
+def contrast_biased_query(query: str) -> str:
+    """Lightly bias search terms toward clear subject/background separation."""
+    q = query.strip()
+    lower = q.lower()
+    hints = ("high contrast", "solid background", "isolated", "studio")
+    if any(h in lower for h in hints):
+        return q
+    return f"{q} high contrast clear subject"
+
+
 def search_images(
     query: str,
     *,
@@ -242,6 +252,7 @@ def search_images(
     safesearch: str = "moderate",
     providers: Iterable[str] | None = None,
     min_a4_dpi: float | None = None,
+    contrast_bias: bool = True,
 ) -> list[ImageHit]:
     """Search the web for images matching a descriptive query.
 
@@ -250,24 +261,27 @@ def search_images(
 
     When ``min_a4_dpi`` is set, results known to be below that print
     resolution are filtered out and larger images are preferred.
+    When ``contrast_bias`` is True, the query is lightly rewritten toward
+    clear subject/background photos.
     """
     query = query.strip()
     if not query:
         raise ValueError("Search query must not be empty.")
+    search_q = contrast_biased_query(query) if contrast_bias else query
 
     order = list(providers or ("openverse", "wikimedia", "duckduckgo"))
     errors: list[str] = []
-    fetch_n = max_results * 3 if min_a4_dpi else max_results
+    fetch_n = max_results * 3 if (min_a4_dpi or contrast_bias) else max_results
 
     for provider in order:
         try:
             if provider == "openverse":
-                hits = _search_openverse(query, max_results=fetch_n)
+                hits = _search_openverse(search_q, max_results=fetch_n)
             elif provider == "wikimedia":
-                hits = _search_wikimedia(query, max_results=fetch_n)
+                hits = _search_wikimedia(search_q, max_results=fetch_n)
             elif provider == "duckduckgo":
                 hits = _search_duckduckgo(
-                    query, max_results=fetch_n, safesearch=safesearch
+                    search_q, max_results=fetch_n, safesearch=safesearch
                 )
             else:
                 raise ValueError(f"Unknown search provider: {provider}")
@@ -338,14 +352,32 @@ def search_and_download(
     max_results: int = 8,
     pick: int = 0,
     min_a4_dpi: float | None = None,
+    min_subject_bg_contrast: float | None = 22.0,
+    contrast_bias: bool = True,
 ) -> tuple[Image.Image, ImageHit]:
-    """Search for images and download one result (default: first).
+    """Search for images and download one high-contrast result.
 
-    When ``min_a4_dpi`` is set, prefer hits that meet the A4 floor and skip
-    downloads whose decoded pixel size falls short.
+    When ``min_subject_bg_contrast`` is set, candidates are scored with a
+    fast centre-vs-border ΔE check and low-contrast downloads are skipped.
+    Among passing candidates, the highest contrast score wins (starting from
+    ``pick``).
     """
+    from .contrast import estimate_centre_border_contrast
+    from .palette import DEFAULT_MIN_SUBJECT_BG_CONTRAST
+
+    if min_subject_bg_contrast is None:
+        min_contrast = None
+    else:
+        min_contrast = float(min_subject_bg_contrast)
+        if min_contrast <= 0:
+            min_contrast = None
+
+    fetch = max(max_results, 8)
     hits = search_images(
-        query, max_results=max_results, min_a4_dpi=min_a4_dpi
+        query,
+        max_results=fetch,
+        min_a4_dpi=min_a4_dpi,
+        contrast_bias=contrast_bias,
     )
     if not hits:
         raise RuntimeError(f"No images found for query: {query!r}")
@@ -353,6 +385,7 @@ def search_and_download(
         raise IndexError(f"pick={pick} out of range for {len(hits)} results")
 
     errors: list[str] = []
+    scored: list[tuple[float, Image.Image, ImageHit]] = []
     order: Iterable[int] = (pick, *range(len(hits)))
     tried: set[int] = set()
     for index in order:
@@ -371,17 +404,34 @@ def search_and_download(
                         f"{hit.url}: downloaded {image.width}×{image.height} "
                         f"(~{report.effective_dpi:.0f} DPI A4) below {min_a4_dpi:.0f}"
                     )
-                    logger.warning(
-                        "Downloaded image below A4 DPI filter: %s (~%.0f DPI)",
-                        hit.url,
-                        report.effective_dpi,
-                    )
                     continue
-            return image, hit
-        except Exception as exc:  # noqa: BLE001 - collect and try next
+            score = estimate_centre_border_contrast(image)
+            if min_contrast is not None and score < min_contrast:
+                errors.append(
+                    f"{hit.url}: subject/bg contrast ΔE≈{score:.1f} "
+                    f"below {min_contrast:.1f}"
+                )
+                logger.info(
+                    "Skipping low-contrast image ΔE≈%.1f: %s", score, hit.url
+                )
+                continue
+            scored.append((score, image, hit))
+            # Early accept a strong match near the requested pick.
+            if score >= (min_contrast or DEFAULT_MIN_SUBJECT_BG_CONTRAST) + 10:
+                break
+            if len(scored) >= 3:
+                break
+        except Exception as exc:  # noqa: BLE001
             errors.append(f"{hit.url}: {exc}")
             logger.warning("Failed to download %s: %s", hit.url, exc)
 
-    raise RuntimeError(
-        "Could not download any search result. Errors:\n" + "\n".join(errors)
-    )
+    if not scored:
+        raise RuntimeError(
+            "Could not download a suitable search result. Errors:\n"
+            + "\n".join(errors)
+        )
+
+    scored.sort(key=lambda t: t[0], reverse=True)
+    best_score, image, hit = scored[0]
+    logger.info("Selected image with subject/bg contrast ΔE≈%.1f", best_score)
+    return image, hit

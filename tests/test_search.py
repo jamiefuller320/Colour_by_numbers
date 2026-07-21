@@ -7,7 +7,7 @@ from colour_by_numbers.search import ImageHit, search_images
 
 def test_search_openverse_mocked(monkeypatch) -> None:
     def fake_openverse(query: str, *, max_results: int):
-        assert query == "dogs"
+        assert "dogs" in query
         return [
             ImageHit(
                 title="Dog",
