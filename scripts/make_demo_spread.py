@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate demo spreads: original + 16-colour simplification settings."""
+"""Generate colour-only demo spreads (outline demos paused)."""
 
 from __future__ import annotations
 
@@ -29,6 +29,11 @@ def main() -> int:
     parser.add_argument("--colours", type=int, default=16)
     parser.add_argument("--max-size", type=int, default=700)
     parser.add_argument("--complexity", default="fine")
+    parser.add_argument(
+        "--include-outlines",
+        action="store_true",
+        help="Also write outline spreads (off by default)",
+    )
     args = parser.parse_args()
 
     sources = {
@@ -45,6 +50,9 @@ def main() -> int:
         n_colours=args.colours,
         max_size=args.max_size,
         complexity=args.complexity,
+        include_outlines=args.include_outlines,
+        firm_border=True,
+        min_a4_dpi=None,
     )
     print("Wrote:")
     for label, path in written.items():

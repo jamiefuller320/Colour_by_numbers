@@ -40,26 +40,39 @@ def build_parser() -> argparse.ArgumentParser:
         "--colours",
         type=int,
         default=16,
-        help="Number of colours / palette size (default: 16)",
+        help="Number of colours / palette size (default: 16, max useful 16)",
     )
     parser.add_argument(
         "--complexity",
         choices=["raw", "fine", "light", "medium", "simple", "detailed", "balanced"],
         default="fine",
-        help=(
-            "Region complexity (default: fine). "
-            "fine / light / medium increase merging; raw = 16-colour only; "
-            "simple = strongest merge. detailed→light, balanced→medium."
-        ),
+        help="Region complexity for off/isolate modes (default: fine).",
     )
     parser.add_argument(
         "--subject",
-        choices=["isolate", "off"],
-        default="isolate",
+        choices=["dual", "isolate", "off"],
+        default="dual",
         help=(
-            "Subject engine (default: isolate). Uses rembg/U²-Net to cut out "
-            "the foreground, place it on a flat background, and crop tightly."
+            "Subject engine (default: dual). dual = mask + 80%% fill crop + "
+            "fine on subject / light on background; isolate = flat background; "
+            "off = full frame."
         ),
+    )
+    parser.add_argument(
+        "--subject-fill",
+        type=float,
+        default=0.80,
+        help="Target subject bbox fill of the frame after crop (default: 0.80)",
+    )
+    parser.add_argument(
+        "--subject-complexity",
+        default="fine",
+        help="Complexity preset for subject pixels in dual mode (default: fine)",
+    )
+    parser.add_argument(
+        "--background-complexity",
+        default="light",
+        help="Complexity preset for background pixels in dual mode (default: light)",
     )
     parser.add_argument(
         "--subject-model",
@@ -72,10 +85,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="Keep full frame after subject isolation (no autocrop)",
     )
     parser.add_argument(
+        "--firm-border",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use a hard binary subject mask for firm silhouette borders (default: on)",
+    )
+    parser.add_argument(
+        "--min-a4-dpi",
+        type=float,
+        default=150.0,
+        help="Reject plates below this effective DPI when printed to A4 (default: 150)",
+    )
+    parser.add_argument(
+        "--no-a4-filter",
+        action="store_true",
+        help="Disable the A4 print-resolution filter",
+    )
+    parser.add_argument(
         "--max-size",
         type=int,
         default=900,
-        help="Longest edge in pixels before processing (default: 900)",
+        help="Longest edge in pixels for colour processing (default: 900)",
+    )
+    parser.add_argument(
+        "--structure-size",
+        type=int,
+        default=None,
+        help="Override structure/quantize canvas size",
     )
     parser.add_argument(
         "--pick",
@@ -96,6 +132,48 @@ def build_parser() -> argparse.ArgumentParser:
         help="Hard cap on connected regions after simplification",
     )
     parser.add_argument(
+        "--min-region-area",
+        type=int,
+        default=None,
+        help="Minimum region area in pixels",
+    )
+    parser.add_argument(
+        "--blur-radius",
+        type=float,
+        default=None,
+        help="Uniform prefilter blur radius",
+    )
+    parser.add_argument(
+        "--subject-blur-radius",
+        type=float,
+        default=None,
+        help="Subject-zone prefilter blur (dual mode)",
+    )
+    parser.add_argument(
+        "--background-blur-radius",
+        type=float,
+        default=None,
+        help="Background-zone prefilter blur (dual mode)",
+    )
+    parser.add_argument(
+        "--smooth-radius",
+        type=int,
+        default=None,
+        help="Region smooth radius override",
+    )
+    parser.add_argument(
+        "--morph-radius",
+        type=int,
+        default=None,
+        help="Morphology radius override",
+    )
+    parser.add_argument(
+        "--boundary-sigma",
+        type=float,
+        default=None,
+        help="Boundary smoothing sigma override",
+    )
+    parser.add_argument(
         "--stem",
         default="colour_by_numbers",
         help="Filename prefix for outputs",
@@ -106,6 +184,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     output_dir = Path(args.output)
+    min_a4 = None if args.no_a4_filter else args.min_a4_dpi
 
     common = dict(
         n_colours=args.colours,
@@ -114,8 +193,21 @@ def main(argv: list[str] | None = None) -> int:
         subject_mode=args.subject,
         subject_model=args.subject_model,
         subject_autocrop=not args.no_subject_crop,
+        subject_fill=args.subject_fill,
+        subject_complexity=args.subject_complexity,
+        background_complexity=args.background_complexity,
+        firm_border=args.firm_border,
+        min_a4_dpi=min_a4,
+        structure_size=args.structure_size,
         line_width=args.line_width,
         max_regions=args.max_regions,
+        min_region_area=args.min_region_area,
+        blur_radius=args.blur_radius,
+        subject_blur_radius=args.subject_blur_radius,
+        background_blur_radius=args.background_blur_radius,
+        smooth_radius=args.smooth_radius,
+        morph_radius=args.morph_radius,
+        boundary_sigma=args.boundary_sigma,
     )
 
     if args.query:
@@ -134,6 +226,14 @@ def main(argv: list[str] | None = None) -> int:
     paths = result.save(output_dir, stem=stem)
     print(f"Complexity: {result.complexity}")
     print(f"Subject mode: {result.subject_mode}")
+    print(f"Firm border: {result.firm_border}")
+    if result.print_dpi is not None:
+        print(f"Effective A4 DPI: {result.print_dpi:.1f}")
+    if result.subject_complexity and result.background_complexity:
+        print(
+            f"Dual pass: subject={result.subject_complexity} "
+            f"background={result.background_complexity}"
+        )
     if result.subject_mask is not None:
         print(
             f"Subject mask: {result.subject_mask.model} "
