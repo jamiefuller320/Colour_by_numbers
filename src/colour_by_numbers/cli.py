@@ -54,12 +54,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--subject",
-        choices=["isolate", "off"],
-        default="isolate",
+        choices=["dual", "isolate", "off"],
+        default="dual",
         help=(
-            "Subject engine (default: isolate). Uses rembg/U²-Net to cut out "
-            "the foreground, place it on a flat background, and crop tightly."
+            "Subject engine (default: dual). dual = mask + 80%% fill crop + "
+            "fine on subject / light on background; isolate = flat background; "
+            "off = full frame."
         ),
+    )
+    parser.add_argument(
+        "--subject-fill",
+        type=float,
+        default=0.80,
+        help="Target subject bbox fill of the frame after crop (default: 0.80)",
+    )
+    parser.add_argument(
+        "--subject-complexity",
+        default="fine",
+        help="Complexity preset for subject pixels in dual mode (default: fine)",
+    )
+    parser.add_argument(
+        "--background-complexity",
+        default="light",
+        help="Complexity preset for background pixels in dual mode (default: light)",
     )
     parser.add_argument(
         "--subject-model",
@@ -114,6 +131,9 @@ def main(argv: list[str] | None = None) -> int:
         subject_mode=args.subject,
         subject_model=args.subject_model,
         subject_autocrop=not args.no_subject_crop,
+        subject_fill=args.subject_fill,
+        subject_complexity=args.subject_complexity,
+        background_complexity=args.background_complexity,
         line_width=args.line_width,
         max_regions=args.max_regions,
     )
@@ -134,6 +154,11 @@ def main(argv: list[str] | None = None) -> int:
     paths = result.save(output_dir, stem=stem)
     print(f"Complexity: {result.complexity}")
     print(f"Subject mode: {result.subject_mode}")
+    if result.subject_complexity and result.background_complexity:
+        print(
+            f"Dual pass: subject={result.subject_complexity} "
+            f"background={result.background_complexity}"
+        )
     if result.subject_mask is not None:
         print(
             f"Subject mask: {result.subject_mask.model} "

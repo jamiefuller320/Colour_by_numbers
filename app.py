@@ -29,16 +29,27 @@ with st.sidebar:
     n_colours = st.slider("Number of colours", min_value=4, max_value=32, value=16)
     complexity_options = ["raw", "fine", "light", "medium", "simple"]
     complexity = st.selectbox(
-        "Complexity",
+        "Uniform complexity (non-dual)",
         options=complexity_options,
         index=complexity_options.index("fine"),
-        help="fine is preferred after subject isolation.",
+        help="Used when subject engine is off or isolate.",
     )
     subject_mode = st.selectbox(
         "Subject engine",
-        options=["isolate", "off"],
+        options=["dual", "isolate", "off"],
         index=0,
-        help="isolate uses rembg/U²-Net to cut out the subject and crop it.",
+        help=(
+            "dual: 80% fill crop + fine on subject / light on background. "
+            "isolate: flat background. off: full frame."
+        ),
+    )
+    subject_fill = st.slider(
+        "Subject fill of frame",
+        min_value=0.5,
+        max_value=0.95,
+        value=0.80,
+        step=0.05,
+        help="Target size of the subject bounding box after crop.",
     )
     max_size = st.slider(
         "Max image edge (px)", min_value=400, max_value=1400, value=900, step=50
@@ -93,6 +104,7 @@ if source_mode == "Web search":
                         max_size=max_size,
                         complexity=complexity,
                         subject_mode=subject_mode,
+                        subject_fill=subject_fill,
                         source_hit=hit,
                     )
                     st.session_state.result = result
@@ -116,6 +128,7 @@ else:
                     max_size=max_size,
                     complexity=complexity,
                     subject_mode=subject_mode,
+                    subject_fill=subject_fill,
                 )
                 st.session_state.result = result
 

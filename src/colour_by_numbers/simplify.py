@@ -317,10 +317,12 @@ def simplify_labels(
     morph_radius: int = 2,
     boundary_sigma: float = 1.25,
     min_thickness: float | None = None,
+    compact: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, SimplificationStats]:
     """Full simplification pipeline for colour-by-numbers pages.
 
-    Returns ``(labels, palette, stats)``.
+    Returns ``(labels, palette, stats)``. When ``compact`` is False, palette
+    indices are preserved so dual-path results can be merged.
     """
     height, width = labels.shape
     if min_region_area is None:
@@ -342,7 +344,10 @@ def simplify_labels(
     simplified = absorb_small_regions(simplified, min_area=min_region_area)
     simplified = absorb_thin_regions(simplified, min_thickness=min_thickness)
     simplified = limit_region_count(simplified, max_regions=max_regions)
-    simplified, new_palette = compact_palette(simplified, palette)
+    if compact:
+        simplified, new_palette = compact_palette(simplified, palette)
+    else:
+        new_palette = palette
     after = count_regions(simplified)
 
     stats = SimplificationStats(
@@ -353,3 +358,35 @@ def simplify_labels(
         passes=smooth_iterations,
     )
     return simplified, new_palette, stats
+
+
+def simplify_dual(
+    labels: np.ndarray,
+    palette: np.ndarray,
+    subject_mask: np.ndarray,
+    *,
+    subject_params: dict,
+    background_params: dict,
+) -> tuple[np.ndarray, np.ndarray, SimplificationStats, SimplificationStats]:
+    """Simplify subject pixels with one preset and background with another.
+
+    ``subject_mask`` is a boolean HxW array aligned with ``labels``.
+    Palette indices stay shared; unused colours are compacted at the end.
+    """
+    if subject_mask.shape != labels.shape:
+        raise ValueError("subject_mask must match labels shape")
+
+    subject_labels, _, subject_stats = simplify_labels(
+        labels, palette, compact=False, **subject_params
+    )
+    background_labels, _, background_stats = simplify_labels(
+        labels, palette, compact=False, **background_params
+    )
+    combined = np.where(subject_mask, subject_labels, background_labels).astype(np.int32)
+    # Soften the seam between the two complexity zones.
+    seam = ndimage.binary_dilation(subject_mask, iterations=2) ^ subject_mask
+    if seam.any():
+        softened = smooth_boundaries(combined, sigma=0.8)
+        combined = np.where(seam, softened, combined).astype(np.int32)
+    combined, new_palette = compact_palette(combined, palette)
+    return combined, new_palette, subject_stats, background_stats

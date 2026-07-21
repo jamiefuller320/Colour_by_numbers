@@ -7,7 +7,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from colour_by_numbers.demo_spread import build_demo_spread
-from colour_by_numbers.pipeline import DEMO_SUBJECT_COMPARE, create_colour_by_numbers
+from colour_by_numbers.pipeline import create_colour_by_numbers
 
 
 def _sample(path: Path) -> Path:
@@ -29,23 +29,33 @@ def test_fine_off_runs_without_subject_engine(tmp_path: Path) -> None:
     assert result.page.outline.size[0] > 0
 
 
-def test_demo_spread_compares_subject_modes(tmp_path: Path, monkeypatch) -> None:
+def test_demo_spread_compares_off_and_dual(tmp_path: Path, monkeypatch) -> None:
     path = _sample(tmp_path / "sample.png")
     image = Image.open(path)
 
-    def fake_prepare(img, *, mode="isolate", **kwargs):
+    def fake_prepare(img, *, mode="dual", **kwargs):
         if mode in {"off", "none"}:
             return img.convert("RGB"), None
-        # Pretend we cropped to the red circle area.
-        cropped = img.crop((10, 10, 100, 110)).convert("RGB")
-        return cropped, None
+        cropped = img.crop((10, 10, 160, 120)).convert("RGB")
+        import numpy as np
+        from colour_by_numbers.subject import SubjectMask
+
+        alpha = np.zeros((cropped.height, cropped.width), dtype=np.uint8)
+        alpha[:, : cropped.width // 2] = 255
+        mask = SubjectMask(alpha=alpha, model="mock", foreground_fraction=0.5)
+        return cropped, mask
 
     monkeypatch.setattr(
         "colour_by_numbers.pipeline.prepare_subject_image", fake_prepare
     )
     colours, outlines, stats = build_demo_spread(
-        image, n_colours=8, max_size=200, tile_width=120, complexity="fine"
+        image,
+        n_colours=8,
+        max_size=200,
+        tile_width=120,
+        complexity="fine",
+        subject_modes=("off", "dual"),
     )
-    assert set(stats) == set(DEMO_SUBJECT_COMPARE)
+    assert set(stats) == {"off", "dual"}
     assert colours.width > 400
     assert outlines.width > 300

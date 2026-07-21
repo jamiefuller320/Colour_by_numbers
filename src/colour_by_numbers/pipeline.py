@@ -5,21 +5,29 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
 from .outline import OutlinePage, build_outline_page, composite_page
 from .quantize import (
     QuantizedImage,
+    prefilter_for_regions,
     preview_from_labels,
     quantize_colours,
     resize_for_processing,
+    upsample_labels,
 )
 from .search import ImageHit, load_local_image, search_and_download
-from .subject import SubjectMask, prepare_subject_image
+from .simplify import count_regions, simplify_dual
+from .subject import (
+    DEFAULT_SUBJECT_FILL,
+    SubjectMask,
+    align_mask,
+    blend_subject_background,
+    prepare_subject_image,
+)
 
 
-# Named complexity presets control cartoon prefilter + region absorption.
-# Primary ladder is centred on ``fine`` after subject isolation.
 COMPLEXITY_PRESETS: dict[str, dict[str, float | int]] = {
     "raw": {
         "blur_radius": 0.0,
@@ -81,9 +89,26 @@ COMPLEXITY_PRESETS: dict[str, dict[str, float | int]] = {
 COMPLEXITY_PRESETS["detailed"] = dict(COMPLEXITY_PRESETS["light"])
 COMPLEXITY_PRESETS["balanced"] = dict(COMPLEXITY_PRESETS["medium"])
 
-# Demo: original vs fine without/with subject isolation.
 DEMO_SPREAD_SETTINGS: tuple[str, ...] = ("fine",)
-DEMO_SUBJECT_COMPARE: tuple[str, ...] = ("off", "isolate")
+DEMO_SUBJECT_COMPARE: tuple[str, ...] = ("off", "isolate", "dual")
+
+
+def _preset_simplify_params(
+    preset: dict[str, float | int],
+    *,
+    width: int,
+    height: int,
+) -> dict:
+    fraction = float(preset["min_area_fraction"])
+    min_area = 1 if fraction <= 0 else max(20, int(width * height * fraction))
+    return {
+        "min_region_area": min_area,
+        "max_regions": int(preset["max_regions"]),
+        "smooth_radius": int(preset["smooth_radius"]),
+        "morph_radius": int(preset["morph_radius"]),
+        "boundary_sigma": float(preset["boundary_sigma"]),
+        "smooth_iterations": 2,
+    }
 
 
 @dataclass(frozen=True)
@@ -98,7 +123,9 @@ class ColourByNumbersResult:
     complexity: str = "fine"
     prepared: Image.Image | None = None
     subject_mask: SubjectMask | None = None
-    subject_mode: str = "isolate"
+    subject_mode: str = "dual"
+    subject_complexity: str | None = None
+    background_complexity: str | None = None
 
     def save(self, output_dir: str | Path, *, stem: str = "colour_by_numbers") -> dict[str, Path]:
         """Write outline, legend, preview, and composite page to disk."""
@@ -129,9 +156,12 @@ def create_colour_by_numbers(
     n_colours: int = 16,
     max_size: int = 900,
     complexity: str = "fine",
-    subject_mode: str = "isolate",
+    subject_mode: str = "dual",
     subject_model: str = "u2net",
     subject_autocrop: bool = True,
+    subject_fill: float = DEFAULT_SUBJECT_FILL,
+    subject_complexity: str = "fine",
+    background_complexity: str = "light",
     min_region_area: int | None = None,
     max_regions: int | None = None,
     blur_radius: float | None = None,
@@ -144,38 +174,96 @@ def create_colour_by_numbers(
 ) -> ColourByNumbersResult:
     """Quantize an image, simplify regions, and produce a numbered outline page.
 
-    By default, a neural subject mask (rembg / U²-Net) isolates the foreground
-    onto a flat background and crops tightly around it before colour reduction.
+    Default ``subject_mode='dual'``:
+      1. rembg subject mask
+      2. crop so the subject fills ``subject_fill`` of the frame (default 80%)
+      3. shared palette of at most ``n_colours`` (default 16)
+      4. ``subject_complexity`` (fine) on the subject, ``background_complexity``
+         (light) on the background
     """
     if complexity not in COMPLEXITY_PRESETS:
         raise ValueError(
             f"Unknown complexity {complexity!r}; "
             f"choose one of {sorted(COMPLEXITY_PRESETS)}"
         )
-    preset = COMPLEXITY_PRESETS[complexity]
+    for name in (subject_complexity, background_complexity):
+        if name not in COMPLEXITY_PRESETS:
+            raise ValueError(f"Unknown complexity {name!r}")
 
-    blur = float(preset["blur_radius"] if blur_radius is None else blur_radius)
-    struct = int(preset["structure_size"] if structure_size is None else structure_size)
-    struct = min(struct, max_size)
-    smooth = int(preset["smooth_radius"] if smooth_radius is None else smooth_radius)
-    morph = int(preset["morph_radius"] if morph_radius is None else morph_radius)
-    boundary = float(preset["boundary_sigma"])
-    stroke = int(preset["line_width"] if line_width is None else line_width)
-    region_cap = int(preset["max_regions"] if max_regions is None else max_regions)
-    do_simplify = bool(int(preset.get("simplify", 1)))
+    mode = subject_mode.lower().strip()
+    subject_preset = COMPLEXITY_PRESETS[subject_complexity]
+    background_preset = COMPLEXITY_PRESETS[background_complexity]
+    uniform_preset = COMPLEXITY_PRESETS[complexity]
 
     source_rgb = image.convert("RGB")
     working = resize_for_processing(source_rgb, max_size=max_size)
     prepared, subject_mask = prepare_subject_image(
         working,
-        mode=subject_mode,
+        mode=mode,
         model_name=subject_model,
         autocrop=subject_autocrop,
+        subject_fill=subject_fill,
     )
+    # After an 80% fill crop the plate can be small (tiny subjects). Scale it
+    # back up to the working canvas size so outlines stay printable.
+    if (
+        subject_autocrop
+        and mode not in {"off", "none"}
+        and max(prepared.size) < max(working.size) * 0.85
+    ):
+        prepared = prepared.resize(working.size, Image.Resampling.LANCZOS)
+        if subject_mask is not None:
+            subject_mask = align_mask(subject_mask, prepared.size)
+            subject_mask = SubjectMask(
+                alpha=subject_mask.alpha,
+                model=subject_mask.model,
+                foreground_fraction=float((subject_mask.alpha >= 128).mean()),
+            )
+
+    use_dual = mode in {"dual", "hybrid", "split"} and subject_mask is not None
+
+    if use_dual:
+        # Differential blur: gentler on subject, stronger on background.
+        subject_blurred = prefilter_for_regions(
+            prepared, blur_radius=float(subject_preset["blur_radius"])
+        )
+        background_blurred = prefilter_for_regions(
+            prepared, blur_radius=float(background_preset["blur_radius"])
+        )
+        quant_input = blend_subject_background(
+            subject_blurred, background_blurred, subject_mask
+        )
+        struct = int(
+            structure_size
+            if structure_size is not None
+            else min(
+                int(subject_preset["structure_size"]),
+                int(background_preset["structure_size"]),
+                max_size,
+            )
+        )
+        blur = 0.0  # already applied differentially
+        stroke = int(
+            line_width
+            if line_width is not None
+            else max(
+                int(subject_preset["line_width"]),
+                int(background_preset["line_width"]),
+            )
+        )
+    else:
+        preset = uniform_preset
+        blur = float(preset["blur_radius"] if blur_radius is None else blur_radius)
+        struct = int(
+            preset["structure_size"] if structure_size is None else structure_size
+        )
+        struct = min(struct, max_size)
+        stroke = int(preset["line_width"] if line_width is None else line_width)
+        quant_input = prepared
 
     quantized = quantize_colours(
-        prepared,
-        n_colours=n_colours,
+        quant_input,
+        n_colours=min(int(n_colours), 16),
         max_size=struct,
         structure_size=struct,
         blur_radius=blur,
@@ -183,24 +271,88 @@ def create_colour_by_numbers(
     )
 
     height, width = quantized.labels.shape
-    if min_region_area is None:
-        fraction = float(preset["min_area_fraction"])
-        min_region_area = (
-            1 if fraction <= 0 else max(20, int(width * height * fraction))
-        )
+    used_subject_complexity: str | None = None
+    used_background_complexity: str | None = None
 
-    page = build_outline_page(
-        quantized.labels,
-        quantized.palette,
-        min_region_area=min_region_area,
-        max_regions=region_cap,
-        line_width=stroke,
-        smooth_radius=smooth,
-        morph_radius=morph,
-        boundary_sigma=boundary,
-        output_size=prepared.size,
-        simplify=do_simplify,
-    )
+    if use_dual:
+        mask_img = Image.fromarray(subject_mask.alpha, mode="L").resize(
+            (width, height), Image.Resampling.BILINEAR
+        )
+        mask_bool = np.asarray(mask_img, dtype=np.uint8) >= 128
+        subject_params = _preset_simplify_params(
+            subject_preset, width=width, height=height
+        )
+        background_params = _preset_simplify_params(
+            background_preset, width=width, height=height
+        )
+        if min_region_area is not None:
+            subject_params["min_region_area"] = min_region_area
+        if max_regions is not None:
+            subject_params["max_regions"] = max_regions
+            background_params["max_regions"] = max_regions
+        if smooth_radius is not None:
+            subject_params["smooth_radius"] = smooth_radius
+        if morph_radius is not None:
+            subject_params["morph_radius"] = morph_radius
+
+        labels, palette, subj_stats, _bg_stats = simplify_dual(
+            quantized.labels,
+            quantized.palette,
+            mask_bool,
+            subject_params=subject_params,
+            background_params=background_params,
+        )
+        labels = upsample_labels(labels, prepared.size)
+        page = build_outline_page(
+            labels,
+            palette,
+            line_width=stroke,
+            simplify=False,
+        )
+        from .simplify import SimplificationStats
+
+        page = OutlinePage(
+            outline=page.outline,
+            legend=page.legend,
+            regions=page.regions,
+            palette=page.palette,
+            colour_numbers=page.colour_numbers,
+            labels=page.labels,
+            simplification=SimplificationStats(
+                regions_before=subj_stats.regions_before,
+                regions_after=count_regions(page.labels),
+                min_region_area=subj_stats.min_region_area,
+                smooth_radius=subj_stats.smooth_radius,
+                passes=subj_stats.passes,
+            ),
+        )
+        complexity_label = f"{subject_complexity}+{background_complexity}"
+        used_subject_complexity = subject_complexity
+        used_background_complexity = background_complexity
+    else:
+        preset = uniform_preset
+        smooth = int(preset["smooth_radius"] if smooth_radius is None else smooth_radius)
+        morph = int(preset["morph_radius"] if morph_radius is None else morph_radius)
+        boundary = float(preset["boundary_sigma"])
+        region_cap = int(preset["max_regions"] if max_regions is None else max_regions)
+        do_simplify = bool(int(preset.get("simplify", 1)))
+        area = min_region_area
+        if area is None:
+            fraction = float(preset["min_area_fraction"])
+            area = 1 if fraction <= 0 else max(20, int(width * height * fraction))
+        page = build_outline_page(
+            quantized.labels,
+            quantized.palette,
+            min_region_area=area,
+            max_regions=region_cap,
+            line_width=stroke,
+            smooth_radius=smooth,
+            morph_radius=morph,
+            boundary_sigma=boundary,
+            output_size=prepared.size,
+            simplify=do_simplify,
+        )
+        complexity_label = complexity
 
     simplified_preview = preview_from_labels(page.labels, page.palette)
     quantized = QuantizedImage(
@@ -208,7 +360,6 @@ def create_colour_by_numbers(
         palette=page.palette,
         preview=simplified_preview,
     )
-
     printable = composite_page(page.outline, page.legend)
     return ColourByNumbersResult(
         source=source_rgb,
@@ -216,10 +367,12 @@ def create_colour_by_numbers(
         page=page,
         printable=printable,
         source_hit=source_hit,
-        complexity=complexity,
-        prepared=prepared if subject_mode not in {"off", "none"} else None,
+        complexity=complexity_label,
+        prepared=prepared if mode not in {"off", "none"} else None,
         subject_mask=subject_mask,
-        subject_mode=subject_mode,
+        subject_mode=mode,
+        subject_complexity=used_subject_complexity,
+        background_complexity=used_background_complexity,
     )
 
 
