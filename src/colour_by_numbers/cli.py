@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .pipeline import create_from_path, create_from_query
+from .pipeline import COMPLEXITY_PRESETS, create_from_path, create_from_query
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -14,7 +14,8 @@ def build_parser() -> argparse.ArgumentParser:
         prog="colour-by-numbers",
         description=(
             "Search the web for an image (or load a local file), reduce it to "
-            "a limited palette, and export a numbered outline for colouring books."
+            "a limited palette, simplify regions, and export a numbered outline "
+            "for colouring books."
         ),
     )
     source = parser.add_mutually_exclusive_group(required=True)
@@ -42,6 +43,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Number of colours / palette size (default: 16)",
     )
     parser.add_argument(
+        "--complexity",
+        choices=sorted(COMPLEXITY_PRESETS),
+        default="balanced",
+        help="Region complexity preset: simple, balanced, or detailed (default: balanced)",
+    )
+    parser.add_argument(
         "--max-size",
         type=int,
         default=900,
@@ -56,8 +63,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--line-width",
         type=int,
-        default=1,
-        help="Outline stroke thickness in pixels (default: 1)",
+        default=None,
+        help="Outline stroke thickness in pixels (default: from complexity preset)",
+    )
+    parser.add_argument(
+        "--max-regions",
+        type=int,
+        default=None,
+        help="Hard cap on connected regions after simplification",
     )
     parser.add_argument(
         "--stem",
@@ -71,29 +84,37 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     output_dir = Path(args.output)
 
+    common = dict(
+        n_colours=args.colours,
+        max_size=args.max_size,
+        complexity=args.complexity,
+        line_width=args.line_width,
+        max_regions=args.max_regions,
+    )
+
     if args.query:
         result = create_from_query(
             args.query,
-            n_colours=args.colours,
-            max_size=args.max_size,
             pick=args.pick,
-            line_width=args.line_width,
+            **common,
         )
         stem = args.stem if args.stem != "colour_by_numbers" else (
             args.query.strip().lower().replace(" ", "_")[:40] or args.stem
         )
     else:
-        result = create_from_path(
-            args.input,
-            n_colours=args.colours,
-            max_size=args.max_size,
-            line_width=args.line_width,
-        )
+        result = create_from_path(args.input, **common)
         stem = args.stem if args.stem != "colour_by_numbers" else Path(args.input).stem
 
     paths = result.save(output_dir, stem=stem)
+    print(f"Complexity: {result.complexity}")
     print(f"Palette colours: {result.quantized.n_colours}")
     print(f"Numbered regions: {len(result.page.regions)}")
+    if result.page.simplification is not None:
+        stats = result.page.simplification
+        print(
+            f"Regions simplified: {stats.regions_before} → {stats.regions_after}"
+            f" (min area {stats.min_region_area}px)"
+        )
     if result.source_hit:
         print(f"Source: {result.source_hit.url}")
         if result.source_hit.title:

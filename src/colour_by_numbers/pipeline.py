@@ -8,8 +8,51 @@ from pathlib import Path
 from PIL import Image
 
 from .outline import OutlinePage, build_outline_page, composite_page
-from .quantize import QuantizedImage, quantize_colours
+from .quantize import (
+    QuantizedImage,
+    preview_from_labels,
+    quantize_colours,
+    resize_for_processing,
+)
 from .search import ImageHit, load_local_image, search_and_download
+
+
+# Named complexity presets control cartoon prefilter + region absorption.
+COMPLEXITY_PRESETS: dict[str, dict[str, float | int]] = {
+    # Few large shapes — good for young colourists / busy photos.
+    "simple": {
+        "blur_radius": 4.0,
+        "structure_size": 240,
+        "min_area_fraction": 0.035,
+        "max_regions": 16,
+        "smooth_radius": 3,
+        "morph_radius": 2,
+        "boundary_sigma": 1.6,
+        "line_width": 2,
+    },
+    # Default balance of recognisable outline vs segment count.
+    "balanced": {
+        "blur_radius": 3.0,
+        "structure_size": 300,
+        "min_area_fraction": 0.022,
+        "max_regions": 22,
+        "smooth_radius": 3,
+        "morph_radius": 2,
+        "boundary_sigma": 1.3,
+        "line_width": 2,
+    },
+    # More detail retained for simple subjects / adults.
+    "detailed": {
+        "blur_radius": 2.0,
+        "structure_size": 380,
+        "min_area_fraction": 0.012,
+        "max_regions": 32,
+        "smooth_radius": 2,
+        "morph_radius": 1,
+        "boundary_sigma": 1.0,
+        "line_width": 2,
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -21,6 +64,7 @@ class ColourByNumbersResult:
     page: OutlinePage
     printable: Image.Image
     source_hit: ImageHit | None = None
+    complexity: str = "balanced"
 
     def save(self, output_dir: str | Path, *, stem: str = "colour_by_numbers") -> dict[str, Path]:
         """Write outline, legend, preview, and composite page to disk."""
@@ -46,24 +90,71 @@ def create_colour_by_numbers(
     *,
     n_colours: int = 16,
     max_size: int = 900,
+    complexity: str = "balanced",
     min_region_area: int | None = None,
-    line_width: int = 1,
+    max_regions: int | None = None,
+    blur_radius: float | None = None,
+    structure_size: int | None = None,
+    smooth_radius: int | None = None,
+    morph_radius: int | None = None,
+    line_width: int | None = None,
     seed: int = 42,
     source_hit: ImageHit | None = None,
 ) -> ColourByNumbersResult:
-    """Quantize an image and produce a numbered outline page."""
+    """Quantize an image, simplify regions, and produce a numbered outline page."""
+    if complexity not in COMPLEXITY_PRESETS:
+        raise ValueError(
+            f"Unknown complexity {complexity!r}; "
+            f"choose one of {sorted(COMPLEXITY_PRESETS)}"
+        )
+    preset = COMPLEXITY_PRESETS[complexity]
+
+    blur = float(preset["blur_radius"] if blur_radius is None else blur_radius)
+    struct = int(preset["structure_size"] if structure_size is None else structure_size)
+    smooth = int(preset["smooth_radius"] if smooth_radius is None else smooth_radius)
+    morph = int(preset["morph_radius"] if morph_radius is None else morph_radius)
+    boundary = float(preset["boundary_sigma"])
+    stroke = int(preset["line_width"] if line_width is None else line_width)
+    region_cap = int(preset["max_regions"] if max_regions is None else max_regions)
+
+    # Keep a high-res canvas for the final page, but quantize/simplify on a
+    # smaller structure canvas so only large shapes survive.
+    output_image = resize_for_processing(image.convert("RGB"), max_size=max_size)
     quantized = quantize_colours(
-        image,
+        output_image,
         n_colours=n_colours,
-        max_size=max_size,
+        max_size=struct,
+        structure_size=struct,
+        blur_radius=blur,
         seed=seed,
     )
+
+    height, width = quantized.labels.shape
+    if min_region_area is None:
+        min_region_area = max(
+            40, int(width * height * float(preset["min_area_fraction"]))
+        )
+
     page = build_outline_page(
         quantized.labels,
         quantized.palette,
         min_region_area=min_region_area,
-        line_width=line_width,
+        max_regions=region_cap,
+        line_width=stroke,
+        smooth_radius=smooth,
+        morph_radius=morph,
+        boundary_sigma=boundary,
+        output_size=output_image.size,
     )
+
+    # Preview should match the simplified (upsampled) regions used for the outline.
+    simplified_preview = preview_from_labels(page.labels, page.palette)
+    quantized = QuantizedImage(
+        labels=page.labels,
+        palette=page.palette,
+        preview=simplified_preview,
+    )
+
     printable = composite_page(page.outline, page.legend)
     return ColourByNumbersResult(
         source=image.convert("RGB"),
@@ -71,6 +162,7 @@ def create_colour_by_numbers(
         page=page,
         printable=printable,
         source_hit=source_hit,
+        complexity=complexity,
     )
 
 

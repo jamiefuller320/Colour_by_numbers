@@ -8,6 +8,15 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 
+from .quantize import upsample_labels
+from .simplify import (
+    SimplificationStats,
+    absorb_small_regions,
+    count_regions,
+    simplify_labels,
+    smooth_boundaries,
+)
+
 
 @dataclass(frozen=True)
 class Region:
@@ -28,6 +37,8 @@ class OutlinePage:
     regions: list[Region]
     palette: np.ndarray
     colour_numbers: list[int]
+    labels: np.ndarray
+    simplification: SimplificationStats | None = None
 
 
 def _edges_from_labels(labels: np.ndarray) -> np.ndarray:
@@ -47,6 +58,7 @@ def _load_font(size: int) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "Arial.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
     ):
         try:
             return ImageFont.truetype(name, size=size)
@@ -55,53 +67,43 @@ def _load_font(size: int) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
     return ImageFont.load_default()
 
 
-def _find_regions(
-    labels: np.ndarray,
-    *,
-    min_area: int,
-) -> list[tuple[int, int, tuple[float, float], int]]:
-    """Find connected components per colour label.
+def _region_centroid(component: np.ndarray) -> tuple[float, float]:
+    """Pick a label anchor inside the region (distance-transform peak).
 
-    Returns tuples of (colour_index, component_label_local, centroid_xy, area).
+    Centroids of crescent/U shapes can fall outside the fill; the darkest
+    point of the distance transform is guaranteed to lie inside.
     """
-    found: list[tuple[int, int, tuple[float, float], int]] = []
+    # Distance to background — peak is a safe interior point.
+    distance = ndimage.distance_transform_edt(component)
+    peak = np.unravel_index(int(np.argmax(distance)), distance.shape)
+    y, x = float(peak[0]), float(peak[1])
+    return x, y
+
+
+def _find_regions(labels: np.ndarray) -> list[Region]:
+    """One numbered region per remaining connected component."""
     structure = np.ones((3, 3), dtype=bool)
+    found: list[Region] = []
 
     for colour_index in np.unique(labels):
         mask = labels == colour_index
         labeled, count = ndimage.label(mask, structure=structure)
         if count == 0:
             continue
+        areas = np.bincount(labeled.ravel())
         for comp_id in range(1, count + 1):
             component = labeled == comp_id
-            area = int(component.sum())
-            if area < min_area:
-                continue
-            ys, xs = np.nonzero(component)
-            centroid = (float(xs.mean()), float(ys.mean()))
-            found.append((int(colour_index), comp_id, centroid, area))
+            area = int(areas[comp_id])
+            centroid = _region_centroid(component)
+            found.append(
+                Region(
+                    colour_index=int(colour_index),
+                    number=int(colour_index) + 1,
+                    centroid=centroid,
+                    area=area,
+                )
+            )
     return found
-
-
-def simplify_labels(labels: np.ndarray, *, smooth_radius: int = 2) -> np.ndarray:
-    """Merge speckles so outlines stay simple enough for colouring.
-
-    Uses majority-filter style smoothing: each pixel becomes the most common
-    label in its neighbourhood, which removes tiny islands without inventing
-    new palette indices.
-    """
-    if smooth_radius <= 0:
-        return labels
-    size = smooth_radius * 2 + 1
-    best_votes = np.zeros(labels.shape, dtype=np.float32)
-    best_labels = labels.astype(np.int32, copy=True)
-    for value in np.unique(labels):
-        mask = (labels == value).astype(np.float32)
-        votes = ndimage.uniform_filter(mask, size=size, mode="nearest")
-        better = votes > best_votes
-        best_labels = np.where(better, value, best_labels)
-        best_votes = np.where(better, votes, best_votes)
-    return best_labels.astype(np.int32)
 
 
 def build_outline_page(
@@ -109,23 +111,47 @@ def build_outline_page(
     palette: np.ndarray,
     *,
     min_region_area: int | None = None,
-    line_width: int = 1,
+    max_regions: int | None = None,
+    line_width: int = 2,
     number_font_scale: float = 1.0,
-    smooth_radius: int = 2,
-    max_numbers_per_colour: int = 8,
+    smooth_radius: int = 3,
+    morph_radius: int = 2,
+    boundary_sigma: float = 1.25,
+    output_size: tuple[int, int] | None = None,
+    simplify: bool = True,
 ) -> OutlinePage:
     """Convert a palette-indexed image into a numbered outline page + legend.
 
-    Each palette colour is assigned a stable number (1..N). Numbers are drawn
-    inside sufficiently large connected regions of that colour.
+    By default runs region simplification so photographic speckles collapse
+    into crayon-sized shapes before outlines and numbers are drawn. When
+    ``output_size`` is set, simplified labels are upsampled afterward so the
+    printed page is sharp while simplification still happens on large shapes.
     """
-    labels = simplify_labels(labels, smooth_radius=smooth_radius)
-    height, width = labels.shape
-    if min_region_area is None:
-        # Ignore speckles; scale with image size.
-        min_region_area = max(80, int(width * height * 0.001))
+    stats: SimplificationStats | None = None
+    working_labels = labels
+    working_palette = palette
 
-    edges = _edges_from_labels(labels)
+    if simplify:
+        working_labels, working_palette, stats = simplify_labels(
+            labels,
+            palette,
+            min_region_area=min_region_area,
+            max_regions=max_regions,
+            smooth_radius=smooth_radius,
+            morph_radius=morph_radius,
+            boundary_sigma=boundary_sigma,
+        )
+
+    if output_size is not None:
+        working_labels = upsample_labels(working_labels, output_size)
+        # Soften nearest-neighbour stair-steps introduced by upsampling, then
+        # mop up any speckles smaller than ~0.15% of the page.
+        working_labels = smooth_boundaries(working_labels, sigma=max(1.0, boundary_sigma))
+        up_min = max(30, int(working_labels.shape[0] * working_labels.shape[1] * 0.0015))
+        working_labels = absorb_small_regions(working_labels, min_area=up_min)
+
+    height, width = working_labels.shape
+    edges = _edges_from_labels(working_labels)
     if line_width > 1:
         edges = ndimage.binary_dilation(edges, iterations=line_width - 1)
 
@@ -135,52 +161,33 @@ def build_outline_page(
     outline = Image.fromarray(outline_arr, mode="RGB")
 
     draw = ImageDraw.Draw(outline)
-    font_size = max(10, int(min(width, height) * 0.028 * number_font_scale))
+    font_size = max(12, int(min(width, height) * 0.035 * number_font_scale))
     font = _load_font(font_size)
 
-    raw_regions = _find_regions(labels, min_area=min_region_area)
-    # Colour numbers are 1-based palette indices.
-    colour_numbers = list(range(1, len(palette) + 1))
-    regions: list[Region] = []
+    regions = _find_regions(working_labels)
+    colour_numbers = list(range(1, len(working_palette) + 1))
 
-    # Keep only the largest regions per colour to avoid an unreadable page.
-    per_colour: dict[int, list[tuple[int, int, tuple[float, float], int]]] = {}
-    for item in raw_regions:
-        per_colour.setdefault(item[0], []).append(item)
-    selected: list[tuple[int, int, tuple[float, float], int]] = []
-    for colour_index, items in per_colour.items():
-        items_sorted = sorted(items, key=lambda row: row[3], reverse=True)
-        selected.extend(items_sorted[:max_numbers_per_colour])
-
-    for colour_index, _comp, centroid, area in sorted(
-        selected, key=lambda item: item[3], reverse=True
-    ):
-        number = colour_index + 1
-        x, y = centroid
-        text = str(number)
+    # Draw numbers largest-first so small regions don't cover big labels.
+    for region in sorted(regions, key=lambda item: item.area, reverse=True):
+        x, y = region.centroid
+        text = str(region.number)
         bbox = draw.textbbox((0, 0), text, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         tx = int(np.clip(x - tw / 2, 1, width - tw - 1))
         ty = int(np.clip(y - th / 2, 1, height - th - 1))
-        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1), (-1, 1), (1, -1)):
             draw.text((tx + dx, ty + dy), text, fill="white", font=font)
         draw.text((tx, ty), text, fill="black", font=font)
-        regions.append(
-            Region(
-                colour_index=colour_index,
-                number=number,
-                centroid=(x, y),
-                area=area,
-            )
-        )
 
-    legend = build_legend(palette, colour_numbers, swatch_size=36)
+    legend = build_legend(working_palette, colour_numbers, swatch_size=36)
     return OutlinePage(
         outline=outline,
         legend=legend,
         regions=regions,
-        palette=palette,
+        palette=working_palette,
         colour_numbers=colour_numbers,
+        labels=working_labels,
+        simplification=stats,
     )
 
 
@@ -240,3 +247,14 @@ def composite_page(
     page.paste(outline, ((width - outline.width) // 2, 0))
     page.paste(legend, ((width - legend.width) // 2, outline.height + gap))
     return page
+
+
+# Re-export for callers/tests that previously imported this helper.
+__all__ = [
+    "Region",
+    "OutlinePage",
+    "build_outline_page",
+    "build_legend",
+    "composite_page",
+    "count_regions",
+]
