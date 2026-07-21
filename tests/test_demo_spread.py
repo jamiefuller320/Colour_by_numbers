@@ -19,10 +19,9 @@ def _sample(path: Path) -> Path:
     return path
 
 
-def test_raw_keeps_more_regions_than_simple(tmp_path: Path) -> None:
-    # Noisy field so raw quantization fragments, while simple merges hard.
-    rng_image = Image.new("RGB", (160, 120), "white")
-    pixels = rng_image.load()
+def _noise(path: Path) -> Path:
+    image = Image.new("RGB", (160, 120), "white")
+    pixels = image.load()
     assert pixels is not None
     for y in range(120):
         for x in range(160):
@@ -31,26 +30,36 @@ def test_raw_keeps_more_regions_than_simple(tmp_path: Path) -> None:
                 (x * 7 + y * 2) % 255,
                 (x * 11 + y * 13) % 255,
             )
-    path = tmp_path / "noise.png"
-    rng_image.save(path)
-    image = Image.open(path)
-    raw = create_colour_by_numbers(image, n_colours=12, max_size=160, complexity="raw")
-    simple = create_colour_by_numbers(
-        image, n_colours=12, max_size=160, complexity="simple"
+    image.save(path)
+    return path
+
+
+def test_light_bracketed_by_fine_and_medium(tmp_path: Path) -> None:
+    image = Image.open(_noise(tmp_path / "noise.png"))
+    fine = create_colour_by_numbers(image, n_colours=12, max_size=160, complexity="fine")
+    light = create_colour_by_numbers(
+        image, n_colours=12, max_size=160, complexity="light"
     )
-    assert raw.page.simplification is not None
-    assert simple.page.simplification is not None
-    assert raw.page.simplification.regions_after > simple.page.simplification.regions_after
-    assert simple.page.simplification.regions_after <= 28
+    medium = create_colour_by_numbers(
+        image, n_colours=12, max_size=160, complexity="medium"
+    )
+    assert fine.page.simplification is not None
+    assert light.page.simplification is not None
+    assert medium.page.simplification is not None
+    assert (
+        fine.page.simplification.regions_after
+        >= light.page.simplification.regions_after
+        >= medium.page.simplification.regions_after
+    )
 
 
-def test_demo_spread_includes_original_and_settings(tmp_path: Path) -> None:
+def test_demo_spread_centres_on_light(tmp_path: Path) -> None:
     path = _sample(tmp_path / "sample.png")
     image = Image.open(path)
     colours, outlines, stats = build_demo_spread(
         image, n_colours=8, max_size=200, tile_width=120
     )
-    assert colours.width > outlines.width * 0.5
-    assert set(stats) == set(DEMO_SPREAD_SETTINGS)
-    # Spread is wider than a single tile (original + settings).
+    assert DEMO_SPREAD_SETTINGS == ("fine", "light", "medium")
+    assert set(stats) == {"fine", "light", "medium"}
     assert colours.width > 400
+    assert outlines.width > 400

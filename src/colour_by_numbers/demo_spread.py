@@ -113,11 +113,14 @@ def build_demo_spread(
                 else regions
             ),
         }
+        markers = {"fine": "− vs light", "light": "preferred", "medium": "+ vs light"}
+        marker = markers.get(setting, "")
+        title = f"{setting}" + (f"  ({marker})" if marker else "")
         subtitle = f"{n_colours}-colour · {regions} regions · {colours} used"
         colour_tiles.append(
             _captioned_tile(
                 result.quantized.preview,
-                title=setting,
+                title=title,
                 subtitle=subtitle,
                 tile_size=tile_size,
             )
@@ -125,7 +128,7 @@ def build_demo_spread(
         outline_tiles.append(
             _captioned_tile(
                 result.page.outline,
-                title=setting,
+                title=title,
                 subtitle=subtitle,
                 tile_size=tile_size,
             )
