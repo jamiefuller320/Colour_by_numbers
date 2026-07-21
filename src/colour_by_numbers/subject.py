@@ -345,12 +345,14 @@ def prepare_subject_image(
     subject_fill: float = DEFAULT_SUBJECT_FILL,
     firm_border: bool = True,
     segment_max_size: int = 1024,
+    colour_refine: bool = True,
 ) -> tuple[Image.Image, SubjectMask | None]:
     """Prepare an image for colour-by-numbers with optional subject isolation.
 
     Segmentation runs on a downscaled copy for speed, but the mask is mapped
     back and the crop is taken from the **full-resolution** source so native
-    print DPI is preserved.
+    print DPI is preserved. When ``colour_refine`` is True, silhouette pixels
+    near the edge are snapped using subject vs background colour contrast.
 
     Modes:
       - ``off``: unchanged image
@@ -372,6 +374,10 @@ def prepare_subject_image(
     if firm_border:
         mask = harden_mask(mask)
     mask = align_mask(mask, rgb.size, firm=firm_border)
+    if colour_refine:
+        from .contrast import refine_mask_by_colour
+
+        mask = refine_mask_by_colour(rgb, mask)
 
     if mode == "mask-only":
         return rgb, mask
@@ -383,6 +389,10 @@ def prepare_subject_image(
             )
         else:
             cropped, mask = rgb, mask
+        if colour_refine:
+            from .contrast import refine_mask_by_colour
+
+            mask = refine_mask_by_colour(cropped, mask)
         if firm_border:
             mask = harden_mask(mask)
         return cropped, mask
@@ -408,6 +418,10 @@ def prepare_subject_image(
         isolated, mask = crop_to_subject_fill(
             isolated, mask, target_fill=subject_fill, pad_colour=background
         )
+    if colour_refine:
+        from .contrast import refine_mask_by_colour
+
+        mask = refine_mask_by_colour(isolated, mask)
     if firm_border:
         mask = harden_mask(mask)
     return isolated, mask

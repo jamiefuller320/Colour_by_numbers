@@ -1,6 +1,6 @@
 # Colour by Numbers
 
-Search the web for images by description (for example `aircraft` or `dogs`), reduce them to a limited palette (default **16 colours**), and export a numbered outline page suitable for colouring books.
+Search the web for images by description (for example `aircraft` or `dogs`), map them onto a **standardised 32-colour** colouring palette, and export a numbered outline page suitable for colouring books.
 
 ## What it produces
 
@@ -18,11 +18,12 @@ For each source image the tool writes:
 ## How it works
 
 1. **Search** — Finds candidate photos from a text query using Openverse (open licences) first, then Wikimedia Commons, then DuckDuckGo as a fallback. No API keys are required. You can also supply a local file.
-2. **Subject engine (default: dual)** — rembg / U²-Net finds the subject on a downscaled copy, then maps a **firm binary mask** back onto the **full-resolution** photo and crops so the subject fills **80% of the frame**. **Fine** cleanup runs on the subject and **light** on the background under a shared palette of at most **16 colours**.
-3. **A4 print filter (CLI/UI default: 150 DPI)** — after the native subject crop, plates that would print softer than the chosen DPI floor on A4 are rejected (avoids enlarging tiny subjects into blur).
-4. **Cartoon prefilter + quantize** — Differential blur (gentler on the subject) then median-cut to ≤16 colours, composited with the hard subject silhouette.
-5. **Dual simplify** — Fine region absorption on subject pixels; light (stronger) absorption on background pixels; **no seam softening** when firm borders are on.
-6. **Outline + legend** — Numbered regions and a colour key (colour plates are the current focus; outline demos are paused).
+2. **Subject engine (default: dual)** — rembg / U²-Net finds the subject, **colour-refines** the silhouette using subject vs background Lab contrast, maps a **firm binary mask** onto the full-resolution photo, and crops so the subject fills **80% of the frame**.
+3. **Contrast-aware search** — web queries are biased toward clear subject/background photos; downloads are scored by centre-vs-border colour contrast.
+4. **A4 print filter (CLI/UI default: 150 DPI)** — reject plates that would print softer than the DPI floor on A4.
+5. **Standard 32-colour palette** — pixels map onto a fixed colouring-book set (optional free median-cut). Touching sections closer than a Lab ΔE floor are merged so adjacent paints stay distinct.
+6. **Dual simplify** — Fine cleanup on the subject, light on the background; firm borders; no seam softening.
+7. **Outline + legend** — Numbered regions and a colour key (colour plates are the current focus; outline demos are paused).
 
 ### Subject engine
 
@@ -110,6 +111,10 @@ Useful options:
 - `--subject dual|isolate|off` — subject engine (default: dual)
 - `--subject-fill 0.80` — subject bbox fill of the frame after crop
 - `--subject-complexity fine` / `--background-complexity light` — dual-pass presets
+- `--palette-mode standard|free` — fixed 32-colour set (default) or adaptive median-cut
+- `--colours 32` — how many paints to use from the palette
+- `--min-adjacent-delta-e 18` — merge small muddy touches closer than this Lab ΔE
+- `--colour-refine` / `--no-colour-refine` — snap silhouette by subject/bg colour
 - `--firm-border` / `--no-firm-border` — hard binary subject silhouette (default: on)
 - `--min-a4-dpi 150` / `--no-a4-filter` — A4 print-resolution gate
 - `--complexity fine|light|medium` — uniform complexity when not using dual

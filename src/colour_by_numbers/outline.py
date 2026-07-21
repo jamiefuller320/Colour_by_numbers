@@ -119,6 +119,7 @@ def build_outline_page(
     boundary_sigma: float = 1.25,
     output_size: tuple[int, int] | None = None,
     simplify: bool = True,
+    min_adjacent_delta_e: float = 18.0,
 ) -> OutlinePage:
     """Convert a palette-indexed image into a numbered outline page + legend.
 
@@ -140,6 +141,7 @@ def build_outline_page(
             smooth_radius=smooth_radius,
             morph_radius=morph_radius,
             boundary_sigma=boundary_sigma,
+            min_adjacent_delta_e=min_adjacent_delta_e,
         )
     else:
         before = count_regions(labels)
