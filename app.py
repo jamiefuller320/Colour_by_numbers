@@ -27,12 +27,15 @@ st.write(
 with st.sidebar:
     st.header("Settings")
     n_colours = st.slider("Number of colours", min_value=4, max_value=32, value=16)
-    complexity_options = ["raw", "light", "balanced", "simple"]
+    complexity_options = ["raw", "fine", "light", "medium", "simple"]
     complexity = st.selectbox(
         "Complexity",
         options=complexity_options,
-        index=complexity_options.index("balanced"),
-        help="raw = 16 colours only; light/balanced/simple increase region merging.",
+        index=complexity_options.index("light"),
+        help=(
+            "Centred on light cleanup. fine = a little less merge, "
+            "medium = a little more. raw = 16 colours only; simple = strongest merge."
+        ),
     )
     max_size = st.slider(
         "Max image edge (px)", min_value=400, max_value=1400, value=900, step=50

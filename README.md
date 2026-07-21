@@ -30,18 +30,21 @@ For each source image the tool writes:
 
 ### Complexity presets
 
+Centred on **`light`** (preferred for photos):
+
 | Preset | Intent |
 |--------|--------|
 | `raw` | 16-colour quantize only (no region merging) |
-| `light` | Gentle cleanup — keeps most photographic structure |
-| `balanced` | Default — recognisable outline with a modest region count |
-| `simple` | Stronger merge — fewer, larger colouring regions |
+| `fine` | Slightly less cleanup than light (−) |
+| `light` | Default — gentle cleanup |
+| `medium` | Slightly more cleanup than light (+) |
+| `simple` | Stronger merge — fewer, larger regions |
 
-`detailed` remains accepted as an alias for `light`.
+Aliases: `detailed` → `light`, `balanced` → `medium`.
 
 ### Demo spreads
 
-Compare the original photo with 16-colour results at each setting:
+Compare the original with 16-colour samples just below / at / above light:
 
 ```bash
 python scripts/make_demo_spread.py \
@@ -50,7 +53,8 @@ python scripts/make_demo_spread.py \
   --output output/demo
 ```
 
-This writes `*_original.png`, `*_spread_colours.png`, and `*_spread_outlines.png`.
+This writes `*_original.png`, `*_spread_colours.png`, and `*_spread_outlines.png`
+(panels: original · fine · light · medium).
 
 ## Install
 
@@ -83,7 +87,7 @@ colour-by-numbers --input photo.jpg --output output --colours 12
 
 Useful options:
 
-- `--complexity simple|balanced|detailed` — region simplification preset
+- `--complexity fine|light|medium` — region simplification (default: light)
 - `--max-regions 36` — hard cap on connected regions
 - `--pick N` — choose the Nth search result (0-based)
 - `--max-size 900` — longest edge before processing
@@ -116,7 +120,7 @@ result = create_colour_by_numbers(image, n_colours=16)
 ## Tips for colouring-book pages
 
 - Simple subjects with clear shapes (animals, vehicles, landmarks) work best.
-- Start with `--complexity light` or `balanced` for photos; use `raw` to inspect the unmerged 16-colour image; use `simple` when you want fewer regions.
+- Default `--complexity light` suits most photos; try `fine` / `medium` for small adjustments; use `raw` to inspect unmerged 16-colour output.
 - Fewer colours (8–12) are easier for younger colourists; 16 suits more detail.
 - Always respect copyright and licensing of source photos before publishing a book.
 - Prefer images you own, public-domain sources, or material with a clear commercial licence.

@@ -18,9 +18,9 @@ from .search import ImageHit, load_local_image, search_and_download
 
 
 # Named complexity presets control cartoon prefilter + region absorption.
-# Ordered from least → most aggressive for demo spreads.
+# Primary ladder is centred on ``light`` (the preferred photographic default).
 COMPLEXITY_PRESETS: dict[str, dict[str, float | int]] = {
-    # 16-colour quantize only — no region absorption.
+    # 16-colour quantize only — no region absorption (inspection / reference).
     "raw": {
         "blur_radius": 0.0,
         "structure_size": 900,
@@ -32,7 +32,19 @@ COMPLEXITY_PRESETS: dict[str, dict[str, float | int]] = {
         "line_width": 1,
         "simplify": 0,
     },
-    # Gentle cleanup — keeps most photographic structure.
+    # Slightly less cleanup than light — more regions retained.
+    "fine": {
+        "blur_radius": 0.6,
+        "structure_size": 580,
+        "min_area_fraction": 0.0018,
+        "max_regions": 110,
+        "smooth_radius": 1,
+        "morph_radius": 1,
+        "boundary_sigma": 0.4,
+        "line_width": 1,
+        "simplify": 1,
+    },
+    # Preferred photographic default — gentle cleanup.
     "light": {
         "blur_radius": 1.0,
         "structure_size": 520,
@@ -44,36 +56,38 @@ COMPLEXITY_PRESETS: dict[str, dict[str, float | int]] = {
         "line_width": 1,
         "simplify": 1,
     },
-    # Default balance of recognisable outline vs segment count.
-    "balanced": {
-        "blur_radius": 1.8,
-        "structure_size": 420,
-        "min_area_fraction": 0.008,
-        "max_regions": 48,
+    # Slightly more cleanup than light — fewer, larger regions.
+    "medium": {
+        "blur_radius": 1.4,
+        "structure_size": 460,
+        "min_area_fraction": 0.005,
+        "max_regions": 55,
         "smooth_radius": 2,
         "morph_radius": 1,
-        "boundary_sigma": 0.9,
-        "line_width": 2,
+        "boundary_sigma": 0.8,
+        "line_width": 1,
         "simplify": 1,
     },
     # Stronger merge — fewer, larger colouring regions.
     "simple": {
-        "blur_radius": 2.8,
-        "structure_size": 320,
-        "min_area_fraction": 0.015,
-        "max_regions": 28,
+        "blur_radius": 2.4,
+        "structure_size": 340,
+        "min_area_fraction": 0.012,
+        "max_regions": 30,
         "smooth_radius": 2,
         "morph_radius": 2,
-        "boundary_sigma": 1.2,
+        "boundary_sigma": 1.1,
         "line_width": 2,
         "simplify": 1,
     },
 }
 
-# Back-compat alias used in earlier docs/UI.
+# Back-compat aliases from earlier docs/UI.
 COMPLEXITY_PRESETS["detailed"] = dict(COMPLEXITY_PRESETS["light"])
+COMPLEXITY_PRESETS["balanced"] = dict(COMPLEXITY_PRESETS["medium"])
 
-DEMO_SPREAD_SETTINGS: tuple[str, ...] = ("raw", "light", "balanced", "simple")
+# Demo compares original with samples just below / at / just above light.
+DEMO_SPREAD_SETTINGS: tuple[str, ...] = ("fine", "light", "medium")
 
 
 @dataclass(frozen=True)
@@ -85,7 +99,7 @@ class ColourByNumbersResult:
     page: OutlinePage
     printable: Image.Image
     source_hit: ImageHit | None = None
-    complexity: str = "balanced"
+    complexity: str = "light"
 
     def save(self, output_dir: str | Path, *, stem: str = "colour_by_numbers") -> dict[str, Path]:
         """Write outline, legend, preview, and composite page to disk."""
@@ -111,7 +125,7 @@ def create_colour_by_numbers(
     *,
     n_colours: int = 16,
     max_size: int = 900,
-    complexity: str = "balanced",
+    complexity: str = "light",
     min_region_area: int | None = None,
     max_regions: int | None = None,
     blur_radius: float | None = None,

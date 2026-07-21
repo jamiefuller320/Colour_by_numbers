@@ -44,11 +44,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--complexity",
-        choices=["raw", "light", "balanced", "simple", "detailed"],
-        default="balanced",
+        choices=["raw", "fine", "light", "medium", "simple", "detailed", "balanced"],
+        default="light",
         help=(
-            "Region complexity: raw (16-colour only), light, balanced, or simple "
-            "(default: balanced). 'detailed' is an alias for light."
+            "Region complexity centred on light (default). "
+            "fine / medium are − / + vs light; raw = 16-colour only; "
+            "simple = strongest merge. detailed→light, balanced→medium."
         ),
     )
     parser.add_argument(
