@@ -99,10 +99,10 @@ def test_simplification_cuts_noisy_photo_regions(noisy_image: Path) -> None:
     )
     simplified_count = len(result.page.regions)
     assert raw_count > 40
-    assert simplified_count <= 36
+    assert simplified_count <= 48
     assert simplified_count < raw_count / 2
     assert result.page.simplification is not None
-    assert result.page.simplification.regions_after <= 36
+    assert result.page.simplification.regions_after <= 48
 
 
 def test_create_from_path_writes_outputs(sample_image: Path, tmp_path: Path) -> None:

@@ -7,7 +7,7 @@ import io
 import streamlit as st
 from PIL import Image
 
-from colour_by_numbers.pipeline import COMPLEXITY_PRESETS, create_colour_by_numbers
+from colour_by_numbers.pipeline import create_colour_by_numbers
 from colour_by_numbers.search import download_image, search_images
 
 
@@ -27,11 +27,12 @@ st.write(
 with st.sidebar:
     st.header("Settings")
     n_colours = st.slider("Number of colours", min_value=4, max_value=32, value=16)
+    complexity_options = ["raw", "light", "balanced", "simple"]
     complexity = st.selectbox(
         "Complexity",
-        options=sorted(COMPLEXITY_PRESETS),
-        index=sorted(COMPLEXITY_PRESETS).index("balanced"),
-        help="Controls blur, minimum region size, and maximum region count.",
+        options=complexity_options,
+        index=complexity_options.index("balanced"),
+        help="raw = 16 colours only; light/balanced/simple increase region merging.",
     )
     max_size = st.slider(
         "Max image edge (px)", min_value=400, max_value=1400, value=900, step=50
