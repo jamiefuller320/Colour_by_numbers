@@ -9,6 +9,7 @@ import numpy as np
 from PIL import Image
 
 from .outline import OutlinePage, build_outline_page, composite_page
+from .print_resolution import evaluate_print_resolution
 from .quantize import (
     QuantizedImage,
     prefilter_for_regions,
@@ -24,6 +25,7 @@ from .subject import (
     SubjectMask,
     align_mask,
     blend_subject_background,
+    harden_mask,
     prepare_subject_image,
 )
 
@@ -111,6 +113,64 @@ def _preset_simplify_params(
     }
 
 
+def _override_simplify_params(
+    params: dict,
+    *,
+    zone: str,
+    min_region_area: int | None = None,
+    max_regions: int | None = None,
+    smooth_radius: int | None = None,
+    morph_radius: int | None = None,
+    boundary_sigma: float | None = None,
+    subject_min_region_area: int | None = None,
+    subject_max_regions: int | None = None,
+    subject_smooth_radius: int | None = None,
+    subject_morph_radius: int | None = None,
+    subject_boundary_sigma: float | None = None,
+    background_min_region_area: int | None = None,
+    background_max_regions: int | None = None,
+    background_smooth_radius: int | None = None,
+    background_morph_radius: int | None = None,
+    background_boundary_sigma: float | None = None,
+) -> dict:
+    """Apply global then zone-specific overrides onto preset simplify params."""
+    out = dict(params)
+    if min_region_area is not None:
+        out["min_region_area"] = min_region_area
+    if max_regions is not None:
+        out["max_regions"] = max_regions
+    if smooth_radius is not None:
+        out["smooth_radius"] = smooth_radius
+    if morph_radius is not None:
+        out["morph_radius"] = morph_radius
+    if boundary_sigma is not None:
+        out["boundary_sigma"] = boundary_sigma
+
+    if zone == "subject":
+        if subject_min_region_area is not None:
+            out["min_region_area"] = subject_min_region_area
+        if subject_max_regions is not None:
+            out["max_regions"] = subject_max_regions
+        if subject_smooth_radius is not None:
+            out["smooth_radius"] = subject_smooth_radius
+        if subject_morph_radius is not None:
+            out["morph_radius"] = subject_morph_radius
+        if subject_boundary_sigma is not None:
+            out["boundary_sigma"] = subject_boundary_sigma
+    elif zone == "background":
+        if background_min_region_area is not None:
+            out["min_region_area"] = background_min_region_area
+        if background_max_regions is not None:
+            out["max_regions"] = background_max_regions
+        if background_smooth_radius is not None:
+            out["smooth_radius"] = background_smooth_radius
+        if background_morph_radius is not None:
+            out["morph_radius"] = background_morph_radius
+        if background_boundary_sigma is not None:
+            out["boundary_sigma"] = background_boundary_sigma
+    return out
+
+
 @dataclass(frozen=True)
 class ColourByNumbersResult:
     """All artefacts produced for one source image."""
@@ -126,6 +186,8 @@ class ColourByNumbersResult:
     subject_mode: str = "dual"
     subject_complexity: str | None = None
     background_complexity: str | None = None
+    print_dpi: float | None = None
+    firm_border: bool = True
 
     def save(self, output_dir: str | Path, *, stem: str = "colour_by_numbers") -> dict[str, Path]:
         """Write outline, legend, preview, and composite page to disk."""
@@ -162,12 +224,27 @@ def create_colour_by_numbers(
     subject_fill: float = DEFAULT_SUBJECT_FILL,
     subject_complexity: str = "fine",
     background_complexity: str = "light",
+    firm_border: bool = True,
+    min_a4_dpi: float | None = None,
+    subject_blur_radius: float | None = None,
+    background_blur_radius: float | None = None,
     min_region_area: int | None = None,
     max_regions: int | None = None,
+    subject_min_region_area: int | None = None,
+    subject_max_regions: int | None = None,
+    background_min_region_area: int | None = None,
+    background_max_regions: int | None = None,
     blur_radius: float | None = None,
     structure_size: int | None = None,
     smooth_radius: int | None = None,
     morph_radius: int | None = None,
+    boundary_sigma: float | None = None,
+    subject_smooth_radius: int | None = None,
+    subject_morph_radius: int | None = None,
+    subject_boundary_sigma: float | None = None,
+    background_smooth_radius: int | None = None,
+    background_morph_radius: int | None = None,
+    background_boundary_sigma: float | None = None,
     line_width: int | None = None,
     seed: int = 42,
     source_hit: ImageHit | None = None,
@@ -175,11 +252,11 @@ def create_colour_by_numbers(
     """Quantize an image, simplify regions, and produce a numbered outline page.
 
     Default ``subject_mode='dual'``:
-      1. rembg subject mask
-      2. crop so the subject fills ``subject_fill`` of the frame (default 80%)
-      3. shared palette of at most ``n_colours`` (default 16)
-      4. ``subject_complexity`` (fine) on the subject, ``background_complexity``
-         (light) on the background
+      1. rembg subject mask (firm binary by default)
+      2. crop full-resolution source so the subject fills ``subject_fill``
+      3. reject plates below ``min_a4_dpi`` when printed to A4
+      4. shared palette of at most ``n_colours`` (default 16)
+      5. ``subject_complexity`` on the subject, ``background_complexity`` on bg
     """
     if complexity not in COMPLEXITY_PRESETS:
         raise ValueError(
@@ -196,42 +273,67 @@ def create_colour_by_numbers(
     uniform_preset = COMPLEXITY_PRESETS[complexity]
 
     source_rgb = image.convert("RGB")
-    working = resize_for_processing(source_rgb, max_size=max_size)
-    prepared, subject_mask = prepare_subject_image(
-        working,
+
+    # Crop / isolate from the full-resolution source so native print DPI is kept.
+    prepared_native, subject_mask = prepare_subject_image(
+        source_rgb,
         mode=mode,
         model_name=subject_model,
         autocrop=subject_autocrop,
         subject_fill=subject_fill,
+        firm_border=firm_border,
     )
-    # After an 80% fill crop the plate can be small (tiny subjects). Scale it
-    # back up to the working canvas size so outlines stay printable.
-    if (
-        subject_autocrop
-        and mode not in {"off", "none"}
-        and max(prepared.size) < max(working.size) * 0.85
-    ):
-        prepared = prepared.resize(working.size, Image.Resampling.LANCZOS)
-        if subject_mask is not None:
-            subject_mask = align_mask(subject_mask, prepared.size)
-            subject_mask = SubjectMask(
-                alpha=subject_mask.alpha,
-                model=subject_mask.model,
-                foreground_fraction=float((subject_mask.alpha >= 128).mean()),
+    firm_mask = harden_mask(subject_mask) if subject_mask is not None else None
+
+    print_dpi: float | None = None
+    if min_a4_dpi is not None and min_a4_dpi > 0:
+        report = evaluate_print_resolution(
+            prepared_native.width,
+            prepared_native.height,
+            min_dpi=min_a4_dpi,
+        )
+        print_dpi = report.effective_dpi
+        if not report.adequate:
+            raise ValueError(
+                f"Subject plate {prepared_native.width}×{prepared_native.height}px "
+                f"is only ~{report.effective_dpi:.0f} DPI on A4; need ≥{min_a4_dpi:.0f} DPI. "
+                "Choose a higher-resolution source, or lower the A4 DPI filter."
             )
+    else:
+        print_dpi = evaluate_print_resolution(
+            prepared_native.width, prepared_native.height, min_dpi=150.0
+        ).effective_dpi
+
+    # Downscale for colour processing only after the native A4 check.
+    prepared = resize_for_processing(prepared_native, max_size=max_size)
+    if subject_mask is not None:
+        subject_mask = align_mask(subject_mask, prepared.size, firm=firm_border)
+    if firm_mask is not None:
+        firm_mask = align_mask(firm_mask, prepared.size, firm=True)
 
     use_dual = mode in {"dual", "hybrid", "split"} and subject_mask is not None
 
     if use_dual:
-        # Differential blur: gentler on subject, stronger on background.
-        subject_blurred = prefilter_for_regions(
-            prepared, blur_radius=float(subject_preset["blur_radius"])
+        subj_blur = (
+            float(subject_preset["blur_radius"])
+            if subject_blur_radius is None
+            else float(subject_blur_radius)
         )
-        background_blurred = prefilter_for_regions(
-            prepared, blur_radius=float(background_preset["blur_radius"])
+        bg_blur = (
+            float(background_preset["blur_radius"])
+            if background_blur_radius is None
+            else float(background_blur_radius)
+        )
+        subject_blurred = prefilter_for_regions(prepared, blur_radius=subj_blur)
+        background_blurred = prefilter_for_regions(prepared, blur_radius=bg_blur)
+        border_mask = (
+            firm_mask if (firm_border and firm_mask is not None) else subject_mask
         )
         quant_input = blend_subject_background(
-            subject_blurred, background_blurred, subject_mask
+            subject_blurred,
+            background_blurred,
+            border_mask,
+            firm_border=firm_border,
         )
         struct = int(
             structure_size
@@ -242,7 +344,7 @@ def create_colour_by_numbers(
                 max_size,
             )
         )
-        blur = 0.0  # already applied differentially
+        blur = 0.0
         stroke = int(
             line_width
             if line_width is not None
@@ -275,25 +377,44 @@ def create_colour_by_numbers(
     used_background_complexity: str | None = None
 
     if use_dual:
-        mask_img = Image.fromarray(subject_mask.alpha, mode="L").resize(
-            (width, height), Image.Resampling.BILINEAR
+        active_mask = (
+            firm_mask if (firm_border and firm_mask is not None) else subject_mask
+        )
+        assert active_mask is not None
+        resample = (
+            Image.Resampling.NEAREST if firm_border else Image.Resampling.BILINEAR
+        )
+        mask_img = Image.fromarray(active_mask.alpha, mode="L").resize(
+            (width, height), resample
         )
         mask_bool = np.asarray(mask_img, dtype=np.uint8) >= 128
-        subject_params = _preset_simplify_params(
-            subject_preset, width=width, height=height
+        override_kwargs = dict(
+            min_region_area=min_region_area,
+            max_regions=max_regions,
+            smooth_radius=smooth_radius,
+            morph_radius=morph_radius,
+            boundary_sigma=boundary_sigma,
+            subject_min_region_area=subject_min_region_area,
+            subject_max_regions=subject_max_regions,
+            subject_smooth_radius=subject_smooth_radius,
+            subject_morph_radius=subject_morph_radius,
+            subject_boundary_sigma=subject_boundary_sigma,
+            background_min_region_area=background_min_region_area,
+            background_max_regions=background_max_regions,
+            background_smooth_radius=background_smooth_radius,
+            background_morph_radius=background_morph_radius,
+            background_boundary_sigma=background_boundary_sigma,
         )
-        background_params = _preset_simplify_params(
-            background_preset, width=width, height=height
+        subject_params = _override_simplify_params(
+            _preset_simplify_params(subject_preset, width=width, height=height),
+            zone="subject",
+            **override_kwargs,
         )
-        if min_region_area is not None:
-            subject_params["min_region_area"] = min_region_area
-        if max_regions is not None:
-            subject_params["max_regions"] = max_regions
-            background_params["max_regions"] = max_regions
-        if smooth_radius is not None:
-            subject_params["smooth_radius"] = smooth_radius
-        if morph_radius is not None:
-            subject_params["morph_radius"] = morph_radius
+        background_params = _override_simplify_params(
+            _preset_simplify_params(background_preset, width=width, height=height),
+            zone="background",
+            **override_kwargs,
+        )
 
         labels, palette, subj_stats, _bg_stats = simplify_dual(
             quantized.labels,
@@ -301,6 +422,7 @@ def create_colour_by_numbers(
             mask_bool,
             subject_params=subject_params,
             background_params=background_params,
+            firm_border=firm_border,
         )
         labels = upsample_labels(labels, prepared.size)
         page = build_outline_page(
@@ -333,7 +455,9 @@ def create_colour_by_numbers(
         preset = uniform_preset
         smooth = int(preset["smooth_radius"] if smooth_radius is None else smooth_radius)
         morph = int(preset["morph_radius"] if morph_radius is None else morph_radius)
-        boundary = float(preset["boundary_sigma"])
+        boundary = float(
+            preset["boundary_sigma"] if boundary_sigma is None else boundary_sigma
+        )
         region_cap = int(preset["max_regions"] if max_regions is None else max_regions)
         do_simplify = bool(int(preset.get("simplify", 1)))
         area = min_region_area
@@ -354,6 +478,8 @@ def create_colour_by_numbers(
         )
         complexity_label = complexity
 
+    prepared_out = prepared_native if mode not in {"off", "none"} else None
+
     simplified_preview = preview_from_labels(page.labels, page.palette)
     quantized = QuantizedImage(
         labels=page.labels,
@@ -368,11 +494,13 @@ def create_colour_by_numbers(
         printable=printable,
         source_hit=source_hit,
         complexity=complexity_label,
-        prepared=prepared if mode not in {"off", "none"} else None,
+        prepared=prepared_out,
         subject_mask=subject_mask,
         subject_mode=mode,
         subject_complexity=used_subject_complexity,
         background_complexity=used_background_complexity,
+        print_dpi=print_dpi,
+        firm_border=firm_border,
     )
 
 
@@ -383,15 +511,22 @@ def create_from_query(
     max_size: int = 900,
     pick: int = 0,
     max_results: int = 8,
+    min_a4_dpi: float | None = 150.0,
     **kwargs,
 ) -> ColourByNumbersResult:
     """Search the web for ``query`` and convert a result to colour-by-numbers."""
-    image, hit = search_and_download(query, max_results=max_results, pick=pick)
+    image, hit = search_and_download(
+        query,
+        max_results=max_results,
+        pick=pick,
+        min_a4_dpi=min_a4_dpi,
+    )
     return create_colour_by_numbers(
         image,
         n_colours=n_colours,
         max_size=max_size,
         source_hit=hit,
+        min_a4_dpi=min_a4_dpi,
         **kwargs,
     )
 

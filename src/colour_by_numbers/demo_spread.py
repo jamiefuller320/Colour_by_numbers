@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from .pipeline import DEMO_SUBJECT_COMPARE, create_colour_by_numbers
+from .pipeline import create_colour_by_numbers
 from .quantize import resize_for_processing
 from .simplify import count_regions
 
@@ -75,10 +75,15 @@ def build_demo_spread(
     complexity: str = "fine",
     subject_modes: tuple[str, ...] = ("off", "dual"),
     tile_width: int = 300,
-) -> tuple[Image.Image, Image.Image, dict[str, dict[str, object]]]:
-    """Return (colour_spread, outline_spread, stats).
+    firm_border: bool = True,
+    min_a4_dpi: float | None = None,
+    include_outlines: bool = False,
+) -> tuple[Image.Image, Image.Image | None, dict[str, dict[str, object]]]:
+    """Return (colour_spread, outline_spread|None, stats).
 
-    Default compares full-frame fine vs dual (80% fill, fine subject / light bg).
+    Outline spreads are omitted by default while colour plates are refined.
+    ``min_a4_dpi`` defaults to None for demos so existing sources still render;
+    production UI/CLI keep the A4 filter on.
     """
     source_fit = resize_for_processing(source.convert("RGB"), max_size=max_size)
     aspect = source_fit.height / max(source_fit.width, 1)
@@ -93,14 +98,16 @@ def build_demo_spread(
             tile_size=tile_size,
         )
     ]
-    outline_tiles: list[Image.Image] = [
-        _captioned_tile(
-            source_fit,
-            title="Original",
-            subtitle="source photograph",
-            tile_size=tile_size,
+    outline_tiles: list[Image.Image] = []
+    if include_outlines:
+        outline_tiles.append(
+            _captioned_tile(
+                source_fit,
+                title="Original",
+                subtitle="source photograph",
+                tile_size=tile_size,
+            )
         )
-    ]
     stats: dict[str, dict[str, object]] = {}
 
     labels = {
@@ -111,7 +118,7 @@ def build_demo_spread(
 
     for mode in subject_modes:
         result = create_colour_by_numbers(
-            source_fit,
+            source,
             n_colours=n_colours,
             max_size=max_size,
             complexity=complexity,
@@ -119,6 +126,8 @@ def build_demo_spread(
             subject_fill=0.80,
             subject_complexity="fine",
             background_complexity="light",
+            firm_border=firm_border,
+            min_a4_dpi=min_a4_dpi,
         )
         regions = (
             result.page.simplification.regions_after
@@ -137,8 +146,12 @@ def build_demo_spread(
             "foreground_pct": fg,
             "complexity": result.complexity,
             "mode": mode,
+            "print_dpi": result.print_dpi,
+            "firm_border": result.firm_border,
         }
         subtitle = f"{colours}-colour · {regions} regions"
+        if result.print_dpi is not None:
+            subtitle += f" · ~{result.print_dpi:.0f} DPI"
         if fg is not None:
             subtitle += f" · fg {fg}%"
         if result.prepared is not None and mode == "dual":
@@ -158,16 +171,18 @@ def build_demo_spread(
                 tile_size=tile_size,
             )
         )
-        outline_tiles.append(
-            _captioned_tile(
-                result.page.outline,
-                title=labels.get(mode, mode),
-                subtitle=subtitle,
-                tile_size=tile_size,
+        if include_outlines:
+            outline_tiles.append(
+                _captioned_tile(
+                    result.page.outline,
+                    title=labels.get(mode, mode),
+                    subtitle=subtitle,
+                    tile_size=tile_size,
+                )
             )
-        )
 
-    return _row(colour_tiles), _row(outline_tiles), stats
+    outlines = _row(outline_tiles) if include_outlines and outline_tiles else None
+    return _row(colour_tiles), outlines, stats
 
 
 def write_demo_spreads(
@@ -177,6 +192,9 @@ def write_demo_spreads(
     n_colours: int = 16,
     max_size: int = 700,
     complexity: str = "fine",
+    include_outlines: bool = False,
+    firm_border: bool = True,
+    min_a4_dpi: float | None = None,
 ) -> dict[str, Path]:
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -190,13 +208,17 @@ def write_demo_spreads(
             max_size=max_size,
             complexity=complexity,
             subject_modes=("off", "dual"),
+            include_outlines=include_outlines,
+            firm_border=firm_border,
+            min_a4_dpi=min_a4_dpi,
         )
         colour_path = out / f"{name}_spread_colours.png"
-        outline_path = out / f"{name}_spread_outlines.png"
         colours.save(colour_path)
-        outlines.save(outline_path)
         written[f"{name}_colours"] = colour_path
-        written[f"{name}_outlines"] = outline_path
+        if outlines is not None:
+            outline_path = out / f"{name}_spread_outlines.png"
+            outlines.save(outline_path)
+            written[f"{name}_outlines"] = outline_path
         source_path = out / f"{name}_original.png"
         resize_for_processing(image, max_size=max_size).save(source_path)
         written[f"{name}_original"] = source_path

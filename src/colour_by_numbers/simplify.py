@@ -367,11 +367,13 @@ def simplify_dual(
     *,
     subject_params: dict,
     background_params: dict,
+    firm_border: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, SimplificationStats, SimplificationStats]:
     """Simplify subject pixels with one preset and background with another.
 
     ``subject_mask`` is a boolean HxW array aligned with ``labels``.
-    Palette indices stay shared; unused colours are compacted at the end.
+    When ``firm_border`` is True, the hard mask silhouette is preserved with
+    no seam softening across the subject edge.
     """
     if subject_mask.shape != labels.shape:
         raise ValueError("subject_mask must match labels shape")
@@ -382,11 +384,17 @@ def simplify_dual(
     background_labels, _, background_stats = simplify_labels(
         labels, palette, compact=False, **background_params
     )
-    combined = np.where(subject_mask, subject_labels, background_labels).astype(np.int32)
-    # Soften the seam between the two complexity zones.
-    seam = ndimage.binary_dilation(subject_mask, iterations=2) ^ subject_mask
-    if seam.any():
-        softened = smooth_boundaries(combined, sigma=0.8)
-        combined = np.where(seam, softened, combined).astype(np.int32)
+    if firm_border:
+        combined = np.where(subject_mask, subject_labels, background_labels).astype(
+            np.int32
+        )
+    else:
+        combined = np.where(subject_mask, subject_labels, background_labels).astype(
+            np.int32
+        )
+        seam = ndimage.binary_dilation(subject_mask, iterations=2) ^ subject_mask
+        if seam.any():
+            softened = smooth_boundaries(combined, sigma=0.8)
+            combined = np.where(seam, softened, combined).astype(np.int32)
     combined, new_palette = compact_palette(combined, palette)
     return combined, new_palette, subject_stats, background_stats

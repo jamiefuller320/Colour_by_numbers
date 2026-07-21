@@ -75,20 +75,31 @@ def estimate_subject_mask(
     return SubjectMask(alpha=alpha, model=model_name, foreground_fraction=fraction)
 
 
-def align_mask(mask: SubjectMask, size: tuple[int, int]) -> SubjectMask:
-    """Resize a subject mask to an image size ``(width, height)``."""
+def align_mask(
+    mask: SubjectMask,
+    size: tuple[int, int],
+    *,
+    resample: Image.Resampling | None = None,
+    firm: bool = False,
+) -> SubjectMask:
+    """Resize a subject mask to an image size ``(width, height)``.
+
+    Use nearest-neighbour (``firm=True``) for binary silhouette masks so
+    subject borders stay crisp when scaled.
+    """
     width, height = size
     if mask.alpha.shape == (height, width):
-        return mask
-    alpha_img = Image.fromarray(mask.alpha, mode="L").resize(
-        (width, height), Image.Resampling.BILINEAR
-    )
+        return harden_mask(mask) if firm else mask
+    if resample is None:
+        resample = Image.Resampling.NEAREST if firm else Image.Resampling.BILINEAR
+    alpha_img = Image.fromarray(mask.alpha, mode="L").resize((width, height), resample)
     alpha = np.asarray(alpha_img, dtype=np.uint8)
-    return SubjectMask(
+    aligned = SubjectMask(
         alpha=alpha,
         model=mask.model,
         foreground_fraction=float((alpha >= 128).mean()),
     )
+    return harden_mask(aligned) if firm else aligned
 
 
 def isolate_on_flat_background(
@@ -260,22 +271,67 @@ def crop_to_subject_fill(
     return cropped, cropped_mask
 
 
+def harden_mask(mask: SubjectMask, *, threshold: int = 128) -> SubjectMask:
+    """Convert a soft alpha matte into a firm binary subject mask."""
+    hard = np.where(mask.alpha >= threshold, 255, 0).astype(np.uint8)
+    return SubjectMask(
+        alpha=hard,
+        model=mask.model,
+        foreground_fraction=float((hard >= 128).mean()),
+    )
+
+
 def blend_subject_background(
     subject_image: Image.Image,
     background_image: Image.Image,
     mask: SubjectMask,
+    *,
+    firm_border: bool = True,
 ) -> Image.Image:
-    """Alpha-composite subject over background using the subject mask."""
+    """Composite subject over background.
+
+    When ``firm_border`` is True, uses the hard binary mask from the original
+    subject crop (no soft alpha), so the silhouette edge stays crisp.
+    """
     subject_image = subject_image.convert("RGB")
     background_image = background_image.convert("RGB").resize(
         subject_image.size, Image.Resampling.BILINEAR
     )
     mask = align_mask(mask, subject_image.size)
+    if firm_border:
+        mask = harden_mask(mask)
+        out = np.asarray(background_image, dtype=np.uint8).copy()
+        subj = np.asarray(subject_image, dtype=np.uint8)
+        out[mask.binary] = subj[mask.binary]
+        return Image.fromarray(out, mode="RGB")
+
     out = background_image.copy()
     rgba = subject_image.convert("RGBA")
     rgba.putalpha(Image.fromarray(mask.alpha, mode="L"))
     out.paste(rgba, mask=rgba.split()[-1])
     return out
+
+
+def apply_firm_subject_border(
+    subject_labels: np.ndarray,
+    background_labels: np.ndarray,
+    hard_mask: np.ndarray,
+) -> np.ndarray:
+    """Snap dual label maps to the hard subject silhouette (no blurred seam)."""
+    if hard_mask.shape != subject_labels.shape:
+        raise ValueError("hard_mask must match subject_labels shape")
+    if background_labels.shape != subject_labels.shape:
+        raise ValueError("background_labels must match subject_labels shape")
+    return np.where(hard_mask, subject_labels, background_labels).astype(np.int32)
+
+
+def subject_bbox(mask: SubjectMask) -> tuple[int, int, int, int] | None:
+    """Return ``(x0, y0, x1, y1)`` for the foreground, or None if empty."""
+    binary = mask.binary
+    if not binary.any():
+        return None
+    ys, xs = np.nonzero(binary)
+    return int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
 
 
 def prepare_subject_image(
@@ -287,24 +343,38 @@ def prepare_subject_image(
     autocrop: bool = True,
     padding_fraction: float = 0.12,
     subject_fill: float = DEFAULT_SUBJECT_FILL,
+    firm_border: bool = True,
+    segment_max_size: int = 1024,
 ) -> tuple[Image.Image, SubjectMask | None]:
     """Prepare an image for colour-by-numbers with optional subject isolation.
 
+    Segmentation runs on a downscaled copy for speed, but the mask is mapped
+    back and the crop is taken from the **full-resolution** source so native
+    print DPI is preserved.
+
     Modes:
       - ``off``: unchanged image
-      - ``isolate``: flat background + optional padding crop
+      - ``isolate``: flat background + optional fill crop
       - ``dual``: keep scene, crop so subject fills ``subject_fill`` of frame
         (default 80%) for fine-on-subject / light-on-background processing
       - ``mask-only``: return mask without changing pixels
     """
+    from .quantize import resize_for_processing
+
     mode = mode.lower().strip()
     rgb = image.convert("RGB")
     if mode in {"off", "none", "false", "0"}:
         return rgb, None
-    if mode == "mask-only":
-        return rgb, estimate_subject_mask(rgb, model_name=model_name)
 
-    mask = estimate_subject_mask(rgb, model_name=model_name)
+    # rembg on a moderate canvas, then lift the mask to native resolution.
+    seg = resize_for_processing(rgb, max_size=segment_max_size)
+    mask = estimate_subject_mask(seg, model_name=model_name)
+    if firm_border:
+        mask = harden_mask(mask)
+    mask = align_mask(mask, rgb.size, firm=firm_border)
+
+    if mode == "mask-only":
+        return rgb, mask
 
     if mode in {"dual", "hybrid", "split"}:
         if autocrop:
@@ -313,7 +383,8 @@ def prepare_subject_image(
             )
         else:
             cropped, mask = rgb, mask
-        # Upscale the cropped plate so the page is still printably large.
+        if firm_border:
+            mask = harden_mask(mask)
         return cropped, mask
 
     if mode not in {"isolate", "on", "true", "1"}:
@@ -321,11 +392,22 @@ def prepare_subject_image(
             f"Unknown subject mode {mode!r}; use off, isolate, dual, or mask-only"
         )
 
-    isolated, mask = isolate_on_flat_background(
-        rgb, mask, background=background, model_name=model_name
-    )
+    # Isolate uses a hard paste when firm borders are requested.
+    if firm_border:
+        mask = harden_mask(mask)
+        base = Image.new("RGB", rgb.size, background)
+        out = np.asarray(base, dtype=np.uint8).copy()
+        src = np.asarray(rgb, dtype=np.uint8)
+        out[mask.binary] = src[mask.binary]
+        isolated = Image.fromarray(out, mode="RGB")
+    else:
+        isolated, mask = isolate_on_flat_background(
+            rgb, mask, background=background, model_name=model_name
+        )
     if autocrop:
         isolated, mask = crop_to_subject_fill(
             isolated, mask, target_fill=subject_fill, pad_colour=background
         )
+    if firm_border:
+        mask = harden_mask(mask)
     return isolated, mask

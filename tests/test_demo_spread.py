@@ -55,7 +55,21 @@ def test_demo_spread_compares_off_and_dual(tmp_path: Path, monkeypatch) -> None:
         tile_width=120,
         complexity="fine",
         subject_modes=("off", "dual"),
+        include_outlines=False,
     )
     assert set(stats) == {"off", "dual"}
     assert colours.width > 400
-    assert outlines.width > 300
+    assert outlines is None
+
+    colours2, outlines2, _ = build_demo_spread(
+        image,
+        n_colours=8,
+        max_size=200,
+        tile_width=120,
+        complexity="fine",
+        subject_modes=("off",),
+        include_outlines=True,
+    )
+    assert outlines2 is not None
+    assert outlines2.width > 100
+    assert colours2.width > 100

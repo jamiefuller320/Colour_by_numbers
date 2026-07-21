@@ -18,10 +18,11 @@ For each source image the tool writes:
 ## How it works
 
 1. **Search** — Finds candidate photos from a text query using Openverse (open licences) first, then Wikimedia Commons, then DuckDuckGo as a fallback. No API keys are required. You can also supply a local file.
-2. **Subject engine (default: dual)** — rembg / U²-Net finds the subject, crops so its bounding box fills **80% of the frame**, then applies **fine** cleanup to the subject and **light** cleanup to the background under a shared palette of at most **16 colours**.
-3. **Cartoon prefilter + quantize** — Differential blur (gentler on the subject) then median-cut to ≤16 colours.
-4. **Dual simplify** — Fine region absorption on subject pixels; light (stronger) absorption on background pixels; seam softened at the mask edge.
-5. **Outline + legend** — Numbered regions and a colour key.
+2. **Subject engine (default: dual)** — rembg / U²-Net finds the subject on a downscaled copy, then maps a **firm binary mask** back onto the **full-resolution** photo and crops so the subject fills **80% of the frame**. **Fine** cleanup runs on the subject and **light** on the background under a shared palette of at most **16 colours**.
+3. **A4 print filter (CLI/UI default: 150 DPI)** — after the native subject crop, plates that would print softer than the chosen DPI floor on A4 are rejected (avoids enlarging tiny subjects into blur).
+4. **Cartoon prefilter + quantize** — Differential blur (gentler on the subject) then median-cut to ≤16 colours, composited with the hard subject silhouette.
+5. **Dual simplify** — Fine region absorption on subject pixels; light (stronger) absorption on background pixels; **no seam softening** when firm borders are on.
+6. **Outline + legend** — Numbered regions and a colour key (colour plates are the current focus; outline demos are paused).
 
 ### Subject engine
 
@@ -51,7 +52,7 @@ Default is **`fine`** (best results so far once the subject is isolated):
 
 ### Demo spreads
 
-Compare original vs full-frame fine vs dual (80% fill, fine/light):
+Colour-only comparison spreads (outline demos paused while colour plates are refined):
 
 ```bash
 python scripts/make_demo_spread.py \
@@ -59,6 +60,21 @@ python scripts/make_demo_spread.py \
   --dogs output/dogs_source.png \
   --output output/demo
 ```
+
+### A4 resolution & firm borders
+
+```bash
+# Require ~150 DPI when the subject plate is printed to fill A4 (default on CLI)
+colour-by-numbers --input photo.jpg --min-a4-dpi 150
+
+# Disable the filter
+colour-by-numbers --input photo.jpg --no-a4-filter
+
+# Soft alpha edges instead of a hard silhouette mask
+colour-by-numbers --input photo.jpg --no-firm-border
+```
+
+Search results with known width/height below the DPI floor are filtered out; larger images are preferred.
 
 ## Install
 
@@ -94,12 +110,16 @@ Useful options:
 - `--subject dual|isolate|off` — subject engine (default: dual)
 - `--subject-fill 0.80` — subject bbox fill of the frame after crop
 - `--subject-complexity fine` / `--background-complexity light` — dual-pass presets
+- `--firm-border` / `--no-firm-border` — hard binary subject silhouette (default: on)
+- `--min-a4-dpi 150` / `--no-a4-filter` — A4 print-resolution gate
 - `--complexity fine|light|medium` — uniform complexity when not using dual
 - `--max-regions 36` — hard cap on connected regions
 - `--pick N` — choose the Nth search result (0-based)
-- `--max-size 900` — longest edge before processing
+- `--max-size 900` — longest edge for colour processing (after native A4 check)
 - `--line-width 2` — thicker outlines
 - `--stem my_page` — output filename prefix
+
+The Streamlit UI exposes these plus per-zone blur / region-simplify overrides.
 
 ## Web UI
 
@@ -107,7 +127,7 @@ Useful options:
 streamlit run app.py
 ```
 
-Search or upload an image, adjust the palette size, then download the outline, legend, or full printable page.
+Search or upload an image, then adjust palette, subject engine, fill, firm borders, A4 DPI floor, dual complexities, and optional blur/region overrides in the sidebar. Colour plates are shown first; outline download remains available in an expander.
 
 ## Python API
 
