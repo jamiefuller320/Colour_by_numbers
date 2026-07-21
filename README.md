@@ -17,9 +17,24 @@ For each source image the tool writes:
 ## How it works
 
 1. **Search** — Finds candidate photos from a text query using Openverse (open licences) first, then Wikimedia Commons, then DuckDuckGo as a fallback. No API keys are required. You can also supply a local file.
-2. **Quantize** — k-means clustering reduces the image to N colours (default 16).
-3. **Outline** — Boundaries between colour regions become black lines on white. Connected regions large enough to colour receive the palette number for that colour.
-4. **Legend** — A colour key lists each number with a swatch and hex value.
+2. **Cartoon prefilter + quantize** — The image is downscaled to a small “structure” canvas, soft-blurred to kill photo grain, then median-cut reduced to N colours (default 16).
+3. **Simplify regions** — On that structure canvas the pipeline:
+   - majority-filters labels
+   - morphologically opens/closes each colour (removes slivers, fills pinholes)
+   - absorbs regions below a minimum area into the neighbour with the longest shared border
+   - absorbs regions that are too thin to colour (inscribed diameter test)
+   - enforces a hard maximum region count
+   - Gaussian-smooths boundaries, then re-absorbs anything that fractured
+4. **Upsample + outline** — Simplified labels are nearest-neighbour scaled to print size, lightly re-smoothed, and stroked as black outlines on white. Every surviving region gets its colour number at an interior point.
+5. **Legend** — A colour key lists each number with a swatch and hex value.
+
+### Complexity presets
+
+| Preset | Intent |
+|--------|--------|
+| `simple` | Few large shapes (busy photos, younger colourists) |
+| `balanced` | Default — recognisable outline with a modest region count |
+| `detailed` | More segments retained for simpler subjects |
 
 ## Install
 
@@ -52,6 +67,8 @@ colour-by-numbers --input photo.jpg --output output --colours 12
 
 Useful options:
 
+- `--complexity simple|balanced|detailed` — region simplification preset
+- `--max-regions 36` — hard cap on connected regions
 - `--pick N` — choose the Nth search result (0-based)
 - `--max-size 900` — longest edge before processing
 - `--line-width 2` — thicker outlines
@@ -83,6 +100,7 @@ result = create_colour_by_numbers(image, n_colours=16)
 ## Tips for colouring-book pages
 
 - Simple subjects with clear shapes (animals, vehicles, landmarks) work best.
+- Start with `--complexity simple` for busy photos; use `detailed` only for already-simple subjects.
 - Fewer colours (8–12) are easier for younger colourists; 16 suits more detail.
 - Always respect copyright and licensing of source photos before publishing a book.
 - Prefer images you own, public-domain sources, or material with a clear commercial licence.

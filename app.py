@@ -7,7 +7,7 @@ import io
 import streamlit as st
 from PIL import Image
 
-from colour_by_numbers.pipeline import create_colour_by_numbers
+from colour_by_numbers.pipeline import COMPLEXITY_PRESETS, create_colour_by_numbers
 from colour_by_numbers.search import download_image, search_images
 
 
@@ -19,15 +19,23 @@ st.set_page_config(
 
 st.title("Colour by Numbers")
 st.write(
-    "Search the web for a subject, reduce it to a limited palette, and export "
-    "a numbered outline ready for a colouring book."
+    "Search the web for a subject, reduce it to a limited palette, simplify "
+    "regions into coherent shapes, and export a numbered outline ready for a "
+    "colouring book."
 )
 
 with st.sidebar:
     st.header("Settings")
     n_colours = st.slider("Number of colours", min_value=4, max_value=32, value=16)
-    max_size = st.slider("Max image edge (px)", min_value=400, max_value=1400, value=900, step=50)
-    line_width = st.slider("Outline thickness", min_value=1, max_value=3, value=1)
+    complexity = st.selectbox(
+        "Complexity",
+        options=sorted(COMPLEXITY_PRESETS),
+        index=sorted(COMPLEXITY_PRESETS).index("balanced"),
+        help="Controls blur, minimum region size, and maximum region count.",
+    )
+    max_size = st.slider(
+        "Max image edge (px)", min_value=400, max_value=1400, value=900, step=50
+    )
     source_mode = st.radio("Image source", ["Web search", "Upload file"], index=0)
 
 
@@ -39,7 +47,7 @@ def _image_to_png_bytes(image: Image.Image) -> bytes:
 
 if source_mode == "Web search":
     query = st.text_input("Search for images", placeholder="aircraft, dogs, sailboat…")
-    col_a, col_b = st.columns([1, 3])
+    col_a, _col_b = st.columns([1, 3])
     with col_a:
         search_clicked = st.button("Search", type="primary", use_container_width=True)
 
@@ -61,7 +69,11 @@ if source_mode == "Web search":
     if hits:
         st.subheader(f"Results for “{st.session_state.query}”")
         labels = [f"{i + 1}. {hit.title[:80]}" for i, hit in enumerate(hits)]
-        choice = st.selectbox("Choose an image", options=list(range(len(hits))), format_func=lambda i: labels[i])
+        choice = st.selectbox(
+            "Choose an image",
+            options=list(range(len(hits))),
+            format_func=lambda i: labels[i],
+        )
         generate = st.button("Generate colour-by-numbers", type="primary")
         if generate:
             hit = hits[choice]
@@ -72,7 +84,7 @@ if source_mode == "Web search":
                         image,
                         n_colours=n_colours,
                         max_size=max_size,
-                        line_width=line_width,
+                        complexity=complexity,
                         source_hit=hit,
                     )
                     st.session_state.result = result
@@ -82,7 +94,9 @@ if source_mode == "Web search":
         st.warning("No images found. Try a different search.")
 
 else:
-    uploaded = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg", "webp", "bmp"])
+    uploaded = st.file_uploader(
+        "Upload an image", type=["png", "jpg", "jpeg", "webp", "bmp"]
+    )
     if uploaded is not None:
         image = Image.open(uploaded).convert("RGB")
         st.image(image, caption="Uploaded image", use_container_width=True)
@@ -92,7 +106,7 @@ else:
                     image,
                     n_colours=n_colours,
                     max_size=max_size,
-                    line_width=line_width,
+                    complexity=complexity,
                 )
                 st.session_state.result = result
 
@@ -101,12 +115,19 @@ result = st.session_state.get("result")
 if result is not None:
     st.divider()
     st.subheader("Results")
+    if result.page.simplification is not None:
+        stats = result.page.simplification
+        st.caption(
+            f"Complexity “{result.complexity}”: "
+            f"{stats.regions_before} regions → {stats.regions_after} "
+            f"({result.quantized.n_colours} colours)"
+        )
     c1, c2, c3 = st.columns(3)
     with c1:
         st.caption("Source")
         st.image(result.source, use_container_width=True)
     with c2:
-        st.caption(f"Quantized ({result.quantized.n_colours} colours)")
+        st.caption(f"Simplified palette ({result.quantized.n_colours} colours)")
         st.image(result.quantized.preview, use_container_width=True)
     with c3:
         st.caption("Numbered outline")
@@ -142,10 +163,10 @@ if result is not None:
         )
 
     if result.source_hit:
-                hit = result.source_hit
-                bits = [f"Source: {hit.url}"]
-                if hit.provider:
-                    bits.append(f"via {hit.provider}")
-                if hit.license:
-                    bits.append(f"licence: {hit.license}")
-                st.caption(" · ".join(bits))
+        hit = result.source_hit
+        bits = [f"Source: {hit.url}"]
+        if hit.provider:
+            bits.append(f"via {hit.provider}")
+        if hit.license:
+            bits.append(f"licence: {hit.license}")
+        st.caption(" · ".join(bits))
