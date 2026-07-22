@@ -1081,6 +1081,9 @@ async function generate() {
 
 async function init() {
   const response = await fetch("./categories.json");
+  if (!response.ok) {
+    throw new Error(`categories.json HTTP ${response.status}`);
+  }
   categories = await response.json();
   const names = Object.keys(categories).sort();
   categorySelect.innerHTML = "";
