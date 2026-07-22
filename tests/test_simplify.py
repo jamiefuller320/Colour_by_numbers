@@ -11,6 +11,8 @@ from colour_by_numbers.simplify import (
     enforce_colourable_blocks,
     is_colourable_block,
     limit_region_count,
+    merge_adjacent_same_colour,
+    normalize_specular_highlights,
     simplify_labels,
 )
 
@@ -70,6 +72,54 @@ def test_enforce_colourable_blocks_keeps_detail_as_ink() -> None:
             assert is_colourable_block(
                 component, min_width_px=5, min_height_px=5, min_inscribed_px=5.0
             )
+
+
+def test_merge_adjacent_same_colour_bridges_gap() -> None:
+    labels = np.zeros((30, 40), dtype=np.int32)
+    labels[:, :] = 1
+    # Two white islands separated by a 3px gap.
+    labels[10:18, 8:14] = 0
+    labels[10:18, 17:23] = 0
+    merged = merge_adjacent_same_colour(labels, bridge_px=4)
+    from scipy import ndimage
+
+    labeled, n = ndimage.label(merged == 0, structure=np.ones((3, 3)))
+    assert n == 1
+
+
+def test_highlights_all_or_none() -> None:
+    from scipy import ndimage
+
+    palette = np.array(
+        [[20, 20, 20], [40, 40, 40], [245, 245, 245]], dtype=np.uint8
+    )
+    labels = np.zeros((50, 50), dtype=np.int32)
+    labels[:, :] = 1
+    # Single colourable white highlight (one eye only).
+    labels[18:26, 18:26] = 2
+    cleaned, _ = normalize_specular_highlights(
+        labels,
+        palette,
+        min_width_px=5,
+        min_height_px=5,
+        min_inscribed_px=5.0,
+    )
+    assert not np.any(cleaned == 2)
+
+    # Two colourable highlights → both kept.
+    labels2 = np.zeros((50, 60), dtype=np.int32)
+    labels2[:, :] = 1
+    labels2[18:26, 12:20] = 2
+    labels2[18:26, 40:48] = 2
+    kept, _ = normalize_specular_highlights(
+        labels2,
+        palette,
+        min_width_px=5,
+        min_height_px=5,
+        min_inscribed_px=5.0,
+    )
+    labeled, n = ndimage.label(kept == 2, structure=np.ones((3, 3)))
+    assert n == 2
 
 
 def test_limit_region_count_respects_cap() -> None:

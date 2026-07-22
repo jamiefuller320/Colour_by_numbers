@@ -15,6 +15,9 @@ from .simplify import (
     absorb_thin_regions,
     count_regions,
     enforce_colourable_blocks,
+    enforce_min_brush_stroke,
+    merge_adjacent_same_colour,
+    normalize_specular_highlights,
     simplify_labels,
     smooth_boundaries,
 )
@@ -254,11 +257,25 @@ def build_outline_page(
         width_req = max(1, int(round(min_thickness)))
         height_req = width_req
     if width_req and height_req:
+        tip = float(min(width_req, height_req))
+        working_labels = enforce_min_brush_stroke(
+            working_labels, min_stroke_px=tip
+        )
+        working_labels = merge_adjacent_same_colour(
+            working_labels, bridge_px=max(2.0, tip * 0.6)
+        )
+        working_labels, _hl = normalize_specular_highlights(
+            working_labels,
+            working_palette,
+            min_width_px=int(width_req),
+            min_height_px=int(height_req),
+            min_inscribed_px=tip,
+        )
         working_labels, more_detail = enforce_colourable_blocks(
             working_labels,
             min_width_px=int(width_req),
             min_height_px=int(height_req),
-            min_inscribed_px=float(min(width_req, height_req)),
+            min_inscribed_px=tip,
         )
         if detail.shape != working_labels.shape:
             detail = np.zeros(working_labels.shape, dtype=bool)
