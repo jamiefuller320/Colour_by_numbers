@@ -5,8 +5,25 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-# ISO A4 in inches.
-A4_INCHES: tuple[float, float] = (210 / 25.4, 297 / 25.4)
+# ISO A4 in mm and inches.
+A4_MM: tuple[float, float] = (210.0, 297.0)
+A4_INCHES: tuple[float, float] = (A4_MM[0] / 25.4, A4_MM[1] / 25.4)
+DEFAULT_MIN_REGION_MM = 5.0
+
+
+@dataclass(frozen=True)
+class RegionPrintSize:
+    """Minimum colouring-region footprint when a plate fills A4."""
+
+    min_width_px: int
+    min_height_px: int
+    min_area_px: int
+    min_mm: float
+    mm_per_px: float
+
+    @property
+    def min_side_px(self) -> int:
+        return min(self.min_width_px, self.min_height_px)
 
 
 @dataclass(frozen=True)
@@ -30,6 +47,62 @@ def a4_pixel_size(dpi: float) -> tuple[int, int]:
     short = int(math.ceil(min(A4_INCHES) * dpi))
     long = int(math.ceil(max(A4_INCHES) * dpi))
     return short, long
+
+
+def mm_per_pixel_on_a4(width: int, height: int) -> float:
+    """Millimetres per pixel when ``width``×``height`` is fit onto A4.
+
+    Chooses the page orientation that prints the plate larger (higher
+    mm/px), matching how colouring pages are typically scaled to the page.
+    """
+    if width <= 0 or height <= 0:
+        raise ValueError("width and height must be positive")
+    short_mm, long_mm = A4_MM
+    # Portrait page: fit into 210×297 mm.
+    scale_portrait = min(short_mm / width, long_mm / height)
+    # Landscape page: fit into 297×210 mm.
+    scale_landscape = min(long_mm / width, short_mm / height)
+    return float(max(scale_portrait, scale_landscape))
+
+
+def min_region_size_for_a4_mm(
+    width: int,
+    height: int,
+    *,
+    min_mm: float = DEFAULT_MIN_REGION_MM,
+) -> RegionPrintSize:
+    """Pixel footprint of a ``min_mm`` × ``min_mm`` patch on A4 for this plate.
+
+    Colouring regions smaller than this are hard to fill by hand when the
+    plate is printed to fit an A4 canvas.
+    """
+    if min_mm <= 0:
+        return RegionPrintSize(
+            min_width_px=1,
+            min_height_px=1,
+            min_area_px=1,
+            min_mm=float(min_mm),
+            mm_per_px=mm_per_pixel_on_a4(width, height),
+        )
+    mm_per_px = mm_per_pixel_on_a4(width, height)
+    side = max(1, int(math.ceil(min_mm / mm_per_px)))
+    return RegionPrintSize(
+        min_width_px=side,
+        min_height_px=side,
+        min_area_px=side * side,
+        min_mm=float(min_mm),
+        mm_per_px=mm_per_px,
+    )
+
+
+def min_region_area_for_a4_mm(
+    width: int,
+    height: int,
+    *,
+    min_mm: float = DEFAULT_MIN_REGION_MM,
+) -> int:
+    """Convenience: minimum region area in pixels for ``min_mm`` on A4."""
+    return min_region_size_for_a4_mm(width, height, min_mm=min_mm).min_area_px
 
 
 def min_pixels_for_a4(dpi: float) -> tuple[int, int]:

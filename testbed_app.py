@@ -58,7 +58,7 @@ with st.sidebar:
         index=0,
         disabled=backend != "pollinations",
     )
-    n_colours = st.slider("Colour-by-numbers colours", 8, 32, 16)
+    n_colours = st.slider("Colour-by-numbers colours (8–16)", 8, 16, 12)
     illustration_size = st.slider(
         "Illustration size (px)",
         min_value=512,
@@ -66,6 +66,14 @@ with st.sidebar:
         value=768,
         step=128,
         help="Smaller is faster on free Pollinations tier.",
+    )
+    min_region_mm = st.slider(
+        "Min region size on A4 (mm)",
+        min_value=3.0,
+        max_value=10.0,
+        value=5.0,
+        step=0.5,
+        help="Colouring regions smaller than this are absorbed when printed on A4.",
     )
     seed = st.number_input(
         "Seed (−1 = random)",
@@ -143,13 +151,14 @@ if generate:
                 discover_types=False,
                 backend=backend,
                 n_colours=n_colours,
-                illustration_colours=min(n_colours, 16),
+                illustration_colours=n_colours,
                 illustration_size=illustration_size,
                 complexity="fine",
                 subject_mode="off",
                 prompt_override=prompt,
                 pollinations_model=pollinations_model,
                 seed=None if seed < 0 else int(seed),
+                min_region_mm=min_region_mm,
             )
             st.session_state.testbed_illustration = page.illustration
             st.session_state.testbed_result = page.result if run_cbn else None

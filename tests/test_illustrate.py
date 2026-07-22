@@ -31,6 +31,29 @@ def test_illustration_prompt_mentions_colouring_style() -> None:
     prompt = illustration_prompt("golden retriever", category="dogs")
     assert "golden retriever" in prompt
     assert "colouring book" in prompt
+    assert "between 8 and 16" in prompt
+    assert "5mm" in prompt
+
+
+def test_prepare_illustration_clamps_palette_and_regions() -> None:
+    from colour_by_numbers.illustrate import prepare_illustration_for_colouring
+
+    image = Image.new("RGB", (210, 210), (240, 240, 240))
+    draw = ImageDraw.Draw(image)
+    # Large areas plus tiny speckles that should be absorbed at 5mm on A4.
+    draw.rectangle((20, 20, 100, 100), fill=(220, 40, 40))
+    draw.rectangle((120, 20, 190, 100), fill=(50, 110, 210))
+    draw.rectangle((20, 120, 100, 190), fill=(50, 150, 60))
+    draw.point((150, 150), fill=(255, 230, 80))
+    draw.point((152, 152), fill=(255, 100, 50))
+    cleaned, used = prepare_illustration_for_colouring(
+        image, n_colours=20, min_region_mm=5.0
+    )
+    assert 1 <= used <= 16
+    pixels = np.asarray(cleaned).reshape(-1, 3)
+    unique = {tuple(row) for row in pixels}
+    assert len(unique) <= 16
+    assert cleaned.size == image.size
 
 
 def test_stylize_reference_produces_flat_plate(tmp_path: Path, monkeypatch) -> None:

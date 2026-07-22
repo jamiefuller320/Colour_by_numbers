@@ -54,9 +54,23 @@ STANDARD_PALETTE_32: np.ndarray = np.array(
 
 assert STANDARD_PALETTE_32.shape == (32, 3)
 
+# Illustration / colouring-book plates use a tighter crayon budget.
+MIN_N_COLOURS = 8
+MAX_N_COLOURS = 16
 DEFAULT_N_COLOURS = 32
+DEFAULT_ILLUSTRATION_COLOURS = 12
 DEFAULT_MIN_ADJACENT_DELTA_E = 18.0
 DEFAULT_MIN_SUBJECT_BG_CONTRAST = 22.0
+
+
+def clamp_n_colours(
+    n_colours: int,
+    *,
+    minimum: int = MIN_N_COLOURS,
+    maximum: int = MAX_N_COLOURS,
+) -> int:
+    """Clamp a colour count into the allowed illustration range (default 8–16)."""
+    return max(int(minimum), min(int(maximum), int(n_colours)))
 
 
 def rgb_to_lab(rgb: np.ndarray) -> np.ndarray:
