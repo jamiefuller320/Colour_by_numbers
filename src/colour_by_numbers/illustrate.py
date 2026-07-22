@@ -16,7 +16,7 @@ import logging
 from dataclasses import dataclass
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter, ImageOps
+from PIL import Image, ImageFilter, ImageOps
 
 from .palette import (
     DEFAULT_ILLUSTRATION_COLOURS,
