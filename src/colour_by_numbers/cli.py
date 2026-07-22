@@ -207,6 +207,28 @@ def build_parser() -> argparse.ArgumentParser:
         default="colour_by_numbers",
         help="Filename prefix for outputs",
     )
+    parser.add_argument(
+        "--list-types",
+        action="store_true",
+        help="Discover and list specific types for a broad --query, then exit",
+    )
+    parser.add_argument(
+        "--type",
+        dest="subject_type",
+        default=None,
+        help="Concrete type within a category, e.g. 'golden retriever' or 'pug'",
+    )
+    parser.add_argument(
+        "--type-pick",
+        type=int,
+        default=0,
+        help="Which discovered type to use, 0-based (default: 0 = top ranked)",
+    )
+    parser.add_argument(
+        "--no-discover",
+        action="store_true",
+        help="Skip type discovery; search the raw --query string",
+    )
     return parser
 
 
@@ -214,6 +236,24 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     output_dir = Path(args.output)
     min_a4 = None if args.no_a4_filter else args.min_a4_dpi
+
+    if args.list_types:
+        if not args.query:
+            print("--list-types requires --query", file=sys.stderr)
+            return 2
+        from .discover import discover_subject_types
+
+        discovery = discover_subject_types(args.query, probe_search=True)
+        print(f"Query: {discovery.original_query}")
+        print(f"Category: {discovery.category or '—'}")
+        print(f"Reason: {discovery.reason}")
+        for i, item in enumerate(discovery.types):
+            ev = f" · e.g. {item.evidence[0]}" if item.evidence else ""
+            print(
+                f"  {i}. {item.label}  (score {item.score:.2f}) "
+                f"→ “{item.search_query}”{ev}"
+            )
+        return 0
 
     common = dict(
         n_colours=args.colours,
@@ -248,10 +288,17 @@ def main(argv: list[str] | None = None) -> int:
             args.query,
             pick=args.pick,
             contrast_bias=not args.no_contrast_bias,
+            discover_types=not args.no_discover,
+            subject_type=args.subject_type,
+            type_pick=args.type_pick,
             **common,
         )
+        if result.subject_type_label:
+            stem_base = result.subject_type_label
+        else:
+            stem_base = args.query
         stem = args.stem if args.stem != "colour_by_numbers" else (
-            args.query.strip().lower().replace(" ", "_")[:40] or args.stem
+            stem_base.strip().lower().replace(" ", "_")[:40] or args.stem
         )
     else:
         result = create_from_path(args.input, **common)
@@ -260,6 +307,10 @@ def main(argv: list[str] | None = None) -> int:
     paths = result.save(output_dir, stem=stem)
     print(f"Complexity: {result.complexity}")
     print(f"Subject mode: {result.subject_mode}")
+    if result.subject_type_label:
+        print(f"Subject type: {result.subject_type_label}")
+        if result.subject_type_query:
+            print(f"Type search: {result.subject_type_query}")
     print(f"Firm border: {result.firm_border}")
     if result.print_dpi is not None:
         print(f"Effective A4 DPI: {result.print_dpi:.1f}")

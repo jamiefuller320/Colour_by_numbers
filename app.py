@@ -317,33 +317,112 @@ def _image_to_png_bytes(image: Image.Image) -> bytes:
 
 
 if source_mode == "Web search":
-    query = st.text_input("Search for images", placeholder="aircraft, dogs, sailboat…")
+    query = st.text_input("Search for images", placeholder="dogs, aircraft, sailboat…")
+    discover_types = st.checkbox(
+        "Discover specific types for broad categories",
+        value=True,
+        help="e.g. dogs → pug / golden retriever / … before searching photos.",
+    )
     col_a, _col_b = st.columns([1, 3])
     with col_a:
         search_clicked = st.button("Search", type="primary", use_container_width=True)
 
-    if "hits" not in st.session_state:
-        st.session_state.hits = []
-    if "query" not in st.session_state:
-        st.session_state.query = ""
+    for key, default in (
+        ("hits", []),
+        ("query", ""),
+        ("type_discovery", None),
+        ("chosen_type", None),
+    ):
+        if key not in st.session_state:
+            st.session_state[key] = default
 
     if search_clicked and query.strip():
-        with st.spinner("Searching the web…"):
+        with st.spinner("Discovering types / searching…"):
             try:
-                st.session_state.hits = search_images(
-                    query.strip(),
-                    max_results=8,
-                    min_a4_dpi=float(min_a4_dpi) if enforce_a4 else None,
-                    contrast_bias=True,
-                )
                 st.session_state.query = query.strip()
+                st.session_state.hits = []
+                st.session_state.chosen_type = None
+                if discover_types:
+                    from colour_by_numbers.discover import discover_subject_types
+
+                    discovery = discover_subject_types(
+                        query.strip(), probe_search=True, max_types=10
+                    )
+                    st.session_state.type_discovery = discovery
+                    if discovery.skipped or (
+                        len(discovery.types) == 1 and discovery.types[0].already_specific
+                    ):
+                        # Go straight to image search for the single/refined query.
+                        chosen = discovery.types[0]
+                        st.session_state.chosen_type = chosen
+                        st.session_state.hits = search_images(
+                            chosen.search_query,
+                            max_results=8,
+                            min_a4_dpi=float(min_a4_dpi) if enforce_a4 else None,
+                            contrast_bias=True,
+                        )
+                else:
+                    st.session_state.type_discovery = None
+                    st.session_state.hits = search_images(
+                        query.strip(),
+                        max_results=8,
+                        min_a4_dpi=float(min_a4_dpi) if enforce_a4 else None,
+                        contrast_bias=True,
+                    )
             except Exception as exc:  # noqa: BLE001
                 st.error(f"Search failed: {exc}")
                 st.session_state.hits = []
+                st.session_state.type_discovery = None
 
+    discovery = st.session_state.type_discovery
+    if (
+        discovery is not None
+        and not discovery.skipped
+        and discovery.needs_choice
+        and st.session_state.chosen_type is None
+    ):
+        st.subheader(f"Choose a type of “{discovery.category}”")
+        st.caption(
+            "Broad categories are narrowed to a specific type so pages stay "
+            "recognisable (e.g. pug vs golden retriever)."
+        )
+        type_labels = [
+            f"{t.label}  (score {t.score:.1f})"
+            + (f" — {t.evidence[0]}" if t.evidence else "")
+            for t in discovery.types
+        ]
+        type_idx = st.selectbox(
+            "Specific type",
+            options=list(range(len(discovery.types))),
+            format_func=lambda i: type_labels[i],
+        )
+        if st.button("Search photos for this type", type="primary"):
+            chosen = discovery.types[type_idx]
+            st.session_state.chosen_type = chosen
+            with st.spinner(f"Searching for “{chosen.search_query}”…"):
+                try:
+                    st.session_state.hits = search_images(
+                        chosen.search_query,
+                        max_results=8,
+                        min_a4_dpi=float(min_a4_dpi) if enforce_a4 else None,
+                        contrast_bias=True,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    st.error(f"Search failed: {exc}")
+                    st.session_state.hits = []
+
+    chosen = st.session_state.chosen_type
     hits = st.session_state.hits
+    if chosen is not None:
+        st.info(
+            f"Specific type: **{chosen.label}** · search “{chosen.search_query}”"
+        )
+
     if hits:
-        st.subheader(f"Results for “{st.session_state.query}”")
+        heading = st.session_state.query
+        if chosen is not None:
+            heading = chosen.label
+        st.subheader(f"Results for “{heading}”")
         labels = []
         for i, hit in enumerate(hits):
             size_bit = ""
@@ -366,10 +445,35 @@ if source_mode == "Web search":
                         source_hit=hit,
                         **_pipeline_kwargs(),
                     )
+                    if chosen is not None:
+                        from colour_by_numbers.pipeline import ColourByNumbersResult
+
+                        result = ColourByNumbersResult(
+                            source=result.source,
+                            quantized=result.quantized,
+                            page=result.page,
+                            printable=result.printable,
+                            source_hit=result.source_hit,
+                            complexity=result.complexity,
+                            prepared=result.prepared,
+                            subject_mask=result.subject_mask,
+                            subject_mode=result.subject_mode,
+                            subject_complexity=result.subject_complexity,
+                            background_complexity=result.background_complexity,
+                            print_dpi=result.print_dpi,
+                            firm_border=result.firm_border,
+                            palette_mode=result.palette_mode,
+                            subject_bg_contrast=result.subject_bg_contrast,
+                            min_adjacent_delta_e=result.min_adjacent_delta_e,
+                            subject_type_label=chosen.label,
+                            subject_type_query=chosen.search_query,
+                        )
                     st.session_state.result = result
                 except Exception as exc:  # noqa: BLE001
                     st.error(f"Conversion failed: {exc}")
-    elif search_clicked:
+    elif search_clicked and st.session_state.chosen_type is None and (
+        discovery is None or discovery.skipped or not discovery.needs_choice
+    ):
         st.warning("No images found. Try a different search.")
 
 else:
@@ -399,6 +503,8 @@ if result is not None:
     ]
     if result.print_dpi is not None:
         bits.append(f"~{result.print_dpi:.0f} DPI on A4")
+    if getattr(result, "subject_type_label", None):
+        bits.append(f"type “{result.subject_type_label}”")
     if result.firm_border:
         bits.append("firm borders")
     if result.page.simplification is not None:
