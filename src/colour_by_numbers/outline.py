@@ -12,6 +12,7 @@ from .quantize import upsample_labels
 from .simplify import (
     SimplificationStats,
     absorb_small_regions,
+    absorb_thin_regions,
     count_regions,
     simplify_labels,
     smooth_boundaries,
@@ -154,7 +155,7 @@ def build_outline_page(
     *,
     min_region_area: int | None = None,
     max_regions: int | None = None,
-    line_width: int = 2,
+    line_width: int = 1,
     number_font_scale: float = 1.0,
     smooth_radius: int = 3,
     morph_radius: int = 2,
@@ -202,20 +203,35 @@ def build_outline_page(
         )
 
     if output_size is not None:
+        source_h, source_w = working_labels.shape
         working_labels = upsample_labels(working_labels, output_size)
-        if simplify and boundary_sigma > 0:
-            working_labels = smooth_boundaries(
-                working_labels, sigma=max(0.8, boundary_sigma)
-            )
+        if simplify:
+            height_up, width_up = working_labels.shape
+            # Keep the A4 mm floor after upsampling (scale area with pixel count).
+            scale = (width_up * height_up) / max(1, source_h * source_w)
             up_min = max(
-                30, int(working_labels.shape[0] * working_labels.shape[1] * 0.0015)
+                int(min_region_area or 0),
+                int(round((min_region_area or 0) * scale)),
+                30,
+                int(width_up * height_up * 0.0015),
             )
+            if boundary_sigma > 0:
+                working_labels = smooth_boundaries(
+                    working_labels, sigma=max(0.8, boundary_sigma)
+                )
             working_labels = absorb_small_regions(working_labels, min_area=up_min)
+            if min_thickness is not None and min_thickness > 0:
+                up_thickness = max(2.0, float(min_thickness) * (scale**0.5))
+                working_labels = absorb_thin_regions(
+                    working_labels, min_thickness=up_thickness
+                )
+                working_labels = absorb_small_regions(working_labels, min_area=up_min)
 
     height, width = working_labels.shape
     edges = _edges_from_labels(working_labels)
-    if line_width > 1:
-        edges = ndimage.binary_dilation(edges, iterations=line_width - 1)
+    stroke = max(1, int(line_width))
+    if stroke > 1:
+        edges = ndimage.binary_dilation(edges, iterations=stroke - 1)
 
     outline = Image.new("RGB", (width, height), "white")
     outline_arr = np.asarray(outline).copy()

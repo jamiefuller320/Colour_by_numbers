@@ -20,6 +20,7 @@ from PIL import Image, ImageFilter, ImageOps
 
 from .palette import (
     DEFAULT_ILLUSTRATION_COLOURS,
+    EARTHY_CATEGORIES,
     MAX_N_COLOURS,
     MIN_N_COLOURS,
     STANDARD_PALETTE_32,
@@ -80,20 +81,23 @@ def illustration_prompt(
     style = (
         "children's colouring book illustration, thick clean black outlines, "
         f"flat cel fills using between {lo} and {hi} solid colours only, "
-        "large simple colour regions (each region at least 5mm by 5mm when "
-        "printed on A4), high subject-background contrast, no gradients, "
+        f"large simple colour regions (each region at least {DEFAULT_MIN_REGION_MM:g}mm "
+        f"by {DEFAULT_MIN_REGION_MM:g}mm when printed on A4), "
+        "high subject-background contrast, no gradients, "
         "no photorealism, no text, white background"
+    )
+    animal_detail = (
+        "clearly defined eyes with dark pupils and light eye highlights, "
+        "warm natural colours"
     )
     if category == "aircraft":
         return f"{subject} side view, clear silhouette, {style}"
-    if category in {"flowers", "birds"}:
+    if category == "flowers":
         return f"{subject} centred portrait, {style}"
-    if category == "dogs":
-        return (
-            f"{subject} portrait, centred subject, clearly defined eyes with "
-            f"dark pupils and light eye highlights, readable muzzle and nose, "
-            f"warm natural fur colours, {style}"
-        )
+    if category == "birds":
+        return f"{subject} centred portrait, {animal_detail}, {style}"
+    if category in EARTHY_CATEGORIES:
+        return f"{subject} portrait, centred subject, {animal_detail}, {style}"
     return f"{subject} portrait, centred subject, {style}"
 
 
@@ -167,7 +171,7 @@ def stylize_reference_to_illustration(
     n_colours: int = DEFAULT_ILLUSTRATION_COLOURS,
     output_size: int = DEFAULT_ILLUSTRATION_SIZE,
     background: tuple[int, int, int] = DEFAULT_PAGE_BACKGROUND,
-    outline_width: int = 3,
+    outline_width: int = 2,
     subject_model: str = "u2net",
     subject_type_label: str | None = None,
     category: str | None = None,

@@ -69,9 +69,9 @@ with st.sidebar:
     )
     min_region_mm = st.slider(
         "Min region size on A4 (mm)",
-        min_value=3.0,
-        max_value=10.0,
-        value=5.0,
+        min_value=4.0,
+        max_value=12.0,
+        value=8.0,
         step=0.5,
         help="Colouring regions smaller than this are absorbed when printed on A4.",
     )

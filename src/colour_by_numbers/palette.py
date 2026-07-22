@@ -66,7 +66,21 @@ DEFAULT_MIN_ADJACENT_DELTA_E = 18.0
 DEFAULT_MIN_SUBJECT_BG_CONTRAST = 22.0
 
 # Soft categories that should keep warm darks instead of cool chromatic shadows.
-EARTHY_CATEGORIES = frozenset({"dogs", "cats", "horses", "wildlife", "animals"})
+# Broad animal supersets — fur, feathers, and hide all need earthy low-light mapping.
+ANIMAL_CATEGORIES = frozenset(
+    {
+        "dogs",
+        "cats",
+        "horses",
+        "birds",
+        "wildlife",
+        "animals",
+        "pets",
+        "farm animals",
+        "mammals",
+    }
+)
+EARTHY_CATEGORIES = ANIMAL_CATEGORIES
 
 
 def clamp_n_colours(

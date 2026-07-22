@@ -45,11 +45,22 @@ const STANDARD_PALETTE = [
   [0, 150, 110],
 ];
 
-const EARTHY_CATEGORIES = new Set(["dogs", "cats", "horses", "wildlife", "animals"]);
+const EARTHY_CATEGORIES = new Set([
+  "dogs",
+  "cats",
+  "horses",
+  "birds",
+  "wildlife",
+  "animals",
+  "pets",
+  "farm animals",
+  "mammals",
+]);
 const MIN_COLOURS = 8;
 const MAX_COLOURS = 16;
-const MIN_REGION_MM = 5;
+const MIN_REGION_MM = 8;
 const A4_MM = [210, 297];
+const OUTLINE_LINE_WIDTH = 1; // single-pixel edges (no thicken pass)
 
 let categories = {};
 
@@ -70,14 +81,16 @@ function buildPrompt(label, category, nColours = 12) {
   if (category === "aircraft") {
     return `${label} side view, clear silhouette, ${style}`;
   }
-  if (category === "flowers" || category === "birds") {
+  if (category === "flowers") {
     return `${label} centred portrait, ${style}`;
   }
-  if (category === "dogs") {
-    return (
-      `${label} portrait, centred subject, clearly defined eyes with dark pupils ` +
-      `and light eye highlights, readable muzzle and nose, warm natural fur colours, ${style}`
-    );
+  if (EARTHY_CATEGORIES.has(category)) {
+    const detail =
+      "clearly defined eyes with dark pupils and light eye highlights, warm natural colours";
+    if (category === "birds") {
+      return `${label} centred portrait, ${detail}, ${style}`;
+    }
+    return `${label} portrait, centred subject, ${detail}, ${style}`;
   }
   return `${label} portrait, centred subject, ${style}`;
 }
@@ -258,46 +271,72 @@ function neighboursOf(idx, width, height) {
   return out;
 }
 
-function absorbSmallLabels(labels, width, height, minArea) {
+function absorbSmallLabels(labels, width, height, minArea, maxPasses = 8) {
   const size = width * height;
-  const visited = new Uint8Array(size);
-  const work = labels.slice();
+  let work = labels.slice();
 
-  for (let start = 0; start < size; start += 1) {
-    if (visited[start]) continue;
-    const colour = work[start];
-    const stack = [start];
-    const component = [];
-    visited[start] = 1;
-    while (stack.length) {
-      const idx = stack.pop();
-      component.push(idx);
-      for (const n of neighboursOf(idx, width, height)) {
-        if (visited[n] || work[n] !== colour) continue;
-        visited[n] = 1;
-        stack.push(n);
-      }
-    }
-    if (component.length >= minArea) continue;
+  for (let pass = 0; pass < maxPasses; pass += 1) {
+    const visited = new Uint8Array(size);
+    let absorbed = 0;
+    const next = work.slice();
 
-    const votes = new Map();
-    for (const idx of component) {
-      for (const n of neighboursOf(idx, width, height)) {
-        const other = work[n];
-        if (other === colour) continue;
-        votes.set(other, (votes.get(other) || 0) + 1);
+    for (let start = 0; start < size; start += 1) {
+      if (visited[start]) continue;
+      const colour = work[start];
+      const stack = [start];
+      const component = [];
+      visited[start] = 1;
+      while (stack.length) {
+        const idx = stack.pop();
+        component.push(idx);
+        for (const n of neighboursOf(idx, width, height)) {
+          if (visited[n] || work[n] !== colour) continue;
+          visited[n] = 1;
+          stack.push(n);
+        }
       }
-    }
-    let bestColour = colour;
-    let bestVotes = 0;
-    for (const [c, v] of votes.entries()) {
-      if (v > bestVotes) {
-        bestVotes = v;
-        bestColour = c;
+      // Also absorb ribbons narrower than the A4 min side, even if area passes.
+      let minX = width;
+      let maxX = 0;
+      let minY = height;
+      let maxY = 0;
+      for (const idx of component) {
+        const x = idx % width;
+        const y = (idx / width) | 0;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
       }
+      const bboxW = maxX - minX + 1;
+      const bboxH = maxY - minY + 1;
+      const minSide = Math.sqrt(minArea);
+      if (component.length >= minArea && bboxW >= minSide && bboxH >= minSide) {
+        continue;
+      }
+
+      const votes = new Map();
+      for (const idx of component) {
+        for (const n of neighboursOf(idx, width, height)) {
+          const other = work[n];
+          if (other === colour) continue;
+          votes.set(other, (votes.get(other) || 0) + 1);
+        }
+      }
+      let bestColour = colour;
+      let bestVotes = 0;
+      for (const [c, v] of votes.entries()) {
+        if (v > bestVotes) {
+          bestVotes = v;
+          bestColour = c;
+        }
+      }
+      if (bestVotes === 0) continue;
+      for (const idx of component) next[idx] = bestColour;
+      absorbed += 1;
     }
-    if (bestVotes === 0) continue;
-    for (const idx of component) work[idx] = bestColour;
+    work = next;
+    if (absorbed === 0) break;
   }
   return work;
 }
@@ -452,19 +491,21 @@ function buildOutlineCanvas(labels, palette, width, height) {
       if (y > 0 && labels[idx - width] !== colour) paintEdge(idx);
     }
   }
-  // Thicken edges slightly for print readability.
-  const edgeMask = new Uint8Array(width * height);
-  for (let i = 0; i < edgeMask.length; i += 1) {
-    if (data[i * 4] === 0 && data[i * 4 + 1] === 0 && data[i * 4 + 2] === 0) {
-      edgeMask[i] = 1;
+  // Optional 1px outline only — no neighbour thicken (keeps strokes fine).
+  if (OUTLINE_LINE_WIDTH > 1) {
+    const edgeMask = new Uint8Array(width * height);
+    for (let i = 0; i < edgeMask.length; i += 1) {
+      if (data[i * 4] === 0 && data[i * 4 + 1] === 0 && data[i * 4 + 2] === 0) {
+        edgeMask[i] = 1;
+      }
     }
-  }
-  for (let y = 1; y < height - 1; y += 1) {
-    for (let x = 1; x < width - 1; x += 1) {
-      const idx = y * width + x;
-      if (!edgeMask[idx]) continue;
-      for (const n of [idx - 1, idx + 1, idx - width, idx + width]) {
-        paintEdge(n);
+    for (let y = 1; y < height - 1; y += 1) {
+      for (let x = 1; x < width - 1; x += 1) {
+        const idx = y * width + x;
+        if (!edgeMask[idx]) continue;
+        for (const n of [idx - 1, idx + 1, idx - width, idx + width]) {
+          paintEdge(n);
+        }
       }
     }
   }
@@ -582,7 +623,7 @@ async function generate() {
       img.src = rawUrl;
     });
 
-    setStatus("Clamping to 8–16 flat colours and A4 ≥5mm regions…");
+    setStatus("Clamping to 8–16 flat colours and A4 ≥8mm regions…");
     const prepared = prepareIllustrationCanvas(
       rawImage,
       nColours,

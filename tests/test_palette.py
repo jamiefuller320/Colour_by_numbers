@@ -113,6 +113,26 @@ def test_dog_dark_fur_maps_to_earthy_not_purple() -> None:
         assert not (b > r + 25 and b > g + 15), colour
 
 
+def test_earthy_rules_cover_animal_superset() -> None:
+    from colour_by_numbers.palette import ANIMAL_CATEGORIES, EARTHY_CATEGORIES
+
+    assert EARTHY_CATEGORIES == ANIMAL_CATEGORIES
+    for category in ("dogs", "cats", "horses", "birds"):
+        assert category in ANIMAL_CATEGORIES
+        image = np.zeros((24, 24, 3), dtype=np.uint8)
+        image[:, :] = (50, 40, 32)
+        active = select_active_palette(
+            STANDARD_PALETTE_32, n_colours=10, image_rgb=image, category=category
+        )
+        labels = nearest_palette_indices(image, active, category=category)
+        used = {tuple(int(c) for c in active[i]) for i in np.unique(labels)}
+        for colour in used:
+            assert is_earthy_shadow_colour(np.array(colour, dtype=np.uint8)), (
+                category,
+                colour,
+            )
+
+
 def test_gold_vs_green_contrast_is_high() -> None:
     gold = np.array([230, 170, 50], dtype=np.uint8)
     green = np.array([40, 140, 55], dtype=np.uint8)

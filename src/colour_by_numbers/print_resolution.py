@@ -8,7 +8,7 @@ from dataclasses import dataclass
 # ISO A4 in mm and inches.
 A4_MM: tuple[float, float] = (210.0, 297.0)
 A4_INCHES: tuple[float, float] = (A4_MM[0] / 25.4, A4_MM[1] / 25.4)
-DEFAULT_MIN_REGION_MM = 5.0
+DEFAULT_MIN_REGION_MM = 8.0
 
 
 @dataclass(frozen=True)
