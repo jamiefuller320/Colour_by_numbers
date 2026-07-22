@@ -117,6 +117,9 @@ def generate_colouring_page(
     subject_mode: str = "off",
     min_a4_dpi: float | None = None,
     openai_api_key: str | None = None,
+    prompt_override: str | None = None,
+    pollinations_model: str = "flux",
+    seed: int | None = None,
     **pipeline_kwargs,
 ) -> GeneratedPage:
     """Discover type → gather references → illustrate → colour-by-numbers.
@@ -149,14 +152,28 @@ def generate_colouring_page(
         n_colours=illustration_colours,
         output_size=illustration_size,
         openai_api_key=openai_api_key,
+        prompt_override=prompt_override,
+        pollinations_model=pollinations_model,
+        seed=seed,
     )
     if reference_hit is not None:
         illustration = IllustrationResult(
             image=illustration.image,
             backend=illustration.backend,
-            subject_type_label=illustration.subject_type_label,
+            subject_type_label=illustration.subject_type_label or chosen.label,
             reference_url=reference_hit.url,
             reference_title=reference_hit.title,
+            n_colours=illustration.n_colours,
+            prompt=illustration.prompt,
+            notes=illustration.notes,
+        )
+    elif illustration.subject_type_label is None:
+        illustration = IllustrationResult(
+            image=illustration.image,
+            backend=illustration.backend,
+            subject_type_label=chosen.label,
+            reference_url=illustration.reference_url,
+            reference_title=illustration.reference_title,
             n_colours=illustration.n_colours,
             prompt=illustration.prompt,
             notes=illustration.notes,

@@ -35,7 +35,8 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_ILLUSTRATION_SIZE = 1600
 DEFAULT_PAGE_BACKGROUND = (248, 248, 252)
-AVAILABLE_ILLUSTRATION_BACKENDS = ("local_stylize", "openai", "replicate")
+AVAILABLE_ILLUSTRATION_BACKENDS = ("local_stylize", "pollinations", "openai", "replicate")
+POLLINATIONS_IMAGE_URL = "https://image.pollinations.ai/prompt/{prompt}"
 
 
 @dataclass(frozen=True)
@@ -179,6 +180,55 @@ def stylize_reference_to_illustration(
     )
 
 
+def generate_illustration_pollinations(
+    prompt: str,
+    *,
+    width: int = 1024,
+    height: int = 1024,
+    model: str = "flux",
+    seed: int | None = None,
+    timeout: float = 120.0,
+) -> IllustrationResult:
+    """Generate an image via Pollinations.ai (no API key / no paid plan).
+
+    Anonymous use is rate-limited (~1 request / 15s) and may watermark.
+    """
+    from urllib.parse import quote
+    import io
+
+    import requests
+
+    encoded = quote(prompt, safe="")
+    url = POLLINATIONS_IMAGE_URL.format(prompt=encoded)
+    params: dict[str, str | int] = {
+        "width": int(width),
+        "height": int(height),
+        "model": model,
+        "nologo": "true",
+        "enhance": "true",
+    }
+    if seed is not None:
+        params["seed"] = int(seed)
+
+    response = requests.get(url, params=params, timeout=timeout)
+    response.raise_for_status()
+    content_type = (response.headers.get("Content-Type") or "").lower()
+    if content_type and not content_type.startswith("image/"):
+        raise RuntimeError(
+            f"Pollinations returned non-image content-type {content_type!r}"
+        )
+    image = Image.open(io.BytesIO(response.content)).convert("RGB")
+    return IllustrationResult(
+        image=image,
+        backend="pollinations",
+        prompt=prompt,
+        notes=(
+            f"Generated via Pollinations.ai ({model}). "
+            "Free / no subscription; anonymous tier is rate-limited."
+        ),
+    )
+
+
 def generate_illustration_openai(
     prompt: str,
     *,
@@ -192,7 +242,7 @@ def generate_illustration_openai(
     if not key:
         raise RuntimeError(
             "OpenAI backend requested but OPENAI_API_KEY is not set. "
-            "Use backend='local_stylize' or export an API key."
+            "Use backend='pollinations' or 'local_stylize', or export an API key."
         )
     try:
         import urllib.request
@@ -242,6 +292,9 @@ def generate_illustration(
     n_colours: int = 16,
     output_size: int = DEFAULT_ILLUSTRATION_SIZE,
     openai_api_key: str | None = None,
+    prompt_override: str | None = None,
+    pollinations_model: str = "flux",
+    seed: int | None = None,
 ) -> IllustrationResult:
     """Generate a colouring-ready illustration via the selected backend."""
     backend = backend.lower().strip()
@@ -251,19 +304,32 @@ def generate_illustration(
             f"choose one of {AVAILABLE_ILLUSTRATION_BACKENDS}"
         )
 
-    prompt = (
+    prompt = prompt_override or (
         illustration_prompt(subject_type_label or "subject", category=category)
         if subject_type_label or backend != "local_stylize"
         else None
     )
 
+    if backend == "pollinations":
+        # Prefer square-ish canvas near output_size for colouring pages.
+        side = max(512, min(int(output_size), 1280))
+        return generate_illustration_pollinations(
+            prompt or "colouring book illustration of a clear subject",
+            width=side,
+            height=side,
+            model=pollinations_model,
+            seed=seed,
+        )
+
     if backend == "openai":
-        return generate_illustration_openai(prompt or "colouring book illustration", api_key=openai_api_key)
+        return generate_illustration_openai(
+            prompt or "colouring book illustration", api_key=openai_api_key
+        )
 
     if backend == "replicate":
         raise RuntimeError(
-            "Replicate backend is reserved but not configured in this environment. "
-            "Use backend='local_stylize' or 'openai'."
+            "Replicate backend is reserved but not configured. "
+            "Use backend='pollinations', 'local_stylize', or 'openai'."
         )
 
     if reference is None:
