@@ -427,14 +427,17 @@ function enforceColourableBlocks(
         continue;
       }
 
-      for (const idx of detailInkFromComponent(
-        component,
-        width,
-        height,
-        work,
-        colour
-      )) {
-        detail[idx] = 1;
+      const aspect = Math.max(w, h) / Math.max(1, Math.min(w, h));
+      if (inscribed <= 3 || aspect >= 2.5) {
+        for (const idx of detailInkFromComponent(
+          component,
+          width,
+          height,
+          work,
+          colour
+        )) {
+          detail[idx] = 1;
+        }
       }
 
       const votes = new Map();
@@ -461,6 +464,259 @@ function enforceColourableBlocks(
     if (changed === 0) break;
   }
   return { labels: work, detail };
+}
+
+function relativeLumaFromPalette(rgb) {
+  return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+}
+
+function mergeAdjacentSameColour(labels, width, height, bridgePx) {
+  const bridge = Math.max(0, Math.round(bridgePx));
+  if (bridge <= 0) return labels.slice();
+  const radius = Math.max(1, Math.ceil((bridge + 1) / 2));
+  const work = labels.slice();
+  const result = work.slice();
+  const protected = new Uint8Array(width * height);
+  const colours = [...new Set(work)].sort(
+    (a, b) => work.filter((v) => v === a).length - work.filter((v) => v === b).length
+  );
+
+  function countComponents(colour, source) {
+    const visited = new Uint8Array(width * height);
+    let count = 0;
+    for (let start = 0; start < source.length; start += 1) {
+      if (visited[start] || source[start] !== colour) continue;
+      count += 1;
+      const stack = [start];
+      visited[start] = 1;
+      while (stack.length) {
+        const idx = stack.pop();
+        for (const n of neighboursOf(idx, width, height)) {
+          if (visited[n] || source[n] !== colour) continue;
+          visited[n] = 1;
+          stack.push(n);
+        }
+      }
+    }
+    return count;
+  }
+
+  function closeColour(colour) {
+    // Dilate
+    const dilated = new Uint8Array(width * height);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const idx = y * width + x;
+        if (work[idx] !== colour) continue;
+        for (let dy = -radius; dy <= radius; dy += 1) {
+          for (let dx = -radius; dx <= radius; dx += 1) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+            dilated[ny * width + nx] = 1;
+          }
+        }
+      }
+    }
+    // Erode → closed
+    const closed = new Uint8Array(width * height);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const idx = y * width + x;
+        if (!dilated[idx]) continue;
+        let ok = true;
+        for (let dy = -radius; dy <= radius && ok; dy += 1) {
+          for (let dx = -radius; dx <= radius; dx += 1) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height || !dilated[ny * width + nx]) {
+              ok = false;
+              break;
+            }
+          }
+        }
+        if (ok) closed[idx] = 1;
+      }
+    }
+    return closed;
+  }
+
+  for (const colour of colours) {
+    const before = countComponents(colour, work);
+    if (before <= 1) continue;
+    const closed = closeColour(colour);
+    // Temporary buffer with closed painted as colour for counting.
+    const temp = work.slice();
+    for (let i = 0; i < closed.length; i += 1) if (closed[i]) temp[i] = colour;
+    const after = countComponents(colour, temp);
+    if (after >= before) continue;
+    for (let i = 0; i < closed.length; i += 1) {
+      if (!closed[i] || protected[i]) continue;
+      result[i] = colour;
+      protected[i] = 1;
+    }
+  }
+  return result;
+}
+
+function enforceMinBrushStroke(labels, width, height, minStrokePx) {
+  const stroke = Math.max(1, Math.round(minStrokePx));
+  if (stroke <= 1) return labels.slice();
+  const radius = Math.max(1, Math.floor(stroke / 2));
+  // Approximate opening: absorb components thinner than stroke via existing enforce path
+  // by using absorbSmall with min area and a thinness pass.
+  let work = labels.slice();
+  const colours = [...new Set(work)];
+  const kept = new Int16Array(width * height).fill(-1);
+
+  function openColour(colour) {
+    const mask = new Uint8Array(width * height);
+    for (let i = 0; i < mask.length; i += 1) if (work[i] === colour) mask[i] = 1;
+    // Erode
+    const eroded = new Uint8Array(mask.length);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const idx = y * width + x;
+        if (!mask[idx]) continue;
+        let ok = true;
+        for (let dy = -radius; dy <= radius && ok; dy += 1) {
+          for (let dx = -radius; dx <= radius; dx += 1) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height || !mask[ny * width + nx]) {
+              ok = false;
+              break;
+            }
+          }
+        }
+        if (ok) eroded[idx] = 1;
+      }
+    }
+    // Dilate eroded → opened
+    const opened = new Uint8Array(mask.length);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const idx = y * width + x;
+        if (!eroded[idx]) continue;
+        for (let dy = -radius; dy <= radius; dy += 1) {
+          for (let dx = -radius; dx <= radius; dx += 1) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+            opened[ny * width + nx] = 1;
+          }
+        }
+      }
+    }
+    return opened;
+  }
+
+  for (const colour of colours) {
+    const opened = openColour(colour);
+    for (let i = 0; i < opened.length; i += 1) {
+      if (opened[i]) kept[i] = colour;
+    }
+  }
+  // Fill unresolved from nearest kept
+  for (let i = 0; i < kept.length; i += 1) {
+    if (kept[i] >= 0) continue;
+    const x = i % width;
+    const y = (i / width) | 0;
+    let best = work[i];
+    let bestDist = Infinity;
+    for (let dy = -stroke; dy <= stroke; dy += 1) {
+      for (let dx = -stroke; dx <= stroke; dx += 1) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const nidx = ny * width + nx;
+        if (kept[nidx] < 0) continue;
+        const dist = Math.abs(dx) + Math.abs(dy);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = kept[nidx];
+        }
+      }
+    }
+    kept[i] = best;
+  }
+  return kept;
+}
+
+function normalizeSpecularHighlights(
+  labels,
+  palette,
+  width,
+  height,
+  minWidthPx,
+  minHeightPx
+) {
+  const size = width * height;
+  const minInscribed = Math.min(minWidthPx, minHeightPx);
+  const areaCap = Math.max(16, Math.floor(size * 0.035));
+  const lightIdx = new Set();
+  palette.forEach((rgb, idx) => {
+    if (relativeLumaFromPalette(rgb) >= 210) lightIdx.add(idx);
+  });
+  if (!lightIdx.size) return labels.slice();
+
+  let work = labels.slice();
+  const visited = new Uint8Array(size);
+  const colourable = [];
+  const undersized = [];
+
+  for (let start = 0; start < size; start += 1) {
+    if (visited[start] || !lightIdx.has(work[start])) continue;
+    const colour = work[start];
+    const stack = [start];
+    const component = [];
+    visited[start] = 1;
+    while (stack.length) {
+      const idx = stack.pop();
+      component.push(idx);
+      for (const n of neighboursOf(idx, width, height)) {
+        if (visited[n] || work[n] !== colour) continue;
+        visited[n] = 1;
+        stack.push(n);
+      }
+    }
+    if (component.length > areaCap) continue;
+    const { w, h } = componentBBox(component, width);
+    const inscribed = approxInscribedDiameter(component, width, height, work, colour);
+    if (w >= minWidthPx && h >= minHeightPx && inscribed >= minInscribed) {
+      colourable.push(component);
+    } else {
+      undersized.push(component);
+    }
+  }
+
+  function absorbPreferDark(component) {
+    const colour = work[component[0]];
+    const votes = new Map();
+    for (const idx of component) {
+      for (const n of neighboursOf(idx, width, height)) {
+        const other = work[n];
+        if (other === colour) continue;
+        votes.set(other, (votes.get(other) || 0) + 1);
+      }
+    }
+    let best = colour;
+    let bestScore = Infinity;
+    for (const [c, v] of votes.entries()) {
+      if (v <= 0) continue;
+      const luma = relativeLumaFromPalette(palette[c] || [128, 128, 128]);
+      if (luma < bestScore) {
+        bestScore = luma;
+        best = c;
+      }
+    }
+    if (best === colour) return;
+    for (const idx of component) work[idx] = best;
+  }
+
+  for (const component of undersized) absorbPreferDark(component);
+  if (colourable.length === 1) absorbPreferDark(colourable[0]);
+  return work;
 }
 
 function compactLabels(labels, palette) {
@@ -565,7 +821,17 @@ function prepareIllustrationCanvas(sourceImage, nColours, category = null) {
     );
   }
   const side = minRegionSidePx(width, height, MIN_REGION_MM);
-  const cleaned = absorbSmallLabels(labels, width, height, side * side);
+  let cleaned = absorbSmallLabels(labels, width, height, side * side);
+  cleaned = enforceMinBrushStroke(cleaned, width, height, side);
+  cleaned = mergeAdjacentSameColour(cleaned, width, height, Math.max(2, side * 0.6));
+  cleaned = normalizeSpecularHighlights(
+    cleaned,
+    palette,
+    width,
+    height,
+    side,
+    side
+  );
   const enforced = enforceColourableBlocks(cleaned, width, height, side, side);
   const compacted = compactLabels(enforced.labels, palette);
   // Remap detail through compaction: rebuild from compacted labels by

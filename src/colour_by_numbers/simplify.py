@@ -210,6 +210,197 @@ def detail_ink_from_component(component: np.ndarray) -> np.ndarray:
     return edge
 
 
+def _absorb_component_into_neighbour(
+    labels: np.ndarray,
+    component: np.ndarray,
+    *,
+    prefer_darker: bool = False,
+    palette: np.ndarray | None = None,
+) -> np.ndarray:
+    """Reassign ``component`` pixels to the best neighbouring colour."""
+    if not component.any():
+        return labels.astype(np.int32, copy=True)
+    work = labels.astype(np.int32, copy=True)
+    colour = int(work[component].flat[0])
+    votes = _neighbour_colour_votes(work, component)
+    if votes.size and colour < votes.size:
+        votes = votes.copy()
+        votes[colour] = 0
+
+    if votes.size == 0 or votes.max() == 0:
+        counts = np.bincount(work.ravel())
+        if colour < counts.size:
+            counts = counts.copy()
+            counts[colour] = 0
+        if counts.max() == 0:
+            return work
+        target = int(counts.argmax())
+    elif prefer_darker and palette is not None:
+        from .palette import rgb_to_lab
+
+        candidates = np.where(votes > 0)[0]
+        lab = rgb_to_lab(palette)
+        target = int(candidates[np.argmin(lab[candidates, 0])])
+    else:
+        target = int(votes.argmax())
+    work[component] = target
+    return work
+
+
+def enforce_min_brush_stroke(
+    labels: np.ndarray,
+    *,
+    min_stroke_px: float,
+) -> np.ndarray:
+    """Remove paint thinner than ``min_stroke_px`` via per-colour opening.
+
+    Opens each colour mask with a disk so generated brushwork cannot be finer
+    than the colourable tip size, then fills gaps from neighbouring colours.
+    """
+    stroke = max(1, int(round(min_stroke_px)))
+    if stroke <= 1:
+        return labels.astype(np.int32, copy=True)
+
+    radius = max(1, stroke // 2)
+    structure = np.ones((radius * 2 + 1, radius * 2 + 1), dtype=bool)
+    current = labels.astype(np.int32, copy=True)
+    kept = np.full(current.shape, -1, dtype=np.int32)
+    for colour in np.unique(current):
+        mask = current == colour
+        opened = ndimage.binary_opening(mask, structure=structure)
+        kept[opened] = int(colour)
+
+    unresolved = kept < 0
+    if unresolved.any():
+        _, indices = ndimage.distance_transform_edt(kept < 0, return_indices=True)
+        iy, ix = indices
+        kept[unresolved] = kept[iy[unresolved], ix[unresolved]]
+        still = kept < 0
+        kept[still] = current[still]
+    return kept.astype(np.int32)
+
+
+def merge_adjacent_same_colour(
+    labels: np.ndarray,
+    *,
+    bridge_px: float,
+) -> np.ndarray:
+    """Merge nearby islands of the same colour across small gaps.
+
+    Morphological closing per colour bridges separations up to ``bridge_px``
+    so split eye whites / fur patches become one colourable block. Smaller
+    colours claim bridges first so large backgrounds do not reopen the gap.
+    """
+    bridge = max(0, int(round(bridge_px)))
+    if bridge <= 0:
+        return labels.astype(np.int32, copy=True)
+
+    radius = max(1, (bridge + 1) // 2)
+    structure = np.ones((radius * 2 + 1, radius * 2 + 1), dtype=bool)
+    current = labels.astype(np.int32, copy=True)
+    result = current.copy()
+    protected = np.zeros(current.shape, dtype=bool)
+    structure_cc = np.ones((3, 3), dtype=bool)
+
+    colours = sorted(
+        (int(c) for c in np.unique(current)),
+        key=lambda c: int((current == c).sum()),
+    )
+    for colour in colours:
+        mask = current == colour
+        if not mask.any():
+            continue
+        _, n_before = ndimage.label(mask, structure=structure_cc)
+        if n_before <= 1:
+            continue
+        closed = ndimage.binary_closing(mask, structure=structure)
+        _, n_after = ndimage.label(closed, structure=structure_cc)
+        if n_after >= n_before:
+            continue
+        fill = closed & ~protected
+        result[fill] = colour
+        protected |= fill
+    return result.astype(np.int32)
+
+
+def normalize_specular_highlights(
+    labels: np.ndarray,
+    palette: np.ndarray,
+    *,
+    min_width_px: int,
+    min_height_px: int,
+    min_inscribed_px: float | None = None,
+    lightness_min: float = 82.0,
+    max_highlight_fraction: float = 0.035,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Apply white eye highlights uniformly: all colourable ones, or none.
+
+    Near-white islands larger than a background plate are ignored. Undersized
+    highlights are always absorbed (preferring a darker neighbour) without
+    becoming numbered fills. If exactly one colourable highlight remains
+    (one eye only), it is absorbed too so highlights are all-or-none.
+    """
+    from .palette import rgb_to_lab
+
+    min_w = max(1, int(min_width_px))
+    min_h = max(1, int(min_height_px))
+    min_inscribed = (
+        float(min(min_w, min_h))
+        if min_inscribed_px is None
+        else float(min_inscribed_px)
+    )
+    lab = rgb_to_lab(palette)
+    light_idxs = {
+        int(i) for i, value in enumerate(lab[:, 0]) if float(value) >= lightness_min
+    }
+    if not light_idxs:
+        return labels.astype(np.int32, copy=True), np.zeros(labels.shape, dtype=bool)
+
+    structure = np.ones((3, 3), dtype=bool)
+    current = labels.astype(np.int32, copy=True)
+    detail = np.zeros(current.shape, dtype=bool)
+    area_cap = max(16, int(current.size * max_highlight_fraction))
+
+    colourable: list[np.ndarray] = []
+    undersized: list[np.ndarray] = []
+
+    for colour in sorted(light_idxs):
+        if colour > int(current.max()):
+            continue
+        labeled, n = ndimage.label(current == colour, structure=structure)
+        if n == 0:
+            continue
+        areas = np.bincount(labeled.ravel())
+        for comp_id in range(1, n + 1):
+            area = int(areas[comp_id])
+            if area <= 0 or area > area_cap:
+                continue  # background / large white plate
+            component = labeled == comp_id
+            if is_colourable_block(
+                component,
+                min_width_px=min_w,
+                min_height_px=min_h,
+                min_inscribed_px=min_inscribed,
+            ):
+                colourable.append(component)
+            else:
+                undersized.append(component)
+
+    # Tiny white speckles: absorb into darker neighbour, no ink clutter.
+    for component in undersized:
+        current = _absorb_component_into_neighbour(
+            current, component, prefer_darker=True, palette=palette
+        )
+
+    # One lonely colourable highlight (single eye) → remove for uniformity.
+    if len(colourable) == 1:
+        current = _absorb_component_into_neighbour(
+            current, colourable[0], prefer_darker=True, palette=palette
+        )
+
+    return current.astype(np.int32), detail
+
+
 def enforce_colourable_blocks(
     labels: np.ndarray,
     *,
@@ -255,7 +446,13 @@ def enforce_colourable_blocks(
                     min_inscribed_px=min_inscribed,
                 ):
                     continue
-                detail |= detail_ink_from_component(component)
+                # Compact undersized puddles (e.g. eye speckles) absorb quietly.
+                # Only stroke-like remnants become black line detail.
+                thickness = _inscribed_diameter_px(component)
+                bw, bh = _component_bbox(component)
+                aspect = max(bw, bh) / max(1, min(bw, bh))
+                if thickness <= 3.0 or aspect >= 2.5:
+                    detail |= detail_ink_from_component(component)
                 votes = _neighbour_colour_votes(current, component)
                 if votes.size == 0:
                     continue
