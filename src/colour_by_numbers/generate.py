@@ -194,6 +194,7 @@ def generate_colouring_page(
         complexity=complexity,
         subject_mode=subject_mode,
         palette_mode="standard",
+        palette_category=chosen.category,
         firm_border=True,
         colour_refine=False,
         min_a4_dpi=min_a4_dpi,

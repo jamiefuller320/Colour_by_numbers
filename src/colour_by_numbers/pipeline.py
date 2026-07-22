@@ -272,6 +272,7 @@ def create_colour_by_numbers(
     background_boundary_sigma: float | None = None,
     line_width: int | None = None,
     palette_mode: str = "standard",
+    palette_category: str | None = None,
     min_adjacent_delta_e: float = DEFAULT_MIN_ADJACENT_DELTA_E,
     colour_refine: bool = True,
     min_subject_bg_contrast: float | None = None,
@@ -415,6 +416,7 @@ def create_colour_by_numbers(
         blur_radius=blur,
         seed=seed,
         palette_mode=palette_mode,
+        palette_category=palette_category,
     )
 
     height, width = quantized.labels.shape

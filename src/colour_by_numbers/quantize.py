@@ -84,6 +84,7 @@ def quantize_colours(
     seed: int = 42,
     palette_mode: str = "standard",
     standard_palette: np.ndarray | None = None,
+    palette_category: str | None = None,
 ) -> QuantizedImage:
     """Quantize an RGB image to a limited palette.
 
@@ -91,6 +92,9 @@ def quantize_colours(
       - ``standard`` (default): map onto the fixed 32-colour colouring set
         (or a subset of size ``n_colours``)
       - ``free``: classic median-cut adaptive palette
+
+    ``palette_category`` biases standard mapping for subjects like dogs so
+    low-light areas stay on warm neutrals / browns.
     """
     del seed
     if n_colours < 2 or n_colours > 64:
@@ -109,8 +113,15 @@ def quantize_colours(
             else np.asarray(standard_palette, dtype=np.uint8)
         )
         pixels = np.asarray(working, dtype=np.uint8)
-        active = select_active_palette(base, n_colours=n_colours, image_rgb=pixels)
-        labels = nearest_palette_indices(pixels, active)
+        active = select_active_palette(
+            base,
+            n_colours=n_colours,
+            image_rgb=pixels,
+            category=palette_category,
+        )
+        labels = nearest_palette_indices(
+            pixels, active, category=palette_category
+        )
         # Compact to colours actually used.
         used = np.unique(labels)
         compact = np.zeros_like(labels)

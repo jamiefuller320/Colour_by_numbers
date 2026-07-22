@@ -16,26 +16,36 @@ const openDirect = document.getElementById("open-direct");
 const downloadLink = document.getElementById("download");
 const downloadOutline = document.getElementById("download-outline");
 
-// Evenly spaced subset of the project's standard 32-colour crayon set.
-const STANDARD_PALETTE_16 = [
-  [20, 20, 20],
-  [160, 160, 160],
-  [240, 240, 240],
+// Standard crayon set aligned with Python STANDARD_PALETTE_32 (truncated to 24
+// for the browser path; darks / earths are kept dense for animal subjects).
+const STANDARD_PALETTE = [
+  [18, 18, 18],
+  [42, 36, 32],
+  [78, 72, 68],
+  [150, 148, 145],
+  [240, 238, 232],
   [255, 230, 80],
+  [245, 180, 40],
   [230, 120, 30],
   [220, 40, 40],
   [240, 120, 160],
+  [55, 30, 16],
   [90, 50, 30],
-  [190, 140, 80],
+  [130, 85, 45],
+  [175, 130, 75],
+  [220, 185, 135],
   [50, 150, 60],
   [180, 220, 120],
   [40, 180, 190],
   [50, 110, 210],
-  [80, 40, 140],
-  [200, 160, 230],
+  [130, 180, 240],
+  [110, 70, 160],
+  [190, 155, 220],
   [255, 100, 50],
+  [0, 150, 110],
 ];
 
+const EARTHY_CATEGORIES = new Set(["dogs", "cats", "horses", "wildlife", "animals"]);
 const MIN_COLOURS = 8;
 const MAX_COLOURS = 16;
 const MIN_REGION_MM = 5;
@@ -62,6 +72,12 @@ function buildPrompt(label, category, nColours = 12) {
   }
   if (category === "flowers" || category === "birds") {
     return `${label} centred portrait, ${style}`;
+  }
+  if (category === "dogs") {
+    return (
+      `${label} portrait, centred subject, clearly defined eyes with dark pupils ` +
+      `and light eye highlights, readable muzzle and nose, warm natural fur colours, ${style}`
+    );
   }
   return `${label} portrait, centred subject, ${style}`;
 }
@@ -128,17 +144,34 @@ function colourDistance2(a, b) {
   return dr * dr + dg * dg + db * db;
 }
 
-function selectActivePalette(imageData, nColours) {
+function relativeLuminance(rgb) {
+  // Cheap luma; good enough to gate low-light fur remapping.
+  return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+}
+
+function isEarthyShadowColour(rgb) {
+  const [r, g, b] = rgb;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const chroma = max - min;
+  const luma = relativeLuminance(rgb);
+  if (chroma <= 28) return true;
+  // Warm browns: red channel leads, not too vivid.
+  if (luma < 150 && r >= g && g >= b - 8 && chroma <= 110) return true;
+  return false;
+}
+
+function selectActivePalette(imageData, nColours, category = null) {
   const n = clampColours(nColours);
-  const counts = new Array(STANDARD_PALETTE_16.length).fill(0);
+  const counts = new Array(STANDARD_PALETTE.length).fill(0);
   const { data } = imageData;
   for (let i = 0; i < data.length; i += 16) {
     // Sample every 4th pixel for speed.
     const rgb = [data[i], data[i + 1], data[i + 2]];
     let best = 0;
     let bestDist = Infinity;
-    for (let p = 0; p < STANDARD_PALETTE_16.length; p += 1) {
-      const dist = colourDistance2(rgb, STANDARD_PALETTE_16[p]);
+    for (let p = 0; p < STANDARD_PALETTE.length; p += 1) {
+      const dist = colourDistance2(rgb, STANDARD_PALETTE[p]);
       if (dist < bestDist) {
         bestDist = dist;
         best = p;
@@ -146,28 +179,64 @@ function selectActivePalette(imageData, nColours) {
     }
     counts[best] += 1;
   }
+
+  if (EARTHY_CATEGORIES.has(category)) {
+    for (let p = 0; p < STANDARD_PALETTE.length; p += 1) {
+      if (!isEarthyShadowColour(STANDARD_PALETTE[p])) {
+        counts[p] *= 0.2;
+      }
+    }
+  }
+
   const order = counts
     .map((count, idx) => ({ count, idx }))
     .sort((a, b) => b.count - a.count);
-  const chosen = order.slice(0, n).map((item) => STANDARD_PALETTE_16[item.idx]);
-  // Keep at least MIN_COLOURS by filling from the fixed list if needed.
-  for (const colour of STANDARD_PALETTE_16) {
-    if (chosen.length >= Math.max(MIN_COLOURS, n)) break;
-    if (!chosen.some((c) => c[0] === colour[0] && c[1] === colour[1] && c[2] === colour[2])) {
-      chosen.push(colour);
+
+  const chosenIdx = [];
+  if (EARTHY_CATEGORIES.has(category)) {
+    // Reserve warm darks + a light paper tone.
+    for (const idx of [0, 1, 2, 10, 11, 4]) {
+      if (chosenIdx.length >= Math.min(6, n)) break;
+      if (!chosenIdx.includes(idx)) chosenIdx.push(idx);
     }
   }
-  return chosen.slice(0, Math.max(MIN_COLOURS, Math.min(n, MAX_COLOURS)));
+  for (const item of order) {
+    if (chosenIdx.length >= n) break;
+    if (!chosenIdx.includes(item.idx)) chosenIdx.push(item.idx);
+  }
+  while (chosenIdx.length < Math.max(MIN_COLOURS, Math.min(n, MAX_COLOURS))) {
+    for (let i = 0; i < STANDARD_PALETTE.length; i += 1) {
+      if (!chosenIdx.includes(i)) {
+        chosenIdx.push(i);
+        break;
+      }
+    }
+  }
+  return chosenIdx
+    .slice(0, Math.max(MIN_COLOURS, Math.min(n, MAX_COLOURS)))
+    .map((idx) => STANDARD_PALETTE[idx]);
 }
 
-function nearestPaletteIndex(rgb, palette) {
+function nearestPaletteIndex(rgb, palette, category = null) {
+  const dark = EARTHY_CATEGORIES.has(category) && relativeLuminance(rgb) < 95;
   let best = 0;
   let bestDist = Infinity;
   for (let i = 0; i < palette.length; i += 1) {
+    if (dark && !isEarthyShadowColour(palette[i])) continue;
     const dist = colourDistance2(rgb, palette[i]);
     if (dist < bestDist) {
       bestDist = dist;
       best = i;
+    }
+  }
+  // Fallback if every candidate was filtered (should be rare).
+  if (bestDist === Infinity) {
+    for (let i = 0; i < palette.length; i += 1) {
+      const dist = colourDistance2(rgb, palette[i]);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
     }
   }
   return best;
@@ -315,7 +384,7 @@ function listRegions(labels, width, height) {
   return regions;
 }
 
-function prepareIllustrationCanvas(sourceImage, nColours) {
+function prepareIllustrationCanvas(sourceImage, nColours, category = null) {
   const width = sourceImage.naturalWidth || sourceImage.width;
   const height = sourceImage.naturalHeight || sourceImage.height;
   const canvas = document.createElement("canvas");
@@ -324,11 +393,15 @@ function prepareIllustrationCanvas(sourceImage, nColours) {
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   ctx.drawImage(sourceImage, 0, 0);
   const imageData = ctx.getImageData(0, 0, width, height);
-  const palette = selectActivePalette(imageData, nColours);
+  const palette = selectActivePalette(imageData, nColours, category);
   const labels = new Int16Array(width * height);
   const { data } = imageData;
   for (let i = 0, p = 0; i < data.length; i += 4, p += 1) {
-    labels[p] = nearestPaletteIndex([data[i], data[i + 1], data[i + 2]], palette);
+    labels[p] = nearestPaletteIndex(
+      [data[i], data[i + 1], data[i + 2]],
+      palette,
+      category
+    );
   }
   const side = minRegionSidePx(width, height, MIN_REGION_MM);
   const cleaned = absorbSmallLabels(labels, width, height, side * side);
@@ -510,7 +583,11 @@ async function generate() {
     });
 
     setStatus("Clamping to 8–16 flat colours and A4 ≥5mm regions…");
-    const prepared = prepareIllustrationCanvas(rawImage, nColours);
+    const prepared = prepareIllustrationCanvas(
+      rawImage,
+      nColours,
+      categorySelect.value
+    );
     const preparedBlob = await blobFromCanvas(prepared.canvas);
     URL.revokeObjectURL(rawUrl);
     const objectUrl = URL.createObjectURL(preparedBlob);
