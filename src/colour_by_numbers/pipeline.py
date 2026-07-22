@@ -197,6 +197,8 @@ class ColourByNumbersResult:
     palette_mode: str = "standard"
     subject_bg_contrast: float | None = None
     min_adjacent_delta_e: float = DEFAULT_MIN_ADJACENT_DELTA_E
+    subject_type_label: str | None = None
+    subject_type_query: str | None = None
 
     def save(self, output_dir: str | Path, *, stem: str = "colour_by_numbers") -> dict[str, Path]:
         """Write outline, legend, preview, and composite page to disk."""
@@ -535,6 +537,8 @@ def create_colour_by_numbers(
         palette_mode=palette_mode,
         subject_bg_contrast=subject_bg_contrast,
         min_adjacent_delta_e=min_adjacent_delta_e,
+        subject_type_label=None,
+        subject_type_query=None,
     )
 
 
@@ -548,18 +552,41 @@ def create_from_query(
     min_a4_dpi: float | None = 150.0,
     min_subject_bg_contrast: float | None = DEFAULT_MIN_SUBJECT_BG_CONTRAST,
     contrast_bias: bool = True,
+    discover_types: bool = True,
+    subject_type: str | None = None,
+    type_pick: int = 0,
     **kwargs,
 ) -> ColourByNumbersResult:
-    """Search the web for ``query`` and convert a result to colour-by-numbers."""
+    """Search the web for ``query`` and convert a result to colour-by-numbers.
+
+    When ``discover_types`` is True (default), broad queries such as ``dogs``
+    are expanded to a concrete type (e.g. golden retriever) before image
+    search. Pass ``subject_type`` to choose explicitly, or ``type_pick`` to
+    select from the ranked shortlist.
+    """
+    from .discover import discover_subject_types, pick_subject_type
+
+    search_query = query
+    chosen_type = None
+    if discover_types or subject_type:
+        discovery = discover_subject_types(
+            query,
+            probe_search=discover_types and subject_type is None,
+        )
+        chosen_type = pick_subject_type(
+            discovery, type_name=subject_type, pick=type_pick
+        )
+        search_query = chosen_type.search_query
+
     image, hit = search_and_download(
-        query,
+        search_query,
         max_results=max_results,
         pick=pick,
         min_a4_dpi=min_a4_dpi,
         min_subject_bg_contrast=min_subject_bg_contrast,
         contrast_bias=contrast_bias,
     )
-    return create_colour_by_numbers(
+    result = create_colour_by_numbers(
         image,
         n_colours=n_colours,
         max_size=max_size,
@@ -568,6 +595,28 @@ def create_from_query(
         min_subject_bg_contrast=None,  # already filtered at download
         **kwargs,
     )
+    if chosen_type is not None:
+        return ColourByNumbersResult(
+            source=result.source,
+            quantized=result.quantized,
+            page=result.page,
+            printable=result.printable,
+            source_hit=result.source_hit,
+            complexity=result.complexity,
+            prepared=result.prepared,
+            subject_mask=result.subject_mask,
+            subject_mode=result.subject_mode,
+            subject_complexity=result.subject_complexity,
+            background_complexity=result.background_complexity,
+            print_dpi=result.print_dpi,
+            firm_border=result.firm_border,
+            palette_mode=result.palette_mode,
+            subject_bg_contrast=result.subject_bg_contrast,
+            min_adjacent_delta_e=result.min_adjacent_delta_e,
+            subject_type_label=chosen_type.label,
+            subject_type_query=chosen_type.search_query,
+        )
+    return result
 
 
 def create_from_path(

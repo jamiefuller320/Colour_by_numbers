@@ -17,13 +17,29 @@ For each source image the tool writes:
 
 ## How it works
 
-1. **Search** — Finds candidate photos from a text query using Openverse (open licences) first, then Wikimedia Commons, then DuckDuckGo as a fallback. No API keys are required. You can also supply a local file.
-2. **Subject engine (default: dual)** — rembg / U²-Net finds the subject, **colour-refines** the silhouette using subject vs background Lab contrast, maps a **firm binary mask** onto the full-resolution photo, and crops so the subject fills **80% of the frame**.
-3. **Contrast-aware search** — web queries are biased toward clear subject/background photos; downloads are scored by centre-vs-border colour contrast.
-4. **A4 print filter (CLI/UI default: 150 DPI)** — reject plates that would print softer than the DPI floor on A4.
-5. **Standard 32-colour palette** — pixels map onto a fixed colouring-book set (optional free median-cut). Touching sections closer than a Lab ΔE floor are merged so adjacent paints stay distinct.
-6. **Dual simplify** — Fine cleanup on the subject, light on the background; firm borders; no seam softening.
-7. **Outline + legend** — Numbered regions and a colour key (colour plates are the current focus; outline demos are paused).
+1. **Type discovery** — Broad queries such as `dogs` or `aircraft` are narrowed to a concrete type (e.g. pug, golden retriever, biplane) before photo search, so pages stay recognisable rather than generic.
+2. **Search** — Finds candidate photos for that specific type using Openverse (open licences) first, then Wikimedia Commons, then DuckDuckGo as a fallback. No API keys are required. You can also supply a local file.
+3. **Subject engine (default: dual)** — rembg / U²-Net finds the subject, **colour-refines** the silhouette using subject vs background Lab contrast, maps a **firm binary mask** onto the full-resolution photo, and crops so the subject fills **80% of the frame**.
+4. **Contrast-aware search** — web queries are biased toward clear subject/background photos; downloads are scored by centre-vs-border colour contrast.
+5. **A4 print filter (CLI/UI default: 150 DPI)** — reject plates that would print softer than the DPI floor on A4.
+6. **Standard 32-colour palette** — pixels map onto a fixed colouring-book set (optional free median-cut). Touching sections closer than a Lab ΔE floor are merged so adjacent paints stay distinct.
+7. **Dual simplify** — Fine cleanup on the subject, light on the background; firm borders; no seam softening.
+8. **Outline + legend** — Numbered regions and a colour key (colour plates are the current focus; outline demos are paused).
+
+### Type discovery
+
+```bash
+# List ranked specific types for a broad category
+colour-by-numbers --query dogs --list-types
+
+# Pick a type explicitly, then search/convert
+colour-by-numbers --query dogs --type "golden retriever" --output output
+
+# Or take the top-ranked discovered type (default)
+colour-by-numbers --query dogs --output output
+```
+
+In the Streamlit UI, searching `dogs` shows a breed shortlist first; choosing one searches photos for that breed only.
 
 ### Subject engine
 
