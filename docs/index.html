@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Colour by Numbers — Illustration Test Bed</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <p class="brand">Colour by Numbers</p>
+      <h1>Illustration test bed</h1>
+      <p class="lede">
+        Generate type-specific colouring-book style images with
+        <strong>Pollinations.ai</strong> (free, no subscription). Runs entirely in your browser on GitHub Pages.
+      </p>
+    </header>
+
+    <main class="layout">
+      <section class="panel controls">
+        <label>
+          Category
+          <select id="category"></select>
+        </label>
+        <label>
+          Specific type
+          <select id="type"></select>
+        </label>
+        <label>
+          Pollinations model
+          <select id="model">
+            <option value="flux" selected>flux</option>
+            <option value="turbo">turbo</option>
+          </select>
+        </label>
+        <label>
+          Size
+          <select id="size">
+            <option value="512">512 × 512</option>
+            <option value="768" selected>768 × 768</option>
+            <option value="1024">1024 × 1024</option>
+          </select>
+        </label>
+        <label>
+          Seed (blank = random)
+          <input id="seed" type="number" placeholder="e.g. 42" />
+        </label>
+        <label class="full">
+          Prompt
+          <textarea id="prompt" rows="5"></textarea>
+        </label>
+        <div class="actions">
+          <button id="generate" type="button">Generate illustration</button>
+          <button id="reset-prompt" type="button" class="ghost">Reset prompt</button>
+        </div>
+        <p id="status" class="status" aria-live="polite"></p>
+        <p class="fineprint">
+          Anonymous Pollinations use is rate-limited (~1 request / 15s) and may watermark.
+          Full colour-by-numbers conversion still needs the Python app locally.
+        </p>
+      </section>
+
+      <section class="panel preview">
+        <h2>Result</h2>
+        <div id="result-frame" class="result-frame empty">
+          <p class="placeholder">Choose a type and generate to see an image here.</p>
+          <img id="result-image" alt="Generated illustration" hidden />
+        </div>
+        <div class="preview-actions">
+          <a id="open-direct" class="ghost link" href="#" target="_blank" rel="noopener" hidden>Open Pollinations URL</a>
+          <a id="download" class="ghost link" href="#" download="illustration.png" hidden>Download PNG</a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Static test bed for
+        <a href="https://github.com/jamiefuller320/Colour_by_numbers">Colour_by_numbers</a>.
+        Image generation via <a href="https://pollinations.ai" rel="noopener">Pollinations.ai</a>.
+      </p>
+    </footer>
+  </div>
+  <script src="app.js" type="module"></script>
+</body>
+</html>

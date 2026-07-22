@@ -60,10 +60,19 @@ colour-by-numbers --query dogs --type "pug" --illustrate \
 **Test bed UI** (best place to compare backends):
 
 ```bash
+# Local Streamlit (full Python pipeline)
 streamlit run testbed_app.py --server.port 8502
 ```
 
-Local stylize isolates a real reference photo. Pollinations generates a new image from the type prompt (free, rate-limited). OpenAI needs a key.
+**GitHub Pages (static Pollinations test bed)** — no install, runs in the browser:
+
+After this branch is merged and Pages is enabled (Settings → Pages → Source: **GitHub Actions**), open:
+
+`https://jamiefuller320.github.io/Colour_by_numbers/`
+
+Or trigger the workflow manually: Actions → “Deploy GitHub Pages test bed” → Run workflow.
+
+Local stylize isolates a real reference photo. Pollinations generates a new image from the type prompt (free, rate-limited). OpenAI needs a key. The Pages site covers the Pollinations generation step only; full colour-by-numbers still uses the Python/Streamlit apps.
 
 ### Subject engine
 

@@ -1,0 +1,86 @@
+{
+  "dogs": [
+    "golden retriever",
+    "labrador retriever",
+    "pug",
+    "french bulldog",
+    "german shepherd",
+    "border collie",
+    "beagle",
+    "dachshund",
+    "corgi",
+    "husky",
+    "poodle",
+    "boxer",
+    "dalmatian",
+    "rottweiler",
+    "chihuahua",
+    "yorkshire terrier"
+  ],
+  "cats": [
+    "tabby cat",
+    "siamese cat",
+    "persian cat",
+    "maine coon",
+    "british shorthair",
+    "bengal cat",
+    "ragdoll cat",
+    "scottish fold"
+  ],
+  "aircraft": [
+    "biplane",
+    "fighter jet",
+    "airliner",
+    "helicopter",
+    "seaplane",
+    "glider",
+    "spitfire",
+    "cessna",
+    "concorde",
+    "hot air balloon"
+  ],
+  "birds": [
+    "robin",
+    "eagle",
+    "owl",
+    "parrot",
+    "swan",
+    "flamingo",
+    "penguin",
+    "hummingbird",
+    "peacock",
+    "toucan"
+  ],
+  "horses": [
+    "thoroughbred horse",
+    "pony",
+    "foal",
+    "clydesdale",
+    "arabian horse"
+  ],
+  "flowers": [
+    "sunflower",
+    "rose",
+    "tulip",
+    "daisy",
+    "poppy",
+    "orchid",
+    "lavender",
+    "lily"
+  ],
+  "cars": [
+    "vintage car",
+    "sports car",
+    "volkswagen beetle",
+    "pickup truck",
+    "formula one car"
+  ],
+  "boats": [
+    "sailboat",
+    "yacht",
+    "rowboat",
+    "canoe",
+    "fishing boat",
+    "tall ship"
+  ]
+}
