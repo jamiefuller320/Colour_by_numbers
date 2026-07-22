@@ -93,7 +93,7 @@ COMPLEXITY_PRESETS: dict[str, dict[str, float | int]] = {
         "smooth_radius": 2,
         "morph_radius": 2,
         "boundary_sigma": 1.1,
-        "line_width": 2,
+        "line_width": 1,
         "simplify": 1,
     },
 }

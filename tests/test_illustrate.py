@@ -32,9 +32,16 @@ def test_illustration_prompt_mentions_colouring_style() -> None:
     assert "golden retriever" in prompt
     assert "colouring book" in prompt
     assert "between 8 and 16" in prompt
-    assert "5mm" in prompt
+    assert "8mm" in prompt
     assert "eyes" in prompt
-    assert "warm natural fur" in prompt
+    assert "warm natural" in prompt
+
+
+def test_illustration_prompt_animals_share_earthy_cues() -> None:
+    cat = illustration_prompt("maine coon", category="cats")
+    bird = illustration_prompt("owl", category="birds")
+    assert "eyes" in cat and "warm natural" in cat
+    assert "eyes" in bird and "centred portrait" in bird
 
 
 def test_prepare_illustration_clamps_palette_and_regions() -> None:
@@ -42,14 +49,14 @@ def test_prepare_illustration_clamps_palette_and_regions() -> None:
 
     image = Image.new("RGB", (210, 210), (240, 240, 240))
     draw = ImageDraw.Draw(image)
-    # Large areas plus tiny speckles that should be absorbed at 5mm on A4.
+    # Large areas plus tiny speckles that should be absorbed at 8mm on A4.
     draw.rectangle((20, 20, 100, 100), fill=(220, 40, 40))
     draw.rectangle((120, 20, 190, 100), fill=(50, 110, 210))
     draw.rectangle((20, 120, 100, 190), fill=(50, 150, 60))
     draw.point((150, 150), fill=(255, 230, 80))
     draw.point((152, 152), fill=(255, 100, 50))
     cleaned, used = prepare_illustration_for_colouring(
-        image, n_colours=20, min_region_mm=5.0
+        image, n_colours=20, min_region_mm=8.0
     )
     assert 1 <= used <= 16
     pixels = np.asarray(cleaned).reshape(-1, 3)
