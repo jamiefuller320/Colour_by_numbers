@@ -18,13 +18,14 @@ For each source image the tool writes:
 ## How it works
 
 1. **Type discovery** — Broad queries such as `dogs` or `aircraft` are narrowed to a concrete type (e.g. pug, golden retriever, biplane) before photo search, so pages stay recognisable rather than generic.
-2. **Search** — Finds candidate photos for that specific type using Openverse (open licences) first, then Wikimedia Commons, then DuckDuckGo as a fallback. No API keys are required. You can also supply a local file.
-3. **Subject engine (default: dual)** — rembg / U²-Net finds the subject, **colour-refines** the silhouette using subject vs background Lab contrast, maps a **firm binary mask** onto the full-resolution photo, and crops so the subject fills **80% of the frame**.
-4. **Contrast-aware search** — web queries are biased toward clear subject/background photos; downloads are scored by centre-vs-border colour contrast.
-5. **A4 print filter (CLI/UI default: 150 DPI)** — reject plates that would print softer than the DPI floor on A4.
-6. **Standard 32-colour palette** — pixels map onto a fixed colouring-book set (optional free median-cut). Touching sections closer than a Lab ΔE floor are merged so adjacent paints stay distinct.
-7. **Dual simplify** — Fine cleanup on the subject, light on the background; firm borders; no seam softening.
-8. **Outline + legend** — Numbered regions and a colour key (colour plates are the current focus; outline demos are paused).
+2. **Illustration (optional)** — With `--illustrate`, gather type-specific reference photos and build a flat colouring-book illustration (local stylize today; optional OpenAI backend when `OPENAI_API_KEY` is set), then convert.
+3. **Search** — Finds candidate photos for that specific type using Openverse (open licences) first, then Wikimedia Commons, then DuckDuckGo as a fallback. No API keys are required. You can also supply a local file.
+4. **Subject engine (default: dual)** — rembg / U²-Net finds the subject, **colour-refines** the silhouette using subject vs background Lab contrast, maps a **firm binary mask** onto the full-resolution photo, and crops so the subject fills **80% of the frame**.
+5. **Contrast-aware search** — web queries are biased toward clear subject/background photos; downloads are scored by centre-vs-border colour contrast.
+6. **A4 print filter (CLI/UI default: 150 DPI)** — reject plates that would print softer than the DPI floor on A4.
+7. **Standard 32-colour palette** — pixels map onto a fixed colouring-book set (optional free median-cut). Touching sections closer than a Lab ΔE floor are merged so adjacent paints stay distinct.
+8. **Dual simplify** — Fine cleanup on the subject, light on the background; firm borders; no seam softening.
+9. **Outline + legend** — Numbered regions and a colour key (colour plates are the current focus; outline demos are paused).
 
 ### Type discovery
 
@@ -40,6 +41,19 @@ colour-by-numbers --query dogs --output output
 ```
 
 In the Streamlit UI, searching `dogs` shows a breed shortlist first; choosing one searches photos for that breed only.
+
+### Illustration-first generation
+
+```bash
+# Discover type → reference photo → flat illustration → colour-by-numbers
+colour-by-numbers --query dogs --type "pug" --illustrate --output output
+
+# Optional OpenAI Images backend (requires OPENAI_API_KEY)
+colour-by-numbers --query dogs --type "pug" --illustrate \
+  --illustration-backend openai --output output
+```
+
+Local stylize isolates the subject, maps fills onto the standard palette, flattens the background, and draws a firm ink outline. True text-to-image generation is available via the OpenAI backend when a key is present.
 
 ### Subject engine
 

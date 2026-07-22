@@ -323,6 +323,21 @@ if source_mode == "Web search":
         value=True,
         help="e.g. dogs → pug / golden retriever / … before searching photos.",
     )
+    illustrate_first = st.checkbox(
+        "Generate illustration first",
+        value=False,
+        help=(
+            "Build a flat colouring-book illustration from a type-specific "
+            "reference photo, then convert (local stylize backend)."
+        ),
+    )
+    illustration_backend = st.selectbox(
+        "Illustration backend",
+        options=["local_stylize", "openai"],
+        index=0,
+        disabled=not illustrate_first,
+        help="openai requires OPENAI_API_KEY in the environment.",
+    )
     col_a, _col_b = st.columns([1, 3])
     with col_a:
         search_clicked = st.button("Search", type="primary", use_container_width=True)
@@ -399,17 +414,44 @@ if source_mode == "Web search":
         if st.button("Search photos for this type", type="primary"):
             chosen = discovery.types[type_idx]
             st.session_state.chosen_type = chosen
-            with st.spinner(f"Searching for “{chosen.search_query}”…"):
-                try:
-                    st.session_state.hits = search_images(
-                        chosen.search_query,
-                        max_results=8,
-                        min_a4_dpi=float(min_a4_dpi) if enforce_a4 else None,
-                        contrast_bias=True,
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    st.error(f"Search failed: {exc}")
-                    st.session_state.hits = []
+            if illustrate_first:
+                with st.spinner(
+                    f"Illustrating “{chosen.label}” via {illustration_backend}…"
+                ):
+                    try:
+                        from colour_by_numbers.generate import generate_colouring_page
+
+                        page = generate_colouring_page(
+                            st.session_state.query,
+                            subject_type=chosen.label,
+                            discover_types=False,
+                            backend=illustration_backend,
+                            n_colours=n_colours,
+                            illustration_colours=min(n_colours, 16),
+                            complexity=complexity,
+                            subject_mode="off",
+                            palette_mode=palette_mode,
+                            min_adjacent_delta_e=float(min_adjacent_delta_e),
+                            firm_border=firm_border,
+                            max_size=max_size,
+                        )
+                        st.session_state.illustration = page.illustration
+                        st.session_state.result = page.result
+                        st.session_state.hits = []
+                    except Exception as exc:  # noqa: BLE001
+                        st.error(f"Illustration failed: {exc}")
+            else:
+                with st.spinner(f"Searching for “{chosen.search_query}”…"):
+                    try:
+                        st.session_state.hits = search_images(
+                            chosen.search_query,
+                            max_results=8,
+                            min_a4_dpi=float(min_a4_dpi) if enforce_a4 else None,
+                            contrast_bias=True,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        st.error(f"Search failed: {exc}")
+                        st.session_state.hits = []
 
     chosen = st.session_state.chosen_type
     hits = st.session_state.hits
@@ -493,6 +535,18 @@ else:
 
 
 result = st.session_state.get("result")
+illustration = st.session_state.get("illustration")
+if illustration is not None:
+    st.divider()
+    st.subheader("Generated illustration")
+    st.caption(
+        f"Backend “{illustration.backend}”"
+        + (f" · type “{illustration.subject_type_label}”" if illustration.subject_type_label else "")
+    )
+    st.image(illustration.image, use_container_width=True)
+    if illustration.reference_url:
+        st.caption(f"Reference photo: {illustration.reference_url}")
+
 if result is not None:
     st.divider()
     st.subheader("Colour plate results")
