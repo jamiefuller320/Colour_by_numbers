@@ -260,8 +260,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--illustration-colours",
         type=int,
-        default=16,
-        help="Flat fills used while stylising the illustration (default: 16)",
+        default=12,
+        help="Flat fills while stylising (clamped to 8–16; default: 12)",
+    )
+    parser.add_argument(
+        "--min-region-mm",
+        type=float,
+        default=5.0,
+        help=(
+            "Minimum colouring-region height/width in mm when printed on A4 "
+            "(default: 5)"
+        ),
     )
     return parser
 
@@ -315,6 +324,7 @@ def main(argv: list[str] | None = None) -> int:
         smooth_radius=args.smooth_radius,
         morph_radius=args.morph_radius,
         boundary_sigma=args.boundary_sigma,
+        min_region_mm=args.min_region_mm,
     )
 
     if args.illustrate:
@@ -331,7 +341,7 @@ def main(argv: list[str] | None = None) -> int:
             backend=args.illustration_backend,
             illustration_colours=args.illustration_colours,
             illustration_size=args.illustration_size,
-            n_colours=args.colours,
+            n_colours=min(args.colours, 16) if args.colours else 12,
             complexity=args.complexity,
             subject_mode="off",
             palette_mode=args.palette_mode,
@@ -343,6 +353,7 @@ def main(argv: list[str] | None = None) -> int:
             min_region_area=args.min_region_area,
             structure_size=args.structure_size,
             pollinations_model=args.pollinations_model,
+            min_region_mm=args.min_region_mm,
         )
         result = page.result
         stem_base = page.subject_type.label

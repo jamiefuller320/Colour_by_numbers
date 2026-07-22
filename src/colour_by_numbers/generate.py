@@ -19,8 +19,9 @@ from .illustrate import (
     IllustrationResult,
     generate_illustration,
 )
+from .palette import DEFAULT_ILLUSTRATION_COLOURS, MAX_N_COLOURS, clamp_n_colours
 from .pipeline import ColourByNumbersResult, create_colour_by_numbers
-from .print_resolution import evaluate_print_resolution
+from .print_resolution import DEFAULT_MIN_REGION_MM, evaluate_print_resolution
 from .search import ImageHit, download_image
 
 logger = logging.getLogger(__name__)
@@ -109,13 +110,14 @@ def generate_colouring_page(
     type_pick: int = 0,
     discover_types: bool = True,
     backend: str = "local_stylize",
-    n_colours: int = 16,
-    illustration_colours: int = 16,
+    n_colours: int = DEFAULT_ILLUSTRATION_COLOURS,
+    illustration_colours: int = DEFAULT_ILLUSTRATION_COLOURS,
     illustration_size: int = DEFAULT_ILLUSTRATION_SIZE,
     max_references: int = 6,
     complexity: str = "fine",
     subject_mode: str = "off",
     min_a4_dpi: float | None = None,
+    min_region_mm: float = DEFAULT_MIN_REGION_MM,
     openai_api_key: str | None = None,
     prompt_override: str | None = None,
     pollinations_model: str = "flux",
@@ -126,6 +128,8 @@ def generate_colouring_page(
 
     Default ``subject_mode='off'`` because the illustration is already isolated
     on a flat background with ink outlines; dual rembg is usually unnecessary.
+    Illustration colour counts are clamped to 8–16; colouring regions are
+    floored to at least ``min_region_mm`` × ``min_region_mm`` on A4.
     """
     discovery = discover_subject_types(
         query,
@@ -137,6 +141,8 @@ def generate_colouring_page(
 
     reference_hit: ImageHit | None = None
     reference_image: Image.Image | None = None
+    illustration_colours = clamp_n_colours(illustration_colours)
+    n_colours = clamp_n_colours(n_colours, maximum=MAX_N_COLOURS)
 
     if backend == "local_stylize":
         hits = gather_reference_hits(
@@ -155,6 +161,7 @@ def generate_colouring_page(
         prompt_override=prompt_override,
         pollinations_model=pollinations_model,
         seed=seed,
+        min_region_mm=min_region_mm,
     )
     if reference_hit is not None:
         illustration = IllustrationResult(
@@ -180,6 +187,7 @@ def generate_colouring_page(
         )
 
     # Illustrations are already flat; keep A4 filter off unless requested.
+    pipeline_kwargs.setdefault("min_region_mm", min_region_mm)
     result = create_colour_by_numbers(
         illustration.image,
         n_colours=n_colours,

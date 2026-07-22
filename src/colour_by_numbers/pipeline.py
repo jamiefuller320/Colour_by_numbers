@@ -15,7 +15,11 @@ from .palette import (
     DEFAULT_MIN_SUBJECT_BG_CONTRAST,
     DEFAULT_N_COLOURS,
 )
-from .print_resolution import evaluate_print_resolution
+from .print_resolution import (
+    DEFAULT_MIN_REGION_MM,
+    evaluate_print_resolution,
+    min_region_size_for_a4_mm,
+)
 from .quantize import (
     QuantizedImage,
     prefilter_for_regions,
@@ -106,10 +110,16 @@ def _preset_simplify_params(
     *,
     width: int,
     height: int,
+    min_region_mm: float | None = DEFAULT_MIN_REGION_MM,
 ) -> dict:
     fraction = float(preset["min_area_fraction"])
     min_area = 1 if fraction <= 0 else max(20, int(width * height * fraction))
-    return {
+    min_thickness: float | None = None
+    if min_region_mm is not None and min_region_mm > 0:
+        region = min_region_size_for_a4_mm(width, height, min_mm=min_region_mm)
+        min_area = max(min_area, region.min_area_px)
+        min_thickness = float(max(2, region.min_side_px))
+    params: dict = {
         "min_region_area": min_area,
         "max_regions": int(preset["max_regions"]),
         "smooth_radius": int(preset["smooth_radius"]),
@@ -117,6 +127,9 @@ def _preset_simplify_params(
         "boundary_sigma": float(preset["boundary_sigma"]),
         "smooth_iterations": 2,
     }
+    if min_thickness is not None:
+        params["min_thickness"] = min_thickness
+    return params
 
 
 def _override_simplify_params(
@@ -237,6 +250,7 @@ def create_colour_by_numbers(
     background_complexity: str = "light",
     firm_border: bool = True,
     min_a4_dpi: float | None = None,
+    min_region_mm: float | None = DEFAULT_MIN_REGION_MM,
     subject_blur_radius: float | None = None,
     background_blur_radius: float | None = None,
     min_region_area: int | None = None,
@@ -437,12 +451,22 @@ def create_colour_by_numbers(
             background_boundary_sigma=background_boundary_sigma,
         )
         subject_params = _override_simplify_params(
-            _preset_simplify_params(subject_preset, width=width, height=height),
+            _preset_simplify_params(
+                subject_preset,
+                width=width,
+                height=height,
+                min_region_mm=min_region_mm,
+            ),
             zone="subject",
             **override_kwargs,
         )
         background_params = _override_simplify_params(
-            _preset_simplify_params(background_preset, width=width, height=height),
+            _preset_simplify_params(
+                background_preset,
+                width=width,
+                height=height,
+                min_region_mm=min_region_mm,
+            ),
             zone="background",
             **override_kwargs,
         )
@@ -493,9 +517,16 @@ def create_colour_by_numbers(
         region_cap = int(preset["max_regions"] if max_regions is None else max_regions)
         do_simplify = bool(int(preset.get("simplify", 1)))
         area = min_region_area
+        min_thickness = None
         if area is None:
             fraction = float(preset["min_area_fraction"])
             area = 1 if fraction <= 0 else max(20, int(width * height * fraction))
+            if min_region_mm is not None and min_region_mm > 0:
+                region = min_region_size_for_a4_mm(
+                    width, height, min_mm=min_region_mm
+                )
+                area = max(area, region.min_area_px)
+                min_thickness = float(max(2, region.min_side_px))
         page = build_outline_page(
             quantized.labels,
             quantized.palette,
@@ -508,6 +539,7 @@ def create_colour_by_numbers(
             output_size=prepared.size,
             simplify=do_simplify,
             min_adjacent_delta_e=min_adjacent_delta_e,
+            min_thickness=min_thickness,
         )
         complexity_label = complexity
 

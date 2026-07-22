@@ -7,6 +7,7 @@ from PIL import Image, ImageDraw
 
 from colour_by_numbers.palette import (
     STANDARD_PALETTE_32,
+    clamp_n_colours,
     colour_distance_matrix,
     contrast_delta_e,
     select_active_palette,
@@ -83,6 +84,12 @@ def test_pipeline_standard_palette_default() -> None:
 def test_select_active_palette_respects_n() -> None:
     active = select_active_palette(STANDARD_PALETTE_32, n_colours=12)
     assert active.shape[0] == 12
+
+
+def test_clamp_n_colours_illustration_range() -> None:
+    assert clamp_n_colours(3) == 8
+    assert clamp_n_colours(12) == 12
+    assert clamp_n_colours(40) == 16
 
 
 def test_gold_vs_green_contrast_is_high() -> None:

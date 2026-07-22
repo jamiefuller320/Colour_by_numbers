@@ -8,6 +8,9 @@ from PIL import Image, ImageDraw
 from colour_by_numbers.print_resolution import (
     a4_pixel_size,
     evaluate_print_resolution,
+    min_region_area_for_a4_mm,
+    min_region_size_for_a4_mm,
+    mm_per_pixel_on_a4,
     subject_crop_adequate_for_a4,
 )
 from colour_by_numbers.pipeline import create_colour_by_numbers
@@ -27,6 +30,16 @@ def test_a4_dpi_accepts_large_plate() -> None:
     short, long = a4_pixel_size(150)
     report = evaluate_print_resolution(short, long, min_dpi=150)
     assert report.adequate
+
+
+def test_min_region_5mm_on_a4_for_square_plate() -> None:
+    # 210×210 px fit on A4 short edge → 1 mm/px → 5mm region is 5×5 px.
+    region = min_region_size_for_a4_mm(210, 210, min_mm=5.0)
+    assert region.min_width_px == 5
+    assert region.min_height_px == 5
+    assert region.min_area_px == 25
+    assert min_region_area_for_a4_mm(210, 210, min_mm=5.0) == 25
+    assert mm_per_pixel_on_a4(210, 210) == pytest.approx(1.0)
 
 
 def test_subject_crop_estimate() -> None:

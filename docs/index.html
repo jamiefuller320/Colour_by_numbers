@@ -46,6 +46,10 @@
           </select>
         </label>
         <label>
+          Max colours (8–16)
+          <input id="colours" type="number" min="8" max="16" value="12" />
+        </label>
+        <label>
           Seed (blank = random)
           <input id="seed" type="number" placeholder="e.g. 42" />
         </label>
@@ -59,6 +63,8 @@
         </div>
         <p id="status" class="status" aria-live="polite"></p>
         <p class="fineprint">
+          Images are requested with 8–16 flat colours and post-processed so
+          colour regions are at least ~5×5&nbsp;mm when printed on A4.
           Anonymous Pollinations use is rate-limited (~1 request / 15s) and may watermark.
           Full colour-by-numbers conversion still needs the Python app locally.
         </p>
