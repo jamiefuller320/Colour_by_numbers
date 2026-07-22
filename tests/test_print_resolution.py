@@ -32,13 +32,14 @@ def test_a4_dpi_accepts_large_plate() -> None:
     assert report.adequate
 
 
-def test_min_region_8mm_on_a4_for_square_plate() -> None:
-    # 210×210 px fit on A4 short edge → 1 mm/px → 8mm region is 8×8 px.
-    region = min_region_size_for_a4_mm(210, 210, min_mm=8.0)
-    assert region.min_width_px == 8
-    assert region.min_height_px == 8
-    assert region.min_area_px == 64
-    assert min_region_area_for_a4_mm(210, 210, min_mm=8.0) == 64
+def test_min_region_5mm_wide_and_high_on_a4() -> None:
+    # 210×210 px fit on A4 short edge → 1 mm/px → 5mm block is 5×5 px.
+    region = min_region_size_for_a4_mm(210, 210, min_mm=5.0)
+    assert region.min_width_px == 5
+    assert region.min_height_px == 5
+    assert region.min_inscribed_diameter_px == 5
+    assert region.min_area_px == 25
+    assert min_region_area_for_a4_mm(210, 210, min_mm=5.0) == 25
     assert mm_per_pixel_on_a4(210, 210) == pytest.approx(1.0)
 
 

@@ -68,12 +68,15 @@ with st.sidebar:
         help="Smaller is faster on free Pollinations tier.",
     )
     min_region_mm = st.slider(
-        "Min region size on A4 (mm)",
-        min_value=4.0,
+        "Min colourable block on A4 (mm wide & high)",
+        min_value=3.0,
         max_value=12.0,
-        value=8.0,
+        value=5.0,
         step=0.5,
-        help="Colouring regions smaller than this are absorbed when printed on A4.",
+        help=(
+            "Each colour fill must be at least this wide and high (fits a tip "
+            "of that diameter). Smaller features become black line detail."
+        ),
     )
     seed = st.number_input(
         "Seed (−1 = random)",

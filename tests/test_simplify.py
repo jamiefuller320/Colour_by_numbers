@@ -8,6 +8,8 @@ from colour_by_numbers.simplify import (
     absorb_small_regions,
     absorb_thin_regions,
     count_regions,
+    enforce_colourable_blocks,
+    is_colourable_block,
     limit_region_count,
     simplify_labels,
 )
@@ -44,6 +46,30 @@ def test_absorb_small_regions_reduces_count() -> None:
     after = count_regions(merged)
     assert after < before
     assert after <= 4
+
+
+def test_enforce_colourable_blocks_keeps_detail_as_ink() -> None:
+    from scipy import ndimage
+
+    labels = np.zeros((40, 40), dtype=np.int32)
+    labels[:, 20:] = 1
+    # Tiny island that cannot fit a 5px tip circle.
+    labels[5:8, 5:8] = 2
+    # Thin whisker-like ribbon.
+    labels[30, 5:18] = 2
+    cleaned, detail = enforce_colourable_blocks(
+        labels, min_width_px=5, min_height_px=5, min_inscribed_px=5.0
+    )
+    assert not np.any(cleaned == 2)
+    assert detail.any()
+    structure = np.ones((3, 3), dtype=bool)
+    for colour in np.unique(cleaned):
+        labeled, n = ndimage.label(cleaned == colour, structure=structure)
+        for comp_id in range(1, n + 1):
+            component = labeled == comp_id
+            assert is_colourable_block(
+                component, min_width_px=5, min_height_px=5, min_inscribed_px=5.0
+            )
 
 
 def test_limit_region_count_respects_cap() -> None:

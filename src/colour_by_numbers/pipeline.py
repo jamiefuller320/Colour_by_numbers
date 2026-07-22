@@ -488,6 +488,7 @@ def create_colour_by_numbers(
             palette,
             line_width=stroke,
             simplify=False,
+            min_region_mm=min_region_mm,
         )
         from .simplify import SimplificationStats
 
@@ -505,6 +506,7 @@ def create_colour_by_numbers(
                 smooth_radius=subj_stats.smooth_radius,
                 passes=subj_stats.passes,
             ),
+            detail_ink=page.detail_ink,
         )
         complexity_label = f"{subject_complexity}+{background_complexity}"
         used_subject_complexity = subject_complexity
@@ -542,12 +544,17 @@ def create_colour_by_numbers(
             simplify=do_simplify,
             min_adjacent_delta_e=min_adjacent_delta_e,
             min_thickness=min_thickness,
+            min_region_mm=min_region_mm,
         )
         complexity_label = complexity
 
     prepared_out = prepared_native if mode not in {"off", "none"} else None
 
     simplified_preview = preview_from_labels(page.labels, page.palette)
+    if page.detail_ink is not None and page.detail_ink.shape == page.labels.shape:
+        preview_arr = np.asarray(simplified_preview).copy()
+        preview_arr[page.detail_ink] = (18, 18, 18)
+        simplified_preview = Image.fromarray(preview_arr, mode="RGB")
     quantized = QuantizedImage(
         labels=page.labels,
         palette=page.palette,

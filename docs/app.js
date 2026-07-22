@@ -58,9 +58,10 @@ const EARTHY_CATEGORIES = new Set([
 ]);
 const MIN_COLOURS = 8;
 const MAX_COLOURS = 16;
-const MIN_REGION_MM = 8;
+const MIN_REGION_MM = 5;
 const A4_MM = [210, 297];
 const OUTLINE_LINE_WIDTH = 1; // single-pixel edges (no thicken pass)
+const DETAIL_INK_RGB = [18, 18, 18];
 
 let categories = {};
 
@@ -75,9 +76,9 @@ function buildPrompt(label, category, nColours = 12) {
   const style =
     `children's colouring book illustration, thick clean black outlines, ` +
     `flat cel fills using between ${MIN_COLOURS} and ${colours} solid colours only, ` +
-    `large simple colour regions (each region at least ${MIN_REGION_MM}mm by ` +
-    `${MIN_REGION_MM}mm when printed on A4), high subject-background contrast, ` +
-    `no gradients, no photorealism, no text, white background`;
+    `colourable blocks at least ${MIN_REGION_MM}mm wide and ${MIN_REGION_MM}mm high ` +
+    `when printed on A4 with finer detail as black line drawing, ` +
+    `high subject-background contrast, no gradients, no photorealism, no text, white background`;
   if (category === "aircraft") {
     return `${label} side view, clear silhouette, ${style}`;
   }
@@ -295,25 +296,7 @@ function absorbSmallLabels(labels, width, height, minArea, maxPasses = 8) {
           stack.push(n);
         }
       }
-      // Also absorb ribbons narrower than the A4 min side, even if area passes.
-      let minX = width;
-      let maxX = 0;
-      let minY = height;
-      let maxY = 0;
-      for (const idx of component) {
-        const x = idx % width;
-        const y = (idx / width) | 0;
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-      }
-      const bboxW = maxX - minX + 1;
-      const bboxH = maxY - minY + 1;
-      const minSide = Math.sqrt(minArea);
-      if (component.length >= minArea && bboxW >= minSide && bboxH >= minSide) {
-        continue;
-      }
+      if (component.length >= minArea) continue;
 
       const votes = new Map();
       for (const idx of component) {
@@ -339,6 +322,145 @@ function absorbSmallLabels(labels, width, height, minArea, maxPasses = 8) {
     if (absorbed === 0) break;
   }
   return work;
+}
+
+function componentBBox(component, width) {
+  let minX = width;
+  let maxX = 0;
+  let minY = 1e9;
+  let maxY = 0;
+  for (const idx of component) {
+    const x = idx % width;
+    const y = (idx / width) | 0;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  return { w: maxX - minX + 1, h: maxY - minY + 1 };
+}
+
+function approxInscribedDiameter(component, width, height, labels, colour) {
+  // Cheaper than a full EDT: max Chebyshev distance to a border-ish neighbour.
+  let best = 0;
+  for (const idx of component) {
+    const x = idx % width;
+    const y = (idx / width) | 0;
+    let onBorder = false;
+    for (const n of neighboursOf(idx, width, height)) {
+      if (labels[n] !== colour) {
+        onBorder = true;
+        break;
+      }
+    }
+    if (onBorder) continue;
+    const depth = Math.min(x + 1, y + 1, width - x, height - y);
+    if (depth > best) best = depth;
+  }
+  // Interior depth ≈ radius; diameter ≈ 2 * depth. Border-only blobs → 1px.
+  return best > 0 ? best * 2 : 1;
+}
+
+function detailInkFromComponent(component, width, height, labels, colour) {
+  const diameter = approxInscribedDiameter(component, width, height, labels, colour);
+  if (diameter <= 2.5) return component.slice();
+  const edge = [];
+  for (const idx of component) {
+    let border = false;
+    for (const n of neighboursOf(idx, width, height)) {
+      if (labels[n] !== colour) {
+        border = true;
+        break;
+      }
+    }
+    // Also treat image-edge pixels as outline candidates.
+    const x = idx % width;
+    const y = (idx / width) | 0;
+    if (x === 0 || y === 0 || x === width - 1 || y === height - 1) border = true;
+    if (border) edge.push(idx);
+  }
+  return edge.length ? edge : component.slice();
+}
+
+function enforceColourableBlocks(
+  labels,
+  width,
+  height,
+  minWidthPx,
+  minHeightPx,
+  maxPasses = 10
+) {
+  const size = width * height;
+  let work = labels.slice();
+  const detail = new Uint8Array(size);
+  const minInscribed = Math.min(minWidthPx, minHeightPx);
+
+  for (let pass = 0; pass < maxPasses; pass += 1) {
+    const visited = new Uint8Array(size);
+    let changed = 0;
+    const next = work.slice();
+
+    for (let start = 0; start < size; start += 1) {
+      if (visited[start]) continue;
+      const colour = work[start];
+      const stack = [start];
+      const component = [];
+      visited[start] = 1;
+      while (stack.length) {
+        const idx = stack.pop();
+        component.push(idx);
+        for (const n of neighboursOf(idx, width, height)) {
+          if (visited[n] || work[n] !== colour) continue;
+          visited[n] = 1;
+          stack.push(n);
+        }
+      }
+      const { w, h } = componentBBox(component, width);
+      const inscribed = approxInscribedDiameter(
+        component,
+        width,
+        height,
+        work,
+        colour
+      );
+      if (w >= minWidthPx && h >= minHeightPx && inscribed >= minInscribed) {
+        continue;
+      }
+
+      for (const idx of detailInkFromComponent(
+        component,
+        width,
+        height,
+        work,
+        colour
+      )) {
+        detail[idx] = 1;
+      }
+
+      const votes = new Map();
+      for (const idx of component) {
+        for (const n of neighboursOf(idx, width, height)) {
+          const other = work[n];
+          if (other === colour) continue;
+          votes.set(other, (votes.get(other) || 0) + 1);
+        }
+      }
+      let bestColour = colour;
+      let bestVotes = 0;
+      for (const [c, v] of votes.entries()) {
+        if (v > bestVotes) {
+          bestVotes = v;
+          bestColour = c;
+        }
+      }
+      if (bestVotes === 0) continue;
+      for (const idx of component) next[idx] = bestColour;
+      changed += 1;
+    }
+    work = next;
+    if (changed === 0) break;
+  }
+  return { labels: work, detail };
 }
 
 function compactLabels(labels, palette) {
@@ -444,9 +566,16 @@ function prepareIllustrationCanvas(sourceImage, nColours, category = null) {
   }
   const side = minRegionSidePx(width, height, MIN_REGION_MM);
   const cleaned = absorbSmallLabels(labels, width, height, side * side);
-  const compacted = compactLabels(cleaned, palette);
+  const enforced = enforceColourableBlocks(cleaned, width, height, side, side);
+  const compacted = compactLabels(enforced.labels, palette);
+  // Remap detail through compaction: rebuild from compacted labels by
+  // re-running enforce is expensive; instead paint detail on the compacted
+  // grid using the pre-compact pixel mask (indices unchanged by remapping
+  // of colours — detail is positional).
   for (let p = 0; p < compacted.labels.length; p += 1) {
-    const colour = compacted.palette[compacted.labels[p]];
+    const colour = enforced.detail[p]
+      ? DETAIL_INK_RGB
+      : compacted.palette[compacted.labels[p]];
     const o = p * 4;
     data[o] = colour[0];
     data[o + 1] = colour[1];
@@ -458,6 +587,7 @@ function prepareIllustrationCanvas(sourceImage, nColours, category = null) {
     canvas,
     labels: compacted.labels,
     palette: compacted.palette,
+    detail: enforced.detail,
     usedColours: compacted.palette.length,
     minSidePx: side,
     width,
@@ -465,7 +595,7 @@ function prepareIllustrationCanvas(sourceImage, nColours, category = null) {
   };
 }
 
-function buildOutlineCanvas(labels, palette, width, height) {
+function buildOutlineCanvas(labels, palette, width, height, detail = null) {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -489,9 +619,10 @@ function buildOutlineCanvas(labels, palette, width, height) {
       const colour = labels[idx];
       if (x > 0 && labels[idx - 1] !== colour) paintEdge(idx);
       if (y > 0 && labels[idx - width] !== colour) paintEdge(idx);
+      if (detail && detail[idx]) paintEdge(idx);
     }
   }
-  // Optional 1px outline only — no neighbour thicken (keeps strokes fine).
+  // Optional thicker outline only when explicitly requested.
   if (OUTLINE_LINE_WIDTH > 1) {
     const edgeMask = new Uint8Array(width * height);
     for (let i = 0; i < edgeMask.length; i += 1) {
@@ -623,7 +754,7 @@ async function generate() {
       img.src = rawUrl;
     });
 
-    setStatus("Clamping to 8–16 flat colours and A4 ≥8mm regions…");
+    setStatus("Clamping to 8–16 flat colours; colourable blocks ≥5×5mm…");
     const prepared = prepareIllustrationCanvas(
       rawImage,
       nColours,
@@ -634,12 +765,13 @@ async function generate() {
     const objectUrl = URL.createObjectURL(preparedBlob);
     showImage(imageEl, frame, objectUrl);
 
-    setStatus("Building numbered colour-by-numbers outline…");
+    setStatus("Building numbered outline with line detail…");
     const outline = buildOutlineCanvas(
       prepared.labels,
       prepared.palette,
       prepared.width,
-      prepared.height
+      prepared.height,
+      prepared.detail
     );
     const outlineBlob = await blobFromCanvas(outline.canvas);
     const outlineUrl = URL.createObjectURL(outlineBlob);
@@ -656,8 +788,9 @@ async function generate() {
     downloadOutline.hidden = false;
     setStatus(
       `Generated “${typeSelect.value}” · ${prepared.usedColours} colours · ` +
-        `${outline.regionCount} numbered blocks · ` +
-        `min region ~${prepared.minSidePx}px (≥${MIN_REGION_MM}mm on A4).`,
+        `${outline.regionCount} colourable blocks · ` +
+        `min block ${prepared.minSidePx}×${prepared.minSidePx}px ` +
+        `(≥${MIN_REGION_MM}mm wide & high on A4).`,
       "ok"
     );
   } catch (err) {
