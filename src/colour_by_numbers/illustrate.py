@@ -88,6 +88,12 @@ def illustration_prompt(
         return f"{subject} side view, clear silhouette, {style}"
     if category in {"flowers", "birds"}:
         return f"{subject} centred portrait, {style}"
+    if category == "dogs":
+        return (
+            f"{subject} portrait, centred subject, clearly defined eyes with "
+            f"dark pupils and light eye highlights, readable muzzle and nose, "
+            f"warm natural fur colours, {style}"
+        )
     return f"{subject} portrait, centred subject, {style}"
 
 
@@ -96,19 +102,24 @@ def prepare_illustration_for_colouring(
     *,
     n_colours: int = DEFAULT_ILLUSTRATION_COLOURS,
     min_region_mm: float = DEFAULT_MIN_REGION_MM,
+    category: str | None = None,
 ) -> tuple[Image.Image, int]:
     """Clamp a generated plate to 8–16 flat palette colours and A4-safe regions.
 
     Maps pixels onto the standard crayon set, then absorbs speckles thinner or
     smaller than ``min_region_mm`` × ``min_region_mm`` when printed on A4.
+    For dog-like categories, dark pixels stay on warm neutrals / browns.
     """
     n = clamp_n_colours(n_colours)
     rgb = np.asarray(image.convert("RGB"), dtype=np.uint8)
     height, width = rgb.shape[:2]
     active = select_active_palette(
-        STANDARD_PALETTE_32, n_colours=n, image_rgb=rgb
+        STANDARD_PALETTE_32,
+        n_colours=n,
+        image_rgb=rgb,
+        category=category,
     )
-    labels = nearest_palette_indices(rgb, active)
+    labels = nearest_palette_indices(rgb, active, category=category)
     region = min_region_size_for_a4_mm(width, height, min_mm=min_region_mm)
     labels = absorb_small_regions(labels, min_area=region.min_area_px)
     labels = absorb_thin_regions(
@@ -196,9 +207,12 @@ def stylize_reference_to_illustration(
     flat = _smooth_flat(prepared, radius=2.6)
     pixels = np.asarray(flat, dtype=np.uint8)
     active = select_active_palette(
-        STANDARD_PALETTE_32, n_colours=n_colours, image_rgb=pixels
+        STANDARD_PALETTE_32,
+        n_colours=n_colours,
+        image_rgb=pixels,
+        category=category,
     )
-    labels = nearest_palette_indices(pixels, active)
+    labels = nearest_palette_indices(pixels, active, category=category)
     poster = active[labels]
 
     # Force a clean flat background outside the firm mask.
@@ -212,13 +226,16 @@ def stylize_reference_to_illustration(
     ink_arr = np.asarray(ink)
     out = np.asarray(illustrated).copy()
     ink_pixels = ink_arr[:, :, 0] < 40
-    out[ink_pixels] = (20, 20, 20)
+    out[ink_pixels] = (18, 18, 18)
     illustrated = Image.fromarray(out, mode="RGB")
 
     # Mild contrast so flat fills read clearly when printed.
     illustrated = ImageOps.autocontrast(illustrated, cutoff=0.5)
     illustrated, used = prepare_illustration_for_colouring(
-        illustrated, n_colours=n_colours, min_region_mm=min_region_mm
+        illustrated,
+        n_colours=n_colours,
+        min_region_mm=min_region_mm,
+        category=category,
     )
 
     prompt = (
@@ -406,7 +423,10 @@ def generate_illustration(
 
     if prepare_for_colouring:
         cleaned, used = prepare_illustration_for_colouring(
-            result.image, n_colours=n_colours, min_region_mm=min_region_mm
+            result.image,
+            n_colours=n_colours,
+            min_region_mm=min_region_mm,
+            category=category,
         )
         notes = (
             f"{result.notes} Post-processed to {used} flat colours "

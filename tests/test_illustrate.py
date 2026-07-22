@@ -33,6 +33,8 @@ def test_illustration_prompt_mentions_colouring_style() -> None:
     assert "colouring book" in prompt
     assert "between 8 and 16" in prompt
     assert "5mm" in prompt
+    assert "eyes" in prompt
+    assert "warm natural fur" in prompt
 
 
 def test_prepare_illustration_clamps_palette_and_regions() -> None:

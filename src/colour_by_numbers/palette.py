@@ -5,13 +5,17 @@ from __future__ import annotations
 import numpy as np
 
 # Fixed 32-colour set spaced for distinct adjacent sections (crayon / paint style).
+# Shadow / earth rungs are intentionally denser so fur, eyes, and low-light
+# areas do not snap onto purple / teal / green just because those sit nearby
+# in Lab when the active subset is thin.
 STANDARD_PALETTE_32: np.ndarray = np.array(
     [
-        # Neutrals
-        [20, 20, 20],
-        [80, 80, 80],
-        [160, 160, 160],
-        [240, 240, 240],
+        # Neutrals / shadows (warm bias for animal subjects)
+        [18, 18, 18],
+        [42, 36, 32],
+        [78, 72, 68],
+        [150, 148, 145],
+        [240, 238, 232],
         # Warm yellows / golds / oranges
         [255, 230, 80],
         [245, 180, 40],
@@ -22,11 +26,12 @@ STANDARD_PALETTE_32: np.ndarray = np.array(
         [180, 30, 70],
         [240, 120, 160],
         [255, 190, 200],
-        # Browns / earth
+        # Browns / earth (dark → light)
+        [55, 30, 16],
         [90, 50, 30],
-        [140, 90, 45],
-        [190, 140, 80],
-        [220, 190, 140],
+        [130, 85, 45],
+        [175, 130, 75],
+        [220, 185, 135],
         # Greens
         [30, 90, 40],
         [50, 150, 60],
@@ -40,14 +45,12 @@ STANDARD_PALETTE_32: np.ndarray = np.array(
         [30, 60, 150],
         [50, 110, 210],
         [130, 180, 240],
-        # Purples
-        [80, 40, 140],
-        [140, 80, 200],
-        [200, 160, 230],
+        # Purples (kept sparse — easy to steal dark fur if over-selected)
+        [110, 70, 160],
+        [190, 155, 220],
         # Accents
-        [255, 250, 180],
         [255, 100, 50],
-        [0, 160, 100],
+        [0, 150, 110],
     ],
     dtype=np.uint8,
 )
@@ -61,6 +64,9 @@ DEFAULT_N_COLOURS = 32
 DEFAULT_ILLUSTRATION_COLOURS = 12
 DEFAULT_MIN_ADJACENT_DELTA_E = 18.0
 DEFAULT_MIN_SUBJECT_BG_CONTRAST = 22.0
+
+# Soft categories that should keep warm darks instead of cool chromatic shadows.
+EARTHY_CATEGORIES = frozenset({"dogs", "cats", "horses", "wildlife", "animals"})
 
 
 def clamp_n_colours(
@@ -119,16 +125,66 @@ def colour_distance_matrix(palette: np.ndarray) -> np.ndarray:
     return np.sqrt(np.sum(diff * diff, axis=-1))
 
 
+def _palette_chroma(palette: np.ndarray) -> np.ndarray:
+    """Approximate chroma from Lab (√(a²+b²))."""
+    lab = rgb_to_lab(palette)
+    return np.sqrt(lab[:, 1] ** 2 + lab[:, 2] ** 2)
+
+
+def _palette_lightness(palette: np.ndarray) -> np.ndarray:
+    return rgb_to_lab(palette)[:, 0]
+
+
+def is_earthy_shadow_colour(rgb: np.ndarray) -> bool:
+    """True for neutrals / browns suitable for fur and low-light modelling."""
+    colour = np.asarray(rgb, dtype=np.uint8).reshape(3)
+    lab = rgb_to_lab(colour).reshape(3)
+    L, a, b = float(lab[0]), float(lab[1]), float(lab[2])
+    chroma = (a * a + b * b) ** 0.5
+    # Warm-ish neutrals and earths (brown sits in +a/+b).
+    if chroma <= 18.0:
+        return True
+    if L <= 55.0 and a >= -5.0 and b >= 2.0 and chroma <= 55.0:
+        return True
+    return False
+
+
+def earthy_shadow_mask(palette: np.ndarray) -> np.ndarray:
+    """Boolean mask of palette rows safe for dark fur / shadow fills."""
+    return np.array(
+        [is_earthy_shadow_colour(row) for row in np.asarray(palette)],
+        dtype=bool,
+    )
+
+
 def nearest_palette_indices(
     pixels: np.ndarray,
     palette: np.ndarray,
+    *,
+    category: str | None = None,
+    dark_lightness: float = 42.0,
 ) -> np.ndarray:
-    """Map HxWx3 RGB pixels to nearest palette index (Lab ΔE)."""
+    """Map HxWx3 RGB pixels to nearest palette index (Lab ΔE).
+
+    For earthy subject categories (dogs, etc.), dark pixels are restricted to
+    neutral / brown palette entries so low-light fur does not snap onto purple,
+    teal, or green crayons.
+    """
     h, w, _ = pixels.shape
     flat = pixels.reshape(-1, 3).astype(np.uint8)
     lab_pix = rgb_to_lab(flat)
     lab_pal = rgb_to_lab(palette)
     d2 = np.sum((lab_pix[:, None, :] - lab_pal[None, :, :]) ** 2, axis=-1)
+
+    if category in EARTHY_CATEGORIES:
+        safe = earthy_shadow_mask(palette)
+        if safe.any() and not safe.all():
+            dark = lab_pix[:, 0] < dark_lightness
+            # Huge penalty for unsafe darks keeps argmin on earthy shadows.
+            penalty = np.where(safe, 0.0, 1.0e6)
+            d2 = d2.copy()
+            d2[dark] = d2[dark] + penalty[None, :]
+
     return np.argmin(d2, axis=1).astype(np.int32).reshape(h, w)
 
 
@@ -147,16 +203,53 @@ def mean_rgb(pixels: np.ndarray) -> np.ndarray:
     return arr.mean(axis=0)
 
 
+def _reserved_palette_indices(
+    full_palette: np.ndarray,
+    *,
+    category: str | None,
+    n_colours: int,
+) -> list[int]:
+    """Seed the active set with luminance / earth anchors for animal plates."""
+    if category not in EARTHY_CATEGORIES or n_colours < 6:
+        return []
+
+    lightness = _palette_lightness(full_palette)
+    safe = earthy_shadow_mask(full_palette)
+    reserved: list[int] = []
+
+    def _take(candidates: np.ndarray, limit: int = 1) -> None:
+        for idx in candidates.tolist():
+            if len(reserved) >= limit:
+                break
+            if int(idx) not in reserved:
+                reserved.append(int(idx))
+
+    # Near-black, warm mid-shadow, light paper.
+    dark_safe = np.where(safe & (lightness < 30))[0]
+    mid_safe = np.where(safe & (lightness >= 30) & (lightness < 60))[0]
+    light = np.where(lightness > 85)[0]
+    _take(dark_safe[np.argsort(lightness[dark_safe])], limit=2)
+    _take(mid_safe[np.argsort(lightness[mid_safe])], limit=2)
+    _take(light[np.argsort(-lightness[light])], limit=1)
+    # One lighter tan/cream if room.
+    tan = np.where(safe & (lightness >= 60) & (lightness <= 85))[0]
+    _take(tan[np.argsort(lightness[tan])], limit=1)
+    return reserved[: max(3, min(6, n_colours // 2))]
+
+
 def select_active_palette(
     full_palette: np.ndarray,
     *,
     n_colours: int,
     image_rgb: np.ndarray | None = None,
+    category: str | None = None,
 ) -> np.ndarray:
     """Choose up to ``n_colours`` entries from the standard set.
 
     When ``image_rgb`` is provided, prefer the palette colours that best cover
     the image's colour distribution (greedy farthest-point on used candidates).
+    For earthy categories, reserve warm darks and demote cool chromatic paints
+    unless they are genuinely dominant in the plate.
     """
     n = min(int(n_colours), len(full_palette))
     if n >= len(full_palette):
@@ -167,25 +260,45 @@ def select_active_palette(
         return full_palette[idx]
 
     # Score each palette colour by how often it is the nearest match.
-    labels = nearest_palette_indices(image_rgb, full_palette)
-    counts = np.bincount(labels.ravel(), minlength=len(full_palette))
-    # Take the top-n by usage, but drop near-duplicates via greedy ΔE spacing.
+    labels = nearest_palette_indices(
+        image_rgb, full_palette, category=category
+    )
+    counts = np.bincount(labels.ravel(), minlength=len(full_palette)).astype(np.float64)
+
+    if category in EARTHY_CATEGORIES:
+        safe = earthy_shadow_mask(full_palette)
+        chroma = _palette_chroma(full_palette)
+        # Cool / vivid crayons need clear majority use before they earn a slot.
+        demote = (~safe) & (chroma > 22.0)
+        counts = counts.copy()
+        counts[demote] *= 0.2
+
     order = np.argsort(-counts)
-    chosen: list[int] = []
+    chosen: list[int] = _reserved_palette_indices(
+        full_palette, category=category, n_colours=n
+    )
     dist = colour_distance_matrix(full_palette)
     min_sep = 12.0
     for idx in order:
+        if len(chosen) >= n:
+            break
         if counts[idx] <= 0 and chosen:
+            continue
+        if int(idx) in chosen:
             continue
         if all(dist[idx, c] >= min_sep for c in chosen):
             chosen.append(int(idx))
-        if len(chosen) >= n:
-            break
-    # Fill if image was nearly monochrome.
+    # Fill if image was nearly monochrome or reservations left gaps.
     for idx in order:
         if len(chosen) >= n:
             break
         if int(idx) not in chosen:
             chosen.append(int(idx))
-    chosen_arr = np.array(sorted(chosen), dtype=np.int32)
+    # Still short (pathological) — take sequential leftovers.
+    for idx in range(len(full_palette)):
+        if len(chosen) >= n:
+            break
+        if idx not in chosen:
+            chosen.append(idx)
+    chosen_arr = np.array(sorted(chosen[:n]), dtype=np.int32)
     return full_palette[chosen_arr]

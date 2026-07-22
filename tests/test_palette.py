@@ -10,6 +10,8 @@ from colour_by_numbers.palette import (
     clamp_n_colours,
     colour_distance_matrix,
     contrast_delta_e,
+    is_earthy_shadow_colour,
+    nearest_palette_indices,
     select_active_palette,
 )
 from colour_by_numbers.pipeline import create_colour_by_numbers
@@ -90,6 +92,25 @@ def test_clamp_n_colours_illustration_range() -> None:
     assert clamp_n_colours(3) == 8
     assert clamp_n_colours(12) == 12
     assert clamp_n_colours(40) == 16
+
+
+def test_dog_dark_fur_maps_to_earthy_not_purple() -> None:
+    """Low-light warm greys should not snap onto purple/teal for dogs."""
+    # Dark warm charcoal fur sample.
+    image = np.zeros((40, 40, 3), dtype=np.uint8)
+    image[:, :] = (48, 38, 30)
+    image[10:30, 10:30] = (70, 48, 32)
+    active = select_active_palette(
+        STANDARD_PALETTE_32, n_colours=12, image_rgb=image, category="dogs"
+    )
+    labels = nearest_palette_indices(image, active, category="dogs")
+    used = {tuple(int(c) for c in active[i]) for i in np.unique(labels)}
+    for colour in used:
+        assert is_earthy_shadow_colour(np.array(colour, dtype=np.uint8)), colour
+    # Purple-ish crayons should not appear on this dark fur plate.
+    for colour in used:
+        r, g, b = colour
+        assert not (b > r + 25 and b > g + 15), colour
 
 
 def test_gold_vs_green_contrast_is_high() -> None:
