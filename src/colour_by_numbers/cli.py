@@ -229,6 +229,32 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip type discovery; search the raw --query string",
     )
+    parser.add_argument(
+        "--illustrate",
+        action="store_true",
+        help=(
+            "Illustration-first mode: discover type, gather references, "
+            "build a flat colouring-book illustration, then convert"
+        ),
+    )
+    parser.add_argument(
+        "--illustration-backend",
+        choices=["local_stylize", "openai", "replicate"],
+        default="local_stylize",
+        help="Illustration generator backend (default: local_stylize)",
+    )
+    parser.add_argument(
+        "--illustration-size",
+        type=int,
+        default=1600,
+        help="Longest edge of the generated illustration (default: 1600)",
+    )
+    parser.add_argument(
+        "--illustration-colours",
+        type=int,
+        default=16,
+        help="Flat fills used while stylising the illustration (default: 16)",
+    )
     return parser
 
 
@@ -282,6 +308,55 @@ def main(argv: list[str] | None = None) -> int:
         morph_radius=args.morph_radius,
         boundary_sigma=args.boundary_sigma,
     )
+
+    if args.illustrate:
+        if not args.query:
+            print("--illustrate requires --query", file=sys.stderr)
+            return 2
+        from .generate import generate_colouring_page
+
+        page = generate_colouring_page(
+            args.query,
+            subject_type=args.subject_type,
+            type_pick=args.type_pick,
+            discover_types=not args.no_discover,
+            backend=args.illustration_backend,
+            illustration_colours=args.illustration_colours,
+            illustration_size=args.illustration_size,
+            n_colours=args.colours,
+            complexity=args.complexity,
+            subject_mode="off",
+            palette_mode=args.palette_mode,
+            min_adjacent_delta_e=args.min_adjacent_delta_e,
+            firm_border=args.firm_border,
+            max_size=args.max_size,
+            line_width=args.line_width,
+            max_regions=args.max_regions,
+            min_region_area=args.min_region_area,
+            structure_size=args.structure_size,
+        )
+        result = page.result
+        stem_base = page.subject_type.label
+        stem = args.stem if args.stem != "colour_by_numbers" else (
+            stem_base.strip().lower().replace(" ", "_")[:40] or args.stem
+        )
+        paths = result.save(output_dir, stem=stem)
+        illustration_path = output_dir / f"{stem}_illustration.png"
+        page.illustration.image.save(illustration_path)
+        paths["illustration"] = illustration_path
+        print(f"Illustration backend: {page.illustration.backend}")
+        print(f"Subject type: {page.subject_type.label}")
+        if page.illustration.prompt:
+            print(f"Prompt: {page.illustration.prompt}")
+        if page.illustration.reference_url:
+            print(f"Reference: {page.illustration.reference_url}")
+        print(f"Complexity: {result.complexity}")
+        print(f"Palette colours: {result.quantized.n_colours}")
+        print(f"Numbered regions: {len(result.page.regions)}")
+        print("Wrote:")
+        for label, path in paths.items():
+            print(f"  {label:12s} {path}")
+        return 0
 
     if args.query:
         result = create_from_query(
