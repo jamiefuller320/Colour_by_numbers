@@ -476,7 +476,8 @@ function mergeAdjacentSameColour(labels, width, height, bridgePx) {
   const radius = Math.max(1, Math.ceil((bridge + 1) / 2));
   const work = labels.slice();
   const result = work.slice();
-  const protected = new Uint8Array(width * height);
+  // Avoid the identifier `protected` — it is reserved in strict mode (ES modules).
+  const lockedPixels = new Uint8Array(width * height);
   const colours = [...new Set(work)].sort(
     (a, b) => work.filter((v) => v === a).length - work.filter((v) => v === b).length
   );
@@ -551,9 +552,9 @@ function mergeAdjacentSameColour(labels, width, height, bridgePx) {
     const after = countComponents(colour, temp);
     if (after >= before) continue;
     for (let i = 0; i < closed.length; i += 1) {
-      if (!closed[i] || protected[i]) continue;
+      if (!closed[i] || lockedPixels[i]) continue;
       result[i] = colour;
-      protected[i] = 1;
+      lockedPixels[i] = 1;
     }
   }
   return result;
