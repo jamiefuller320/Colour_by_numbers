@@ -14,6 +14,7 @@ from .simplify import (
     absorb_small_regions,
     absorb_thin_regions,
     count_regions,
+    enforce_colourable_blocks,
     simplify_labels,
     smooth_boundaries,
 )
@@ -40,6 +41,7 @@ class OutlinePage:
     colour_numbers: list[int]
     labels: np.ndarray
     simplification: SimplificationStats | None = None
+    detail_ink: np.ndarray | None = None
 
 
 def _edges_from_labels(labels: np.ndarray) -> np.ndarray:
@@ -164,21 +166,27 @@ def build_outline_page(
     simplify: bool = True,
     min_adjacent_delta_e: float = 18.0,
     min_thickness: float | None = None,
+    min_width_px: int | None = None,
+    min_height_px: int | None = None,
+    min_region_mm: float | None = None,
     number_all_regions: bool = True,
+    detail_ink: np.ndarray | None = None,
 ) -> OutlinePage:
     """Convert a palette-indexed image into a numbered outline page + legend.
 
-    By default runs region simplification so photographic speckles collapse
-    into crayon-sized shapes before outlines and numbers are drawn. When
-    ``output_size`` is set, simplified labels are upsampled afterward so the
-    printed page is sharp while simplification still happens on large shapes.
-
-    Every remaining colour block receives its palette number when
-    ``number_all_regions`` is True (default).
+    Colourable blocks must be at least ``min_region_mm`` wide **and** high when
+    printed on A4 (or the explicit ``min_width_px`` / ``min_height_px``). Each
+    block must fit a circular colouring tip of that diameter. Undersized
+    features become black line detail instead of numbered fills.
     """
     stats: SimplificationStats | None = None
     working_labels = labels
     working_palette = palette
+    detail = (
+        np.zeros(labels.shape, dtype=bool)
+        if detail_ink is None
+        else detail_ink.astype(bool, copy=True)
+    )
 
     if simplify:
         working_labels, working_palette, stats = simplify_labels(
@@ -205,10 +213,14 @@ def build_outline_page(
     if output_size is not None:
         source_h, source_w = working_labels.shape
         working_labels = upsample_labels(working_labels, output_size)
+        if detail.shape != working_labels.shape:
+            detail_img = Image.fromarray(detail.astype(np.uint8) * 255, mode="L")
+            detail_img = detail_img.resize(output_size, Image.Resampling.NEAREST)
+            detail = np.asarray(detail_img) > 0
         if simplify:
             height_up, width_up = working_labels.shape
-            # Keep the A4 mm floor after upsampling (scale area with pixel count).
             scale = (width_up * height_up) / max(1, source_h * source_w)
+            side_scale = scale**0.5
             up_min = max(
                 int(min_region_area or 0),
                 int(round((min_region_area or 0) * scale)),
@@ -221,14 +233,41 @@ def build_outline_page(
                 )
             working_labels = absorb_small_regions(working_labels, min_area=up_min)
             if min_thickness is not None and min_thickness > 0:
-                up_thickness = max(2.0, float(min_thickness) * (scale**0.5))
+                up_thickness = max(2.0, float(min_thickness) * side_scale)
                 working_labels = absorb_thin_regions(
                     working_labels, min_thickness=up_thickness
                 )
                 working_labels = absorb_small_regions(working_labels, min_area=up_min)
 
+    # Colourable blocks: ≥min wide AND high on the final canvas, fitting a
+    # min-diameter tip circle. Anything smaller becomes black line detail.
     height, width = working_labels.shape
-    edges = _edges_from_labels(working_labels)
+    width_req = min_width_px
+    height_req = min_height_px
+    if min_region_mm is not None and min_region_mm > 0:
+        from .print_resolution import min_region_size_for_a4_mm
+
+        region = min_region_size_for_a4_mm(width, height, min_mm=min_region_mm)
+        width_req = region.min_width_px
+        height_req = region.min_height_px
+    elif width_req is None and min_thickness is not None and min_thickness > 0:
+        width_req = max(1, int(round(min_thickness)))
+        height_req = width_req
+    if width_req and height_req:
+        working_labels, more_detail = enforce_colourable_blocks(
+            working_labels,
+            min_width_px=int(width_req),
+            min_height_px=int(height_req),
+            min_inscribed_px=float(min(width_req, height_req)),
+        )
+        if detail.shape != working_labels.shape:
+            detail = np.zeros(working_labels.shape, dtype=bool)
+        detail = detail | more_detail
+
+    height, width = working_labels.shape
+    if detail.shape != working_labels.shape:
+        detail = np.zeros(working_labels.shape, dtype=bool)
+    edges = _edges_from_labels(working_labels) | detail
     stroke = max(1, int(line_width))
     if stroke > 1:
         edges = ndimage.binary_dilation(edges, iterations=stroke - 1)
@@ -276,6 +315,7 @@ def build_outline_page(
         colour_numbers=colour_numbers,
         labels=working_labels,
         simplification=stats,
+        detail_ink=detail,
     )
 
 

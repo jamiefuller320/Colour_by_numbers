@@ -129,7 +129,8 @@ def generate_colouring_page(
     Default ``subject_mode='off'`` because the illustration is already isolated
     on a flat background with ink outlines; dual rembg is usually unnecessary.
     Illustration colour counts are clamped to 8–16; colouring regions are
-    floored to at least ``min_region_mm`` × ``min_region_mm`` on A4.
+    floored so each colourable block is at least ``min_region_mm`` wide and
+    high on A4; finer detail becomes black line drawing.
     """
     discovery = discover_subject_types(
         query,

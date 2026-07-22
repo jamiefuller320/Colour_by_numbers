@@ -266,10 +266,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--min-region-mm",
         type=float,
-        default=8.0,
+        default=5.0,
         help=(
-            "Minimum colouring-region height/width in mm when printed on A4 "
-            "(default: 8)"
+            "Minimum colourable-block width and height in mm on A4 "
+            "(default: 5; finer detail becomes black line drawing)"
         ),
     )
     return parser

@@ -8,12 +8,16 @@ from dataclasses import dataclass
 # ISO A4 in mm and inches.
 A4_MM: tuple[float, float] = (210.0, 297.0)
 A4_INCHES: tuple[float, float] = (A4_MM[0] / 25.4, A4_MM[1] / 25.4)
-DEFAULT_MIN_REGION_MM = 8.0
+DEFAULT_MIN_REGION_MM = 5.0
 
 
 @dataclass(frozen=True)
 class RegionPrintSize:
-    """Minimum colouring-region footprint when a plate fills A4."""
+    """Minimum colourable-block footprint when a plate fills A4.
+
+    A block must be at least ``min_mm`` wide **and** ``min_mm`` high so a
+    circular colouring tip of diameter ``min_mm`` fits inside it.
+    """
 
     min_width_px: int
     min_height_px: int
@@ -24,6 +28,11 @@ class RegionPrintSize:
     @property
     def min_side_px(self) -> int:
         return min(self.min_width_px, self.min_height_px)
+
+    @property
+    def min_inscribed_diameter_px(self) -> int:
+        """Pixels needed for a ``min_mm``-diameter circle inside the block."""
+        return self.min_side_px
 
 
 @dataclass(frozen=True)
@@ -71,10 +80,11 @@ def min_region_size_for_a4_mm(
     *,
     min_mm: float = DEFAULT_MIN_REGION_MM,
 ) -> RegionPrintSize:
-    """Pixel footprint of a ``min_mm`` × ``min_mm`` patch on A4 for this plate.
+    """Pixel size of a block that is ``min_mm`` wide and ``min_mm`` high on A4.
 
-    Colouring regions smaller than this are hard to fill by hand when the
-    plate is printed to fit an A4 canvas.
+    Colourable fills smaller than this in either dimension cannot fit a
+    ``min_mm``-diameter colouring tip; those features should become black
+    line detail instead of numbered colour blocks.
     """
     if min_mm <= 0:
         return RegionPrintSize(

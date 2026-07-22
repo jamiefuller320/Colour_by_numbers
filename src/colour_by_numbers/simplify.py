@@ -157,6 +157,133 @@ def absorb_thin_regions(
     return current
 
 
+def _component_bbox(component: np.ndarray) -> tuple[int, int]:
+    """Return ``(width, height)`` of the axis-aligned bbox of a boolean mask."""
+    ys, xs = np.where(component)
+    if xs.size == 0:
+        return 0, 0
+    return int(xs.max() - xs.min() + 1), int(ys.max() - ys.min() + 1)
+
+
+def _inscribed_diameter_px(component: np.ndarray) -> float:
+    """Largest circle diameter (px) that fits inside ``component``."""
+    if not component.any():
+        return 0.0
+    return 2.0 * float(ndimage.distance_transform_edt(component).max())
+
+
+def is_colourable_block(
+    component: np.ndarray,
+    *,
+    min_width_px: int,
+    min_height_px: int,
+    min_inscribed_px: float | None = None,
+) -> bool:
+    """True when a block is ≥min wide and high and fits a colouring-tip circle."""
+    min_inscribed = (
+        float(min(min_width_px, min_height_px))
+        if min_inscribed_px is None
+        else float(min_inscribed_px)
+    )
+    bw, bh = _component_bbox(component)
+    if bw < min_width_px or bh < min_height_px:
+        return False
+    return _inscribed_diameter_px(component) + 1e-6 >= min_inscribed
+
+
+def detail_ink_from_component(component: np.ndarray) -> np.ndarray:
+    """Turn an undersized feature into black line detail (not a fill).
+
+    Stroke-like ribbons keep their pixels; puddles keep only a clean edge so
+    the outline stays a genuine line drawing.
+    """
+    if not component.any():
+        return component
+    thickness = _inscribed_diameter_px(component)
+    if thickness <= 2.5:
+        return component.astype(bool, copy=True)
+    eroded = ndimage.binary_erosion(component, iterations=1)
+    edge = component & ~eroded
+    if not edge.any():
+        # Single-pixel islands — keep the pixels as ink dots/ticks.
+        return component.astype(bool, copy=True)
+    return edge
+
+
+def enforce_colourable_blocks(
+    labels: np.ndarray,
+    *,
+    min_width_px: int,
+    min_height_px: int,
+    min_inscribed_px: float | None = None,
+    max_passes: int = 16,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Keep only colour blocks that are colourable; harvest the rest as ink.
+
+    A colourable block must be at least ``min_width_px`` wide **and**
+    ``min_height_px`` high, and large enough to fit a circular tip of diameter
+    ``min_inscribed_px`` (defaults to ``min(min_width_px, min_height_px)``).
+
+    Undersized features are recorded in the returned detail mask (for black
+    line drawing) and their fill is absorbed into neighbouring colours so they
+    are not numbered as separate paints.
+    """
+    min_w = max(1, int(min_width_px))
+    min_h = max(1, int(min_height_px))
+    min_inscribed = (
+        float(min(min_w, min_h))
+        if min_inscribed_px is None
+        else float(min_inscribed_px)
+    )
+    structure = np.ones((3, 3), dtype=bool)
+    current = labels.astype(np.int32, copy=True)
+    detail = np.zeros(current.shape, dtype=bool)
+
+    for _ in range(max_passes):
+        work = current.copy()
+        changed = 0
+        for colour in np.unique(current):
+            labeled, n = ndimage.label(current == colour, structure=structure)
+            if n == 0:
+                continue
+            for comp_id in range(1, n + 1):
+                component = labeled == comp_id
+                if is_colourable_block(
+                    component,
+                    min_width_px=min_w,
+                    min_height_px=min_h,
+                    min_inscribed_px=min_inscribed,
+                ):
+                    continue
+                detail |= detail_ink_from_component(component)
+                votes = _neighbour_colour_votes(current, component)
+                if votes.size == 0:
+                    continue
+                if colour < votes.size:
+                    votes = votes.copy()
+                    votes[colour] = 0
+                if votes.max() == 0:
+                    # Isolated island — keep as ink only; fill with any remaining.
+                    counts = np.bincount(current.ravel())
+                    if colour < counts.size:
+                        counts = counts.copy()
+                        counts[colour] = 0
+                    if counts.max() == 0:
+                        continue
+                    target = int(counts.argmax())
+                else:
+                    target = int(votes.argmax())
+                work[component] = target
+                changed += 1
+        current = work
+        if changed == 0:
+            break
+
+    # Detail that landed on a still-valid block edge stays ink; clear ink that
+    # coincides with nothing useful after absorption is fine to keep.
+    return current.astype(np.int32), detail
+
+
 def absorb_small_regions(
     labels: np.ndarray,
     *,

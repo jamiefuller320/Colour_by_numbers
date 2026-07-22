@@ -37,6 +37,7 @@ from .simplify import (
     absorb_small_regions,
     absorb_thin_regions,
     compact_palette,
+    enforce_colourable_blocks,
 )
 from .subject import (
     SubjectMask,
@@ -81,8 +82,9 @@ def illustration_prompt(
     style = (
         "children's colouring book illustration, thick clean black outlines, "
         f"flat cel fills using between {lo} and {hi} solid colours only, "
-        f"large simple colour regions (each region at least {DEFAULT_MIN_REGION_MM:g}mm "
-        f"by {DEFAULT_MIN_REGION_MM:g}mm when printed on A4), "
+        f"large simple colour regions (each colourable block at least "
+        f"{DEFAULT_MIN_REGION_MM:g}mm wide and {DEFAULT_MIN_REGION_MM:g}mm high "
+        f"when printed on A4, with finer detail as black line drawing), "
         "high subject-background contrast, no gradients, "
         "no photorealism, no text, white background"
     )
@@ -110,9 +112,10 @@ def prepare_illustration_for_colouring(
 ) -> tuple[Image.Image, int]:
     """Clamp a generated plate to 8–16 flat palette colours and A4-safe regions.
 
-    Maps pixels onto the standard crayon set, then absorbs speckles thinner or
-    smaller than ``min_region_mm`` × ``min_region_mm`` when printed on A4.
-    For dog-like categories, dark pixels stay on warm neutrals / browns.
+    Colourable blocks must be at least ``min_region_mm`` wide **and** high on
+    A4 (enough for a circular tip of that diameter). Smaller features are kept
+    as black line detail instead of numbered fills. For animal categories, dark
+    pixels stay on warm neutrals / browns.
     """
     n = clamp_n_colours(n_colours)
     rgb = np.asarray(image.convert("RGB"), dtype=np.uint8)
@@ -125,15 +128,22 @@ def prepare_illustration_for_colouring(
     )
     labels = nearest_palette_indices(rgb, active, category=category)
     region = min_region_size_for_a4_mm(width, height, min_mm=min_region_mm)
+    # Coarse cleanup first, then the strict width×height + tip-circle rule.
     labels = absorb_small_regions(labels, min_area=region.min_area_px)
     labels = absorb_thin_regions(
-        labels, min_thickness=float(max(2, region.min_side_px))
+        labels, min_thickness=float(max(2, region.min_inscribed_diameter_px))
     )
-    labels = absorb_small_regions(labels, min_area=region.min_area_px)
+    labels, detail = enforce_colourable_blocks(
+        labels,
+        min_width_px=region.min_width_px,
+        min_height_px=region.min_height_px,
+        min_inscribed_px=float(region.min_inscribed_diameter_px),
+    )
     labels, palette = compact_palette(labels, active)
-    # If absorption collapsed below the requested minimum, keep what remains;
-    # the prompt still asked for ≥8 and most plates retain that many paints.
     poster = palette[labels]
+    if detail.any():
+        poster = poster.copy()
+        poster[detail] = (18, 18, 18)
     return Image.fromarray(poster, mode="RGB"), int(palette.shape[0])
 
 
