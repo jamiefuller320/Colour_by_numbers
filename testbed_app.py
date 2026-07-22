@@ -197,16 +197,28 @@ if illustration is not None:
             st.caption(f"Reference: {illustration.reference_url}")
     with c2:
         if result is not None:
-            st.markdown("**Colour-by-numbers preview**")
-            st.image(result.quantized.preview, use_container_width=True)
+            st.markdown("**Colour-by-numbers outline**")
+            st.image(result.page.outline, use_container_width=True)
+            st.caption(
+                f"{len(result.page.regions)} numbered blocks · "
+                f"{result.quantized.n_colours} colours"
+            )
             st.download_button(
-                "Download colour preview PNG",
-                data=_png(result.quantized.preview),
-                file_name="colour_preview.png",
+                "Download outline PNG",
+                data=_png(result.page.outline),
+                file_name="colour_by_numbers_outline.png",
                 mime="image/png",
                 use_container_width=True,
             )
-            with st.expander("Outline preview"):
-                st.image(result.page.outline, use_container_width=True)
+            with st.expander("Colour preview + key"):
+                st.image(result.quantized.preview, use_container_width=True)
+                st.image(result.page.legend, use_container_width=True)
+                st.download_button(
+                    "Download printable page (outline + key)",
+                    data=_png(result.printable),
+                    file_name="colour_by_numbers_page.png",
+                    mime="image/png",
+                    use_container_width=True,
+                )
         else:
             st.info("Colour-by-numbers step skipped.")
