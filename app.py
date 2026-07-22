@@ -333,10 +333,13 @@ if source_mode == "Web search":
     )
     illustration_backend = st.selectbox(
         "Illustration backend",
-        options=["local_stylize", "openai"],
+        options=["local_stylize", "pollinations", "openai"],
         index=0,
         disabled=not illustrate_first,
-        help="openai requires OPENAI_API_KEY in the environment.",
+        help=(
+            "pollinations = free text-to-image (no subscription). "
+            "openai requires OPENAI_API_KEY."
+        ),
     )
     col_a, _col_b = st.columns([1, 3])
     with col_a:

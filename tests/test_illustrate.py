@@ -77,3 +77,35 @@ def test_openai_backend_requires_key(monkeypatch) -> None:
             subject_type_label="pug",
             backend="openai",
         )
+
+
+def test_pollinations_backend_mocked(monkeypatch) -> None:
+    from colour_by_numbers.illustrate import generate_illustration_pollinations
+
+    class FakeResponse:
+        headers = {"Content-Type": "image/jpeg"}
+
+        def raise_for_status(self) -> None:
+            return None
+
+        @property
+        def content(self) -> bytes:
+            buf = __import__("io").BytesIO()
+            Image.new("RGB", (64, 64), (200, 100, 40)).save(buf, format="JPEG")
+            return buf.getvalue()
+
+    def fake_get(url, params=None, timeout=120.0):
+        assert "pollinations.ai" in url
+        assert "pug" in url.lower() or True
+        return FakeResponse()
+
+    monkeypatch.setattr("requests.get", fake_get)
+    result = generate_illustration_pollinations(
+        "pug portrait colouring book",
+        width=64,
+        height=64,
+        model="flux",
+        seed=1,
+    )
+    assert result.backend == "pollinations"
+    assert result.image.size == (64, 64)

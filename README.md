@@ -48,12 +48,22 @@ In the Streamlit UI, searching `dogs` shows a breed shortlist first; choosing on
 # Discover type → reference photo → flat illustration → colour-by-numbers
 colour-by-numbers --query dogs --type "pug" --illustrate --output output
 
+# Free text-to-image via Pollinations (no paid subscription)
+colour-by-numbers --query dogs --type "pug" --illustrate \
+  --illustration-backend pollinations --output output
+
 # Optional OpenAI Images backend (requires OPENAI_API_KEY)
 colour-by-numbers --query dogs --type "pug" --illustrate \
   --illustration-backend openai --output output
 ```
 
-Local stylize isolates the subject, maps fills onto the standard palette, flattens the background, and draws a firm ink outline. True text-to-image generation is available via the OpenAI backend when a key is present.
+**Test bed UI** (best place to compare backends):
+
+```bash
+streamlit run testbed_app.py --server.port 8502
+```
+
+Local stylize isolates a real reference photo. Pollinations generates a new image from the type prompt (free, rate-limited). OpenAI needs a key.
 
 ### Subject engine
 

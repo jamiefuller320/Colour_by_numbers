@@ -239,9 +239,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--illustration-backend",
-        choices=["local_stylize", "openai", "replicate"],
+        choices=["local_stylize", "pollinations", "openai", "replicate"],
         default="local_stylize",
-        help="Illustration generator backend (default: local_stylize)",
+        help=(
+            "Illustration generator backend (default: local_stylize). "
+            "pollinations = free text-to-image, no paid subscription."
+        ),
+    )
+    parser.add_argument(
+        "--pollinations-model",
+        default="flux",
+        help="Pollinations model name (default: flux)",
     )
     parser.add_argument(
         "--illustration-size",
@@ -334,6 +342,7 @@ def main(argv: list[str] | None = None) -> int:
             max_regions=args.max_regions,
             min_region_area=args.min_region_area,
             structure_size=args.structure_size,
+            pollinations_model=args.pollinations_model,
         )
         result = page.result
         stem_base = page.subject_type.label
