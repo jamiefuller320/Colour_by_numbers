@@ -65,20 +65,30 @@
         <p class="fineprint">
           Images are requested with 8–16 flat colours and post-processed so
           colour regions are at least ~5×5&nbsp;mm when printed on A4.
-          Anonymous Pollinations use is rate-limited (~1 request / 15s) and may watermark.
-          Full colour-by-numbers conversion still needs the Python app locally.
+          A second pass builds the numbered colour-by-numbers outline (every
+          colour block labelled). Anonymous Pollinations use is rate-limited
+          (~1 request / 15s) and may watermark.
         </p>
       </section>
 
       <section class="panel preview">
-        <h2>Result</h2>
+        <h2>Flat colour plate</h2>
         <div id="result-frame" class="result-frame empty">
           <p class="placeholder">Choose a type and generate to see an image here.</p>
-          <img id="result-image" alt="Generated illustration" hidden />
+          <img id="result-image" alt="Generated flat colour illustration" hidden />
         </div>
         <div class="preview-actions">
           <a id="open-direct" class="ghost link" href="#" target="_blank" rel="noopener" hidden>Open Pollinations URL</a>
-          <a id="download" class="ghost link" href="#" download="illustration.png" hidden>Download PNG</a>
+          <a id="download" class="ghost link" href="#" download="illustration.png" hidden>Download flat PNG</a>
+        </div>
+
+        <h2 class="outline-heading">Colour-by-numbers outline</h2>
+        <div id="outline-frame" class="result-frame empty">
+          <p class="placeholder outline-placeholder">The numbered outline appears here after generation.</p>
+          <img id="outline-image" alt="Numbered colour-by-numbers outline" hidden />
+        </div>
+        <div class="preview-actions">
+          <a id="download-outline" class="ghost link" href="#" download="outline.png" hidden>Download outline PNG</a>
         </div>
       </section>
     </main>

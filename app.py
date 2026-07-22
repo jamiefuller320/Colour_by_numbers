@@ -574,19 +574,18 @@ if result is not None:
         st.caption("Source")
         st.image(result.source, use_container_width=True)
     with c2:
-        if result.prepared is not None:
-            st.caption("Subject plate (native crop)")
-            st.image(result.prepared, use_container_width=True)
-        else:
-            st.caption("Source (no subject crop)")
-            st.image(result.source, use_container_width=True)
-    with c3:
-        st.caption(f"Colour preview ({result.quantized.n_colours} colours, {result.palette_mode})")
+        st.caption(f"Flat colour plate ({result.quantized.n_colours} colours)")
         st.image(result.quantized.preview, use_container_width=True)
+    with c3:
+        st.caption(
+            f"Colour-by-numbers outline ({len(result.page.regions)} numbered blocks)"
+        )
+        st.image(result.page.outline, use_container_width=True)
 
-    with st.expander("Outline / printable page (preview only — demos paused)", expanded=False):
-        st.image(result.page.outline, caption="Numbered outline", use_container_width=True)
-        st.image(result.printable, caption="Printable page", use_container_width=True)
+    with st.expander("Printable page + colour key", expanded=False):
+        st.image(result.printable, caption="Outline with colour key", use_container_width=True)
+        if result.prepared is not None:
+            st.image(result.prepared, caption="Subject plate (native crop)", use_container_width=True)
 
     d1, d2, d3 = st.columns(3)
     with d1:

@@ -86,6 +86,35 @@ def test_outline_numbers_and_legend(sample_image: Path) -> None:
     assert page.simplification.regions_after <= page.simplification.regions_before
 
 
+def test_every_colour_block_is_numbered() -> None:
+    """Every connected colour block must receive a painted number."""
+    labels = np.zeros((80, 80), dtype=np.int32)
+    # Checker of 16 solid blocks — more than the old 80-of-100 cap would allow
+    # if the image were busier; here we assert 1:1 region→number coverage.
+    palette = np.array(
+        [[i * 15, 40, 200 - i * 10] for i in range(8)], dtype=np.uint8
+    )
+    idx = 0
+    for row in range(4):
+        for col in range(4):
+            y0, y1 = row * 20, (row + 1) * 20
+            x0, x1 = col * 20, (col + 1) * 20
+            labels[y0:y1, x0:x1] = idx % 8
+            idx += 1
+    page = build_outline_page(
+        labels,
+        palette,
+        simplify=False,
+        number_all_regions=True,
+    )
+    assert len(page.regions) == count_regions(page.labels)
+    # With number_all_regions, every discovered region is drawn (no 80-cap).
+    assert len(page.regions) == 16
+    # Outline should contain non-white ink from numbers and/or edges.
+    arr = np.asarray(page.outline)
+    assert (arr < 250).any()
+
+
 def test_simplification_cuts_noisy_photo_regions(noisy_image: Path) -> None:
     image = Image.open(noisy_image).convert("RGB")
     raw = quantize_colours(image, n_colours=16, max_size=280, blur_radius=0)

@@ -106,6 +106,48 @@ def _find_regions(labels: np.ndarray) -> list[Region]:
     return found
 
 
+def _font_size_for_region(
+    area: int,
+    *,
+    base_size: int,
+    min_size: int = 7,
+) -> int:
+    """Scale number glyphs down for small colour blocks so every block fits one."""
+    side = max(1.0, float(area) ** 0.5)
+    # Keep the glyph roughly inside ~45% of the region's inscribed-ish width.
+    sized = int(side * 0.45)
+    return max(min_size, min(base_size, sized))
+
+
+def _draw_region_number(
+    draw: ImageDraw.ImageDraw,
+    *,
+    text: str,
+    xy: tuple[float, float],
+    font: ImageFont.ImageFont | ImageFont.FreeTypeFont,
+    width: int,
+    height: int,
+) -> None:
+    """Paint a haloed number centred on ``xy``, clipped to the plate."""
+    x, y = xy
+    bbox = draw.textbbox((0, 0), text, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    tx = int(np.clip(x - tw / 2, 1, max(1, width - tw - 1)))
+    ty = int(np.clip(y - th / 2, 1, max(1, height - th - 1)))
+    for dx, dy in (
+        (-1, 0),
+        (1, 0),
+        (0, -1),
+        (0, 1),
+        (-1, -1),
+        (1, 1),
+        (-1, 1),
+        (1, -1),
+    ):
+        draw.text((tx + dx, ty + dy), text, fill="white", font=font)
+    draw.text((tx, ty), text, fill="black", font=font)
+
+
 def build_outline_page(
     labels: np.ndarray,
     palette: np.ndarray,
@@ -121,6 +163,7 @@ def build_outline_page(
     simplify: bool = True,
     min_adjacent_delta_e: float = 18.0,
     min_thickness: float | None = None,
+    number_all_regions: bool = True,
 ) -> OutlinePage:
     """Convert a palette-indexed image into a numbered outline page + legend.
 
@@ -128,6 +171,9 @@ def build_outline_page(
     into crayon-sized shapes before outlines and numbers are drawn. When
     ``output_size`` is set, simplified labels are upsampled afterward so the
     printed page is sharp while simplification still happens on large shapes.
+
+    Every remaining colour block receives its palette number when
+    ``number_all_regions`` is True (default).
     """
     stats: SimplificationStats | None = None
     working_labels = labels
@@ -177,36 +223,33 @@ def build_outline_page(
     outline = Image.fromarray(outline_arr, mode="RGB")
 
     draw = ImageDraw.Draw(outline)
-    font_size = max(12, int(min(width, height) * 0.035 * number_font_scale))
-    font = _load_font(font_size)
+    base_font_size = max(12, int(min(width, height) * 0.035 * number_font_scale))
+    # Cache fonts by pixel size so adaptive numbering stays cheap.
+    font_cache: dict[int, ImageFont.ImageFont | ImageFont.FreeTypeFont] = {}
 
     regions = _find_regions(working_labels)
     colour_numbers = list(range(1, len(working_palette) + 1))
 
-    # Avoid painting thousands of unreadable numbers on raw/busy pages.
-    numberable = regions
-    if len(regions) > 100:
-        numberable = sorted(regions, key=lambda item: item.area, reverse=True)[:80]
+    if number_all_regions:
+        numberable = regions
+    else:
+        # Legacy escape hatch for extremely busy raw plates.
+        numberable = regions
+        if len(regions) > 100:
+            numberable = sorted(regions, key=lambda item: item.area, reverse=True)[:80]
 
     for region in sorted(numberable, key=lambda item: item.area, reverse=True):
-        x, y = region.centroid
-        text = str(region.number)
-        bbox = draw.textbbox((0, 0), text, font=font)
-        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        tx = int(np.clip(x - tw / 2, 1, width - tw - 1))
-        ty = int(np.clip(y - th / 2, 1, height - th - 1))
-        for dx, dy in (
-            (-1, 0),
-            (1, 0),
-            (0, -1),
-            (0, 1),
-            (-1, -1),
-            (1, 1),
-            (-1, 1),
-            (1, -1),
-        ):
-            draw.text((tx + dx, ty + dy), text, fill="white", font=font)
-        draw.text((tx, ty), text, fill="black", font=font)
+        size = _font_size_for_region(region.area, base_size=base_font_size)
+        if size not in font_cache:
+            font_cache[size] = _load_font(size)
+        _draw_region_number(
+            draw,
+            text=str(region.number),
+            xy=region.centroid,
+            font=font_cache[size],
+            width=width,
+            height=height,
+        )
 
     legend = build_legend(working_palette, colour_numbers, swatch_size=36)
     return OutlinePage(

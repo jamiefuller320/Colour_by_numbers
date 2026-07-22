@@ -10,8 +10,11 @@ const resetBtn = document.getElementById("reset-prompt");
 const statusEl = document.getElementById("status");
 const frame = document.getElementById("result-frame");
 const imageEl = document.getElementById("result-image");
+const outlineFrame = document.getElementById("outline-frame");
+const outlineImageEl = document.getElementById("outline-image");
 const openDirect = document.getElementById("open-direct");
 const downloadLink = document.getElementById("download");
+const downloadOutline = document.getElementById("download-outline");
 
 // Evenly spaced subset of the project's standard 32-colour crayon set.
 const STANDARD_PALETTE_16 = [
@@ -170,26 +173,26 @@ function nearestPaletteIndex(rgb, palette) {
   return best;
 }
 
+function neighboursOf(idx, width, height) {
+  const x = idx % width;
+  const y = (idx / width) | 0;
+  const out = [];
+  for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      out.push(ny * width + nx);
+    }
+  }
+  return out;
+}
+
 function absorbSmallLabels(labels, width, height, minArea) {
   const size = width * height;
   const visited = new Uint8Array(size);
   const work = labels.slice();
-
-  const neighbours = (idx) => {
-    const x = idx % width;
-    const y = (idx / width) | 0;
-    const out = [];
-    for (let dy = -1; dy <= 1; dy += 1) {
-      for (let dx = -1; dx <= 1; dx += 1) {
-        if (dx === 0 && dy === 0) continue;
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-        out.push(ny * width + nx);
-      }
-    }
-    return out;
-  };
 
   for (let start = 0; start < size; start += 1) {
     if (visited[start]) continue;
@@ -200,7 +203,7 @@ function absorbSmallLabels(labels, width, height, minArea) {
     while (stack.length) {
       const idx = stack.pop();
       component.push(idx);
-      for (const n of neighbours(idx)) {
+      for (const n of neighboursOf(idx, width, height)) {
         if (visited[n] || work[n] !== colour) continue;
         visited[n] = 1;
         stack.push(n);
@@ -210,7 +213,7 @@ function absorbSmallLabels(labels, width, height, minArea) {
 
     const votes = new Map();
     for (const idx of component) {
-      for (const n of neighbours(idx)) {
+      for (const n of neighboursOf(idx, width, height)) {
         const other = work[n];
         if (other === colour) continue;
         votes.set(other, (votes.get(other) || 0) + 1);
@@ -230,6 +233,88 @@ function absorbSmallLabels(labels, width, height, minArea) {
   return work;
 }
 
+function compactLabels(labels, palette) {
+  const used = [];
+  const seen = new Set();
+  for (let i = 0; i < labels.length; i += 1) {
+    const value = labels[i];
+    if (!seen.has(value)) {
+      seen.add(value);
+      used.push(value);
+    }
+  }
+  used.sort((a, b) => a - b);
+  const remap = new Map(used.map((old, idx) => [old, idx]));
+  const compacted = new Int16Array(labels.length);
+  for (let i = 0; i < labels.length; i += 1) {
+    compacted[i] = remap.get(labels[i]);
+  }
+  return {
+    labels: compacted,
+    palette: used.map((idx) => palette[idx]),
+  };
+}
+
+function listRegions(labels, width, height) {
+  const size = width * height;
+  const visited = new Uint8Array(size);
+  const regions = [];
+
+  for (let start = 0; start < size; start += 1) {
+    if (visited[start]) continue;
+    const colour = labels[start];
+    const stack = [start];
+    const component = [];
+    visited[start] = 1;
+    let sumX = 0;
+    let sumY = 0;
+    while (stack.length) {
+      const idx = stack.pop();
+      component.push(idx);
+      sumX += idx % width;
+      sumY += (idx / width) | 0;
+      for (const n of neighboursOf(idx, width, height)) {
+        if (visited[n] || labels[n] !== colour) continue;
+        visited[n] = 1;
+        stack.push(n);
+      }
+    }
+
+    // Prefer an interior anchor near the component centre.
+    let bestIdx = component[0];
+    let bestDist = -Infinity;
+    const cx = sumX / component.length;
+    const cy = sumY / component.length;
+    for (const idx of component) {
+      const x = idx % width;
+      const y = (idx / width) | 0;
+      let onBorder = false;
+      for (const n of neighboursOf(idx, width, height)) {
+        if (labels[n] !== colour) {
+          onBorder = true;
+          break;
+        }
+      }
+      const depth = Math.min(x, y, width - 1 - x, height - 1 - y);
+      const toCentre = -((x - cx) * (x - cx) + (y - cy) * (y - cy));
+      const score = (onBorder ? -1000 : 0) + depth * 10 + toCentre;
+      if (score > bestDist) {
+        bestDist = score;
+        bestIdx = idx;
+      }
+    }
+
+    regions.push({
+      colourIndex: colour,
+      number: colour + 1,
+      area: component.length,
+      x: bestIdx % width,
+      y: (bestIdx / width) | 0,
+    });
+  }
+  return regions;
+}
+
 function prepareIllustrationCanvas(sourceImage, nColours) {
   const width = sourceImage.naturalWidth || sourceImage.width;
   const height = sourceImage.naturalHeight || sourceImage.height;
@@ -247,10 +332,9 @@ function prepareIllustrationCanvas(sourceImage, nColours) {
   }
   const side = minRegionSidePx(width, height, MIN_REGION_MM);
   const cleaned = absorbSmallLabels(labels, width, height, side * side);
-  const used = new Set();
-  for (let p = 0; p < cleaned.length; p += 1) {
-    const colour = palette[cleaned[p]];
-    used.add(cleaned[p]);
+  const compacted = compactLabels(cleaned, palette);
+  for (let p = 0; p < compacted.labels.length; p += 1) {
+    const colour = compacted.palette[compacted.labels[p]];
     const o = p * 4;
     data[o] = colour[0];
     data[o + 1] = colour[1];
@@ -260,8 +344,82 @@ function prepareIllustrationCanvas(sourceImage, nColours) {
   ctx.putImageData(imageData, 0, 0);
   return {
     canvas,
-    usedColours: used.size,
+    labels: compacted.labels,
+    palette: compacted.palette,
+    usedColours: compacted.palette.length,
     minSidePx: side,
+    width,
+    height,
+  };
+}
+
+function buildOutlineCanvas(labels, palette, width, height) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const { data } = imageData;
+  const paintEdge = (idx) => {
+    const o = idx * 4;
+    data[o] = 0;
+    data[o + 1] = 0;
+    data[o + 2] = 0;
+    data[o + 3] = 255;
+  };
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const idx = y * width + x;
+      const colour = labels[idx];
+      if (x > 0 && labels[idx - 1] !== colour) paintEdge(idx);
+      if (y > 0 && labels[idx - width] !== colour) paintEdge(idx);
+    }
+  }
+  // Thicken edges slightly for print readability.
+  const edgeMask = new Uint8Array(width * height);
+  for (let i = 0; i < edgeMask.length; i += 1) {
+    if (data[i * 4] === 0 && data[i * 4 + 1] === 0 && data[i * 4 + 2] === 0) {
+      edgeMask[i] = 1;
+    }
+  }
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const idx = y * width + x;
+      if (!edgeMask[idx]) continue;
+      for (const n of [idx - 1, idx + 1, idx - width, idx + width]) {
+        paintEdge(n);
+      }
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+
+  const regions = listRegions(labels, width, height);
+  const baseFont = Math.max(12, Math.round(Math.min(width, height) * 0.035));
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  // Draw larger regions first so small-block numbers stay visible on top.
+  regions.sort((a, b) => b.area - a.area);
+  for (const region of regions) {
+    const side = Math.sqrt(region.area);
+    const fontSize = Math.max(7, Math.min(baseFont, Math.round(side * 0.45)));
+    const text = String(region.number);
+    ctx.font = `bold ${fontSize}px "Source Sans 3", "Segoe UI", sans-serif`;
+    ctx.lineWidth = Math.max(2, Math.round(fontSize / 5));
+    ctx.strokeStyle = "#ffffff";
+    ctx.fillStyle = "#000000";
+    ctx.strokeText(text, region.x, region.y);
+    ctx.fillText(text, region.x, region.y);
+  }
+
+  return {
+    canvas,
+    regionCount: regions.length,
+    colourCount: palette.length,
   };
 }
 
@@ -272,6 +430,38 @@ function blobFromCanvas(canvas) {
       else resolve(blob);
     }, "image/png");
   });
+}
+
+function revokePrev(el) {
+  if (el?.dataset?.prevUrl) {
+    URL.revokeObjectURL(el.dataset.prevUrl);
+    delete el.dataset.prevUrl;
+  }
+}
+
+function showImage(el, frameEl, objectUrl) {
+  revokePrev(el);
+  el.onload = () => {
+    el.dataset.prevUrl = objectUrl;
+  };
+  el.src = objectUrl;
+  el.hidden = false;
+  frameEl.classList.remove("empty");
+  frameEl.querySelector(".placeholder")?.remove();
+}
+
+function clearOutlinePreview() {
+  outlineImageEl.hidden = true;
+  outlineFrame.classList.add("empty");
+  if (!outlineFrame.querySelector(".placeholder")) {
+    const p = document.createElement("p");
+    p.className = "placeholder outline-placeholder";
+    p.textContent = "The numbered outline appears here after generation.";
+    outlineFrame.appendChild(p);
+  }
+  downloadOutline.hidden = true;
+  revokePrev(outlineImageEl);
+  outlineImageEl.removeAttribute("src");
 }
 
 async function generate() {
@@ -298,6 +488,7 @@ async function generate() {
   imageEl.hidden = true;
   openDirect.hidden = true;
   downloadLink.hidden = true;
+  clearOutlinePreview();
 
   try {
     // Prefer fetch so we can offer a real download blob; fall back to img src.
@@ -319,33 +510,36 @@ async function generate() {
     });
 
     setStatus("Clamping to 8–16 flat colours and A4 ≥5mm regions…");
-    const { canvas, usedColours, minSidePx } = prepareIllustrationCanvas(
-      rawImage,
-      nColours
-    );
-    const preparedBlob = await blobFromCanvas(canvas);
+    const prepared = prepareIllustrationCanvas(rawImage, nColours);
+    const preparedBlob = await blobFromCanvas(prepared.canvas);
     URL.revokeObjectURL(rawUrl);
     const objectUrl = URL.createObjectURL(preparedBlob);
+    showImage(imageEl, frame, objectUrl);
 
-    imageEl.onload = () => {
-      if (imageEl.dataset.prevUrl) {
-        URL.revokeObjectURL(imageEl.dataset.prevUrl);
-      }
-      imageEl.dataset.prevUrl = objectUrl;
-    };
-    imageEl.src = objectUrl;
-    imageEl.hidden = false;
-    frame.classList.remove("empty");
-    frame.querySelector(".placeholder")?.remove();
+    setStatus("Building numbered colour-by-numbers outline…");
+    const outline = buildOutlineCanvas(
+      prepared.labels,
+      prepared.palette,
+      prepared.width,
+      prepared.height
+    );
+    const outlineBlob = await blobFromCanvas(outline.canvas);
+    const outlineUrl = URL.createObjectURL(outlineBlob);
+    showImage(outlineImageEl, outlineFrame, outlineUrl);
 
     openDirect.href = url;
     openDirect.hidden = false;
+    const stem = typeSelect.value.replace(/\s+/g, "_") || "illustration";
     downloadLink.href = objectUrl;
-    downloadLink.download = `${typeSelect.value.replace(/\s+/g, "_") || "illustration"}.png`;
+    downloadLink.download = `${stem}.png`;
     downloadLink.hidden = false;
+    downloadOutline.href = outlineUrl;
+    downloadOutline.download = `${stem}_outline.png`;
+    downloadOutline.hidden = false;
     setStatus(
-      `Generated “${typeSelect.value}” · ${usedColours} colours · ` +
-        `min region ~${minSidePx}px (≥${MIN_REGION_MM}mm on A4) · ${size}×${size}.`,
+      `Generated “${typeSelect.value}” · ${prepared.usedColours} colours · ` +
+        `${outline.regionCount} numbered blocks · ` +
+        `min region ~${prepared.minSidePx}px (≥${MIN_REGION_MM}mm on A4).`,
       "ok"
     );
   } catch (err) {
@@ -357,6 +551,7 @@ async function generate() {
     openDirect.href = url;
     openDirect.hidden = false;
     downloadLink.hidden = true;
+    clearOutlinePreview();
     setStatus(
       `Showing raw Pollinations image (post-process skipped: ${err.message}).`,
       "ok"
