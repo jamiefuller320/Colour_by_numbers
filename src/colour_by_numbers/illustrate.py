@@ -38,7 +38,6 @@ from .simplify import (
     absorb_thin_regions,
     compact_palette,
     enforce_colourable_blocks,
-    enforce_min_brush_stroke,
     merge_adjacent_same_colour,
     normalize_specular_highlights,
 )
@@ -132,9 +131,9 @@ def prepare_illustration_for_colouring(
     labels = nearest_palette_indices(rgb, active, category=category)
     region = min_region_size_for_a4_mm(width, height, min_mm=min_region_mm)
     tip = float(max(2, region.min_inscribed_diameter_px))
-    # Thicken/minimise generated brushwork, then merge split same-colour islands
-    # (e.g. both eye whites) before the colourable-block rules.
-    labels = enforce_min_brush_stroke(labels, min_stroke_px=tip)
+    # Merge split same-colour islands (e.g. both eye whites) before the
+    # colourable-block rules. Do not morphologically open/thicken strokes —
+    # that flattens fine illustration detail.
     labels = merge_adjacent_same_colour(labels, bridge_px=max(2.0, tip * 0.6))
     labels = absorb_small_regions(labels, min_area=region.min_area_px)
     labels = absorb_thin_regions(labels, min_thickness=tip)

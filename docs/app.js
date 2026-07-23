@@ -560,90 +560,6 @@ function mergeAdjacentSameColour(labels, width, height, bridgePx) {
   return result;
 }
 
-function enforceMinBrushStroke(labels, width, height, minStrokePx) {
-  const stroke = Math.max(1, Math.round(minStrokePx));
-  if (stroke <= 1) return labels.slice();
-  const radius = Math.max(1, Math.floor(stroke / 2));
-  // Approximate opening: absorb components thinner than stroke via existing enforce path
-  // by using absorbSmall with min area and a thinness pass.
-  let work = labels.slice();
-  const colours = [...new Set(work)];
-  const kept = new Int16Array(width * height).fill(-1);
-
-  function openColour(colour) {
-    const mask = new Uint8Array(width * height);
-    for (let i = 0; i < mask.length; i += 1) if (work[i] === colour) mask[i] = 1;
-    // Erode
-    const eroded = new Uint8Array(mask.length);
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const idx = y * width + x;
-        if (!mask[idx]) continue;
-        let ok = true;
-        for (let dy = -radius; dy <= radius && ok; dy += 1) {
-          for (let dx = -radius; dx <= radius; dx += 1) {
-            const nx = x + dx;
-            const ny = y + dy;
-            if (nx < 0 || ny < 0 || nx >= width || ny >= height || !mask[ny * width + nx]) {
-              ok = false;
-              break;
-            }
-          }
-        }
-        if (ok) eroded[idx] = 1;
-      }
-    }
-    // Dilate eroded → opened
-    const opened = new Uint8Array(mask.length);
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const idx = y * width + x;
-        if (!eroded[idx]) continue;
-        for (let dy = -radius; dy <= radius; dy += 1) {
-          for (let dx = -radius; dx <= radius; dx += 1) {
-            const nx = x + dx;
-            const ny = y + dy;
-            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-            opened[ny * width + nx] = 1;
-          }
-        }
-      }
-    }
-    return opened;
-  }
-
-  for (const colour of colours) {
-    const opened = openColour(colour);
-    for (let i = 0; i < opened.length; i += 1) {
-      if (opened[i]) kept[i] = colour;
-    }
-  }
-  // Fill unresolved from nearest kept
-  for (let i = 0; i < kept.length; i += 1) {
-    if (kept[i] >= 0) continue;
-    const x = i % width;
-    const y = (i / width) | 0;
-    let best = work[i];
-    let bestDist = Infinity;
-    for (let dy = -stroke; dy <= stroke; dy += 1) {
-      for (let dx = -stroke; dx <= stroke; dx += 1) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-        const nidx = ny * width + nx;
-        if (kept[nidx] < 0) continue;
-        const dist = Math.abs(dx) + Math.abs(dy);
-        if (dist < bestDist) {
-          bestDist = dist;
-          best = kept[nidx];
-        }
-      }
-    }
-    kept[i] = best;
-  }
-  return kept;
-}
-
 function normalizeSpecularHighlights(
   labels,
   palette,
@@ -823,7 +739,6 @@ function prepareIllustrationCanvas(sourceImage, nColours, category = null) {
   }
   const side = minRegionSidePx(width, height, MIN_REGION_MM);
   let cleaned = absorbSmallLabels(labels, width, height, side * side);
-  cleaned = enforceMinBrushStroke(cleaned, width, height, side);
   cleaned = mergeAdjacentSameColour(cleaned, width, height, Math.max(2, side * 0.6));
   cleaned = normalizeSpecularHighlights(
     cleaned,
