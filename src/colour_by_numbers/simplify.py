@@ -247,39 +247,6 @@ def _absorb_component_into_neighbour(
     return work
 
 
-def enforce_min_brush_stroke(
-    labels: np.ndarray,
-    *,
-    min_stroke_px: float,
-) -> np.ndarray:
-    """Remove paint thinner than ``min_stroke_px`` via per-colour opening.
-
-    Opens each colour mask with a disk so generated brushwork cannot be finer
-    than the colourable tip size, then fills gaps from neighbouring colours.
-    """
-    stroke = max(1, int(round(min_stroke_px)))
-    if stroke <= 1:
-        return labels.astype(np.int32, copy=True)
-
-    radius = max(1, stroke // 2)
-    structure = np.ones((radius * 2 + 1, radius * 2 + 1), dtype=bool)
-    current = labels.astype(np.int32, copy=True)
-    kept = np.full(current.shape, -1, dtype=np.int32)
-    for colour in np.unique(current):
-        mask = current == colour
-        opened = ndimage.binary_opening(mask, structure=structure)
-        kept[opened] = int(colour)
-
-    unresolved = kept < 0
-    if unresolved.any():
-        _, indices = ndimage.distance_transform_edt(kept < 0, return_indices=True)
-        iy, ix = indices
-        kept[unresolved] = kept[iy[unresolved], ix[unresolved]]
-        still = kept < 0
-        kept[still] = current[still]
-    return kept.astype(np.int32)
-
-
 def merge_adjacent_same_colour(
     labels: np.ndarray,
     *,

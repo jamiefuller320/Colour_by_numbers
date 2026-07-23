@@ -15,7 +15,6 @@ from .simplify import (
     absorb_thin_regions,
     count_regions,
     enforce_colourable_blocks,
-    enforce_min_brush_stroke,
     merge_adjacent_same_colour,
     normalize_specular_highlights,
     simplify_labels,
@@ -258,9 +257,6 @@ def build_outline_page(
         height_req = width_req
     if width_req and height_req:
         tip = float(min(width_req, height_req))
-        working_labels = enforce_min_brush_stroke(
-            working_labels, min_stroke_px=tip
-        )
         working_labels = merge_adjacent_same_colour(
             working_labels, bridge_px=max(2.0, tip * 0.6)
         )
