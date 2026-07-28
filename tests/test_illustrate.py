@@ -45,6 +45,13 @@ def test_illustration_prompt_animals_share_earthy_cues() -> None:
     assert "eyes" in bird and "centred portrait" in bird
 
 
+def test_illustration_prompt_spitfire_is_aircraft_not_person() -> None:
+    prompt = illustration_prompt("spitfire", category="aircraft")
+    assert "Supermarine Spitfire" in prompt
+    assert "no people" in prompt or "no person" in prompt
+    assert "side view" in prompt
+
+
 def test_prepare_illustration_clamps_palette_and_regions() -> None:
     from colour_by_numbers.illustrate import prepare_illustration_for_colouring
 

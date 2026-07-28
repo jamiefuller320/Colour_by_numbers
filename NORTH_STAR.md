@@ -53,8 +53,67 @@ Ordered so each step unlocks the next; probing continues only when it answers on
 5. **Book compiler** — Layout, order, PDF export, print checklist.
 6. **Publish guardrails** — Licence/provenance recorded per asset; block unsafe sources from book export.
 
+## Workable progression framework
+
+Use short gated phases. Exit a phase only when its gate passes; do not open parallel “option probes” unless they unblock the current gate.
+
+### Phase A — Subject control (gate: no wrong-entity plates)
+
+- Disambiguate ambiguous names (`spitfire` → WWII fighter aircraft, not a person/character).
+- Category negatives (no people on vehicle plates).
+- Manual spot-check: 10 generations across aircraft/animals with zero category errors.
+
+### Phase B — Plate quality bar (gate: colourable reconstructible single plate)
+
+- Lock backend(s) that meet quality (see models note below).
+- Palette, region size, outline numbering stable for one subject.
+- Pass/fail checklist: readable outline, every block numbered, hand-colourable regions, reconstructible vs colour plate.
+
+### Phase C — Format brief from references (gate: written page/cover spec)
+
+- Study **rights-safe** colour-by-numbers examples (own purchases, public-domain / explicitly licensed pages)—**not** scraped commercial books as training or copy targets.
+- Extract a short **format brief**: typical page layout, subject fill, legend placement, cover formula, difficulty banding.
+- Encode that brief as generation + layout constraints (this repo’s print rules), not as cloned artwork.
+
+### Phase D — Set generation (gate: N varied plates, one phrase)
+
+- Planner turns a keyword/phrase into aspect/scene slots (e.g. side view / takeoff / hangar).
+- Generate the set with shared palette language and subject identity.
+- Reject duplicates and off-brief plates.
+
+### Phase E — Covers + book compile (gate: print-ready PDF)
+
+- Front/back full-colour covers in the same family.
+- Ordered interiors + keys + covers → PDF with trim/DPI checklist.
+- Provenance log: every asset marked generated or licensed.
+
+### Phase F — Harden & scale
+
+- More categories, batch runs, weaker prompts still stay on-entity.
+- Publish guardrails automated.
+
+## Models, Cursor Pro+, and image quality
+
+**Cursor Pro+ improves the coding agent in Cursor; it does not automatically upgrade Pollinations or other image APIs used by this app.**
+
+Image quality depends on the **illustration backend** and its own plan/key:
+
+| Backend | Notes |
+|---------|--------|
+| `pollinations` | Free/public; model choice (`flux`, `turbo`, …) is Pollinations-side, not Cursor-side. |
+| `openai` | Needs `OPENAI_API_KEY`; quality follows your OpenAI image model access. |
+| `local_stylize` | No diffusion model; stylizes a reference photo. |
+
+Progression implication: pick **one primary rights-safe generator** in Phase B and optimize prompts/disambiguation against it; treat other backends as fallbacks, not a perpetual bake-off.
+
+## Using existing colour-by-numbers pictures
+
+**Yes, as a format teacher—carefully.** Search/browse (or buy) colour-by-numbers products to learn **conventions**: how much subject fills the page, how busy scenes are, legend style, cover layout, age/difficulty banding.
+
+**No, as a content source to copy.** Do not scrape commercial pages into the generator or train on them. That fights the copyright north star. Capture findings as a written format brief (Phase C), then implement constraints in our pipeline.
+
 ## How to use this document
 
-- New features and PRs should state which **success criterion** or **build-sequence step** they advance.
-- If a change only “probes an option,” park it unless it reduces risk on a sequenced step above.
+- New features and PRs should state which **success criterion**, **build-sequence step**, or **framework phase** they advance.
+- If a change only “probes an option,” park it unless it reduces risk on the **current** phase gate.
 - When trade-offs arise (e.g. more colours vs hand-colourability), prefer the north star: **a human-colourable, reconstructible, rights-safe book**.

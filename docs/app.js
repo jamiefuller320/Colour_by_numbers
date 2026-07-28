@@ -71,8 +71,34 @@ function clampColours(n) {
   return Math.max(MIN_COLOURS, Math.min(MAX_COLOURS, Math.round(value)));
 }
 
+function disambiguateSubject(label, category) {
+  const aircraftMap = {
+    spitfire: "Supermarine Spitfire WWII fighter aircraft",
+    biplane: "vintage biplane aeroplane",
+    "fighter jet": "modern fighter jet aeroplane",
+    airliner: "commercial airliner aeroplane",
+    helicopter: "helicopter aircraft",
+    seaplane: "seaplane aeroplane on water",
+    glider: "sailplane glider aircraft",
+    cessna: "Cessna light aeroplane",
+    concorde: "Concorde supersonic airliner aeroplane",
+    "hot air balloon": "hot air balloon aircraft in the sky",
+  };
+  const cleaned = String(label || "").trim();
+  if (category === "aircraft") {
+    const mapped = aircraftMap[cleaned.toLowerCase()];
+    if (mapped) return mapped;
+    const lower = cleaned.toLowerCase();
+    if (!lower.includes("aircraft") && !lower.includes("aeroplane") && !lower.includes("airplane")) {
+      return `${cleaned} aeroplane aircraft`;
+    }
+  }
+  return cleaned;
+}
+
 function buildPrompt(label, category, nColours = 12) {
   const colours = clampColours(nColours);
+  const subject = disambiguateSubject(label, category);
   const style =
     `children's colouring book illustration, thick clean black outlines, ` +
     `flat cel fills using between ${MIN_COLOURS} and ${colours} solid colours only, ` +
@@ -80,20 +106,23 @@ function buildPrompt(label, category, nColours = 12) {
     `when printed on A4 with finer detail as black line drawing, ` +
     `high subject-background contrast, no gradients, no photorealism, no text, white background`;
   if (category === "aircraft") {
-    return `${label} side view, clear silhouette, ${style}`;
+    return (
+      `${subject} side view, clear silhouette, vehicle only, ` +
+      `no people, no person, no man, no woman, no human face, no comic character, ${style}`
+    );
   }
   if (category === "flowers") {
-    return `${label} centred portrait, ${style}`;
+    return `${subject} centred portrait, ${style}`;
   }
   if (EARTHY_CATEGORIES.has(category)) {
     const detail =
       "clearly defined eyes with dark pupils and light eye highlights, warm natural colours";
     if (category === "birds") {
-      return `${label} centred portrait, ${detail}, ${style}`;
+      return `${subject} centred portrait, ${detail}, ${style}`;
     }
-    return `${label} portrait, centred subject, ${detail}, ${style}`;
+    return `${subject} portrait, centred subject, ${detail}, ${style}`;
   }
-  return `${label} portrait, centred subject, ${style}`;
+  return `${subject} portrait, centred subject, ${style}`;
 }
 
 function setStatus(message, kind = "") {

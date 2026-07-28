@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from colour_by_numbers.discover import (
     build_type_search_query,
+    disambiguate_subject_label,
     discover_subject_types,
     find_matching_type,
     is_broad_category_query,
@@ -73,3 +74,14 @@ def test_custom_query_skipped() -> None:
     discovery = discover_subject_types("red vintage tractor", probe_search=False)
     assert discovery.skipped
     assert discovery.types[0].search_query == "red vintage tractor"
+
+
+def test_spitfire_disambiguates_to_aircraft_not_person() -> None:
+    phrase = disambiguate_subject_label("spitfire", category="aircraft")
+    assert "Supermarine" in phrase
+    assert "aircraft" in phrase.lower()
+    query = build_type_search_query("spitfire", category="aircraft")
+    assert "Supermarine Spitfire" in query
+    assert "clear sky" in query
+    # Bare "spitfire clear sky" is too weak — must keep the aircraft sense.
+    assert "spitfire clear sky" != query
