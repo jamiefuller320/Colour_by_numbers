@@ -228,8 +228,8 @@ def is_broad_category_query(query: str) -> bool:
     return matched is None and q.split()[0] in alias_forms
 
 
-# Ambiguous type labels → unambiguous phrases for search / image generation.
-# Bare names like "spitfire" often resolve to fictional people in diffusion models.
+# Hard overrides for labels that still collide even with a category hypernym
+# (e.g. "spitfire" → person/character in many image models).
 SUBJECT_DISAMBIGUATION: dict[str, dict[str, str]] = {
     "aircraft": {
         "spitfire": "Supermarine Spitfire WWII fighter aircraft",
@@ -245,7 +245,25 @@ SUBJECT_DISAMBIGUATION: dict[str, dict[str, str]] = {
     },
 }
 
-# Negative cues appended to generation prompts for categories prone to people/characters.
+# Global fix layer 1: always name the *kind* so bare labels stay on-entity.
+# "pug" → "pug dog", "rose" → "rose flower", unknown plane → "… aircraft".
+CATEGORY_HYPERNYMS: dict[str, str] = {
+    "dogs": "dog",
+    "cats": "cat",
+    "horses": "horse",
+    "birds": "bird",
+    "aircraft": "aircraft aeroplane",
+    "flowers": "flower blossom",
+    "cars": "car automobile",
+    "boats": "boat watercraft",
+    "wildlife": "wild animal",
+    "animals": "animal",
+    "pets": "pet animal",
+    "farm animals": "farm animal",
+    "mammals": "mammal animal",
+}
+
+# Global fix layer 2: category negatives (people/characters are the usual failure).
 CATEGORY_NEGATIVE_CUES: dict[str, str] = {
     "aircraft": (
         "no people, no person, no man, no woman, no human face, "
@@ -253,11 +271,48 @@ CATEGORY_NEGATIVE_CUES: dict[str, str] = {
     ),
     "cars": "no people, no person, no driver visible, no human face",
     "boats": "no people, no person, no human face",
+    "dogs": "no people, no human face, real dog animal only",
+    "cats": "no people, no human face, real cat animal only",
+    "horses": "no people, no rider, no human face, real horse animal only",
+    "birds": "no people, no human face, real bird animal only",
+    "flowers": "no people, no human face, flower plant only",
+    "wildlife": "no people, no human face, wild animal only",
+    "animals": "no people, no human face, animal only",
+    "pets": "no people, no human face, pet animal only",
+    "farm animals": "no people, no human face, farm animal only",
+    "mammals": "no people, no human face, mammal animal only",
+}
+
+# Short "kind" words used in structured prompt framing.
+CATEGORY_KIND: dict[str, str] = {
+    "dogs": "dog",
+    "cats": "cat",
+    "horses": "horse",
+    "birds": "bird",
+    "aircraft": "aircraft",
+    "flowers": "flower",
+    "cars": "car",
+    "boats": "boat",
+    "wildlife": "animal",
+    "animals": "animal",
+    "pets": "animal",
+    "farm animals": "animal",
+    "mammals": "animal",
 }
 
 
+def _contains_hypernym(label: str, hypernym: str) -> bool:
+    lower = label.lower()
+    return any(token in lower for token in hypernym.lower().split() if len(token) > 2)
+
+
 def disambiguate_subject_label(label: str, *, category: str | None = None) -> str:
-    """Expand ambiguous short labels into generation/search-safe subject phrases."""
+    """Expand labels into generation/search-safe subject phrases.
+
+    Global strategy (not per-name whack-a-mole):
+    1. Apply a hard override when the short name is famously ambiguous.
+    2. Otherwise append the category hypernym if missing (``pug`` → ``pug dog``).
+    """
     cleaned = label.strip()
     if not cleaned:
         return cleaned
@@ -265,10 +320,18 @@ def disambiguate_subject_label(label: str, *, category: str | None = None) -> st
         mapped = SUBJECT_DISAMBIGUATION[category].get(cleaned.lower())
         if mapped:
             return mapped
-        # Unknown aircraft type: still force the vehicle sense.
-        if category == "aircraft" and "aircraft" not in cleaned.lower() and "aeroplane" not in cleaned.lower() and "airplane" not in cleaned.lower():
-            return f"{cleaned} aeroplane aircraft"
+    hypernym = CATEGORY_HYPERNYMS.get(category or "")
+    if hypernym and not _contains_hypernym(cleaned, hypernym):
+        return f"{cleaned} {hypernym}"
     return cleaned
+
+
+def subject_kind_frame(category: str | None) -> str | None:
+    """Optional structured cue: force the model to treat the label as that kind."""
+    kind = CATEGORY_KIND.get(category or "")
+    if not kind:
+        return None
+    return f"subject kind: {kind} (depict only this kind of thing, not a person or unrelated character)"
 
 
 def build_type_search_query(label: str, *, category: str | None = None) -> str:
@@ -280,7 +343,7 @@ def build_type_search_query(label: str, *, category: str | None = None) -> str:
         return f"{subject} close up"
     if category in {"cars", "boats"}:
         return f"{subject} side view"
-    return f"{label.strip()} portrait"
+    return f"{subject} portrait"
 
 
 def _title_match_score(label: str, titles: list[str]) -> tuple[float, list[str]]:

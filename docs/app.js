@@ -72,33 +72,81 @@ function clampColours(n) {
 }
 
 function disambiguateSubject(label, category) {
-  const aircraftMap = {
-    spitfire: "Supermarine Spitfire WWII fighter aircraft",
-    biplane: "vintage biplane aeroplane",
-    "fighter jet": "modern fighter jet aeroplane",
-    airliner: "commercial airliner aeroplane",
-    helicopter: "helicopter aircraft",
-    seaplane: "seaplane aeroplane on water",
-    glider: "sailplane glider aircraft",
-    cessna: "Cessna light aeroplane",
-    concorde: "Concorde supersonic airliner aeroplane",
-    "hot air balloon": "hot air balloon aircraft in the sky",
+  const overrides = {
+    aircraft: {
+      spitfire: "Supermarine Spitfire WWII fighter aircraft",
+      biplane: "vintage biplane aeroplane",
+      "fighter jet": "modern fighter jet aeroplane",
+      airliner: "commercial airliner aeroplane",
+      helicopter: "helicopter aircraft",
+      seaplane: "seaplane aeroplane on water",
+      glider: "sailplane glider aircraft",
+      cessna: "Cessna light aeroplane",
+      concorde: "Concorde supersonic airliner aeroplane",
+      "hot air balloon": "hot air balloon aircraft in the sky",
+    },
   };
+  const hypernyms = {
+    dogs: "dog",
+    cats: "cat",
+    horses: "horse",
+    birds: "bird",
+    aircraft: "aircraft aeroplane",
+    flowers: "flower blossom",
+    cars: "car automobile",
+    boats: "boat watercraft",
+  };
+  const kinds = {
+    dogs: "dog",
+    cats: "cat",
+    horses: "horse",
+    birds: "bird",
+    aircraft: "aircraft",
+    flowers: "flower",
+    cars: "car",
+    boats: "boat",
+  };
+  const negatives = {
+    aircraft:
+      "no people, no person, no man, no woman, no human face, no comic character",
+    cars: "no people, no person, no driver visible, no human face",
+    boats: "no people, no person, no human face",
+    dogs: "no people, no human face, real dog animal only",
+    cats: "no people, no human face, real cat animal only",
+    horses: "no people, no rider, no human face, real horse animal only",
+    birds: "no people, no human face, real bird animal only",
+    flowers: "no people, no human face, flower plant only",
+  };
+
   const cleaned = String(label || "").trim();
-  if (category === "aircraft") {
-    const mapped = aircraftMap[cleaned.toLowerCase()];
-    if (mapped) return mapped;
-    const lower = cleaned.toLowerCase();
-    if (!lower.includes("aircraft") && !lower.includes("aeroplane") && !lower.includes("airplane")) {
-      return `${cleaned} aeroplane aircraft`;
+  let subject = cleaned;
+  const catOverrides = overrides[category] || {};
+  if (catOverrides[cleaned.toLowerCase()]) {
+    subject = catOverrides[cleaned.toLowerCase()];
+  } else {
+    const hyper = hypernyms[category];
+    if (hyper) {
+      const lower = cleaned.toLowerCase();
+      const missing = hyper
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((t) => t.length > 2)
+        .every((t) => !lower.includes(t));
+      if (missing) subject = `${cleaned} ${hyper}`;
     }
   }
-  return cleaned;
+
+  const kind = kinds[category];
+  const kindPrefix = kind
+    ? `subject kind: ${kind} (depict only this kind of thing, not a person or unrelated character). `
+    : "";
+  const negative = negatives[category] ? `, ${negatives[category]}` : "";
+  return { subject, kindPrefix, negative };
 }
 
 function buildPrompt(label, category, nColours = 12) {
   const colours = clampColours(nColours);
-  const subject = disambiguateSubject(label, category);
+  const { subject, kindPrefix, negative } = disambiguateSubject(label, category);
   const style =
     `children's colouring book illustration, thick clean black outlines, ` +
     `flat cel fills using between ${MIN_COLOURS} and ${colours} solid colours only, ` +
@@ -107,22 +155,22 @@ function buildPrompt(label, category, nColours = 12) {
     `high subject-background contrast, no gradients, no photorealism, no text, white background`;
   if (category === "aircraft") {
     return (
-      `${subject} side view, clear silhouette, vehicle only, ` +
-      `no people, no person, no man, no woman, no human face, no comic character, ${style}`
+      `${kindPrefix}${subject} side view, clear silhouette, vehicle only` +
+      `${negative}, ${style}`
     );
   }
   if (category === "flowers") {
-    return `${subject} centred portrait, ${style}`;
+    return `${kindPrefix}${subject} centred portrait${negative}, ${style}`;
   }
   if (EARTHY_CATEGORIES.has(category)) {
     const detail =
       "clearly defined eyes with dark pupils and light eye highlights, warm natural colours";
     if (category === "birds") {
-      return `${subject} centred portrait, ${detail}, ${style}`;
+      return `${kindPrefix}${subject} centred portrait, ${detail}${negative}, ${style}`;
     }
-    return `${subject} portrait, centred subject, ${detail}, ${style}`;
+    return `${kindPrefix}${subject} portrait, centred subject, ${detail}${negative}, ${style}`;
   }
-  return `${subject} portrait, centred subject, ${style}`;
+  return `${kindPrefix}${subject} portrait, centred subject${negative}, ${style}`;
 }
 
 function setStatus(message, kind = "") {

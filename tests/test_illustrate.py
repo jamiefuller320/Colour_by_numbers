@@ -50,6 +50,14 @@ def test_illustration_prompt_spitfire_is_aircraft_not_person() -> None:
     assert "Supermarine Spitfire" in prompt
     assert "no people" in prompt or "no person" in prompt
     assert "side view" in prompt
+    assert "subject kind: aircraft" in prompt
+
+
+def test_illustration_prompt_uses_global_kind_frame() -> None:
+    prompt = illustration_prompt("pug", category="dogs")
+    assert "pug dog" in prompt
+    assert "subject kind: dog" in prompt
+    assert "no people" in prompt or "real dog" in prompt
 
 
 def test_prepare_illustration_clamps_palette_and_regions() -> None:

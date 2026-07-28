@@ -52,7 +52,7 @@ def test_discover_broad_dogs_without_network(monkeypatch) -> None:
     # Pug mentioned twice should rank highly.
     labels = [t.label for t in discovery.types]
     assert "pug" in labels
-    assert build_type_search_query("pug", category="dogs") == "pug portrait"
+    assert build_type_search_query("pug", category="dogs") == "pug dog portrait"
 
 
 def test_discover_specific_skips_shortlist() -> None:
@@ -85,3 +85,11 @@ def test_spitfire_disambiguates_to_aircraft_not_person() -> None:
     assert "clear sky" in query
     # Bare "spitfire clear sky" is too weak — must keep the aircraft sense.
     assert "spitfire clear sky" != query
+
+
+def test_global_hypernym_disambiguation() -> None:
+    assert disambiguate_subject_label("pug", category="dogs") == "pug dog"
+    assert disambiguate_subject_label("rose", category="flowers") == "rose flower blossom"
+    # Already contains the kind — do not double-append.
+    assert disambiguate_subject_label("tabby cat", category="cats") == "tabby cat"
+    assert "dog" in build_type_search_query("beagle", category="dogs")
