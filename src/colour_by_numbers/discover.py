@@ -228,16 +228,59 @@ def is_broad_category_query(query: str) -> bool:
     return matched is None and q.split()[0] in alias_forms
 
 
+# Ambiguous type labels → unambiguous phrases for search / image generation.
+# Bare names like "spitfire" often resolve to fictional people in diffusion models.
+SUBJECT_DISAMBIGUATION: dict[str, dict[str, str]] = {
+    "aircraft": {
+        "spitfire": "Supermarine Spitfire WWII fighter aircraft",
+        "biplane": "vintage biplane aeroplane",
+        "fighter jet": "modern fighter jet aeroplane",
+        "airliner": "commercial airliner aeroplane",
+        "helicopter": "helicopter aircraft",
+        "seaplane": "seaplane aeroplane on water",
+        "glider": "sailplane glider aircraft",
+        "cessna": "Cessna light aeroplane",
+        "concorde": "Concorde supersonic airliner aeroplane",
+        "hot air balloon": "hot air balloon aircraft in the sky",
+    },
+}
+
+# Negative cues appended to generation prompts for categories prone to people/characters.
+CATEGORY_NEGATIVE_CUES: dict[str, str] = {
+    "aircraft": (
+        "no people, no person, no man, no woman, no human face, "
+        "no comic character, no superhero, no mascot"
+    ),
+    "cars": "no people, no person, no driver visible, no human face",
+    "boats": "no people, no person, no human face",
+}
+
+
+def disambiguate_subject_label(label: str, *, category: str | None = None) -> str:
+    """Expand ambiguous short labels into generation/search-safe subject phrases."""
+    cleaned = label.strip()
+    if not cleaned:
+        return cleaned
+    if category and category in SUBJECT_DISAMBIGUATION:
+        mapped = SUBJECT_DISAMBIGUATION[category].get(cleaned.lower())
+        if mapped:
+            return mapped
+        # Unknown aircraft type: still force the vehicle sense.
+        if category == "aircraft" and "aircraft" not in cleaned.lower() and "aeroplane" not in cleaned.lower() and "airplane" not in cleaned.lower():
+            return f"{cleaned} aeroplane aircraft"
+    return cleaned
+
+
 def build_type_search_query(label: str, *, category: str | None = None) -> str:
     """Build a specific, colouring-friendly search string for one type."""
-    label = label.strip()
+    subject = disambiguate_subject_label(label, category=category)
     if category == "aircraft":
-        return f"{label} clear sky"
+        return f"{subject} clear sky side view"
     if category == "flowers":
-        return f"{label} close up"
+        return f"{subject} close up"
     if category in {"cars", "boats"}:
-        return f"{label} side view"
-    return f"{label} portrait"
+        return f"{subject} side view"
+    return f"{label.strip()} portrait"
 
 
 def _title_match_score(label: str, titles: list[str]) -> tuple[float, list[str]]:

@@ -18,6 +18,7 @@ from dataclasses import dataclass
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
+from .discover import CATEGORY_NEGATIVE_CUES, disambiguate_subject_label
 from .palette import (
     DEFAULT_ILLUSTRATION_COLOURS,
     EARTHY_CATEGORIES,
@@ -78,7 +79,7 @@ def illustration_prompt(
     max_colours: int = MAX_N_COLOURS,
 ) -> str:
     """Text prompt used by API backends (and recorded for local runs)."""
-    subject = subject_type_label.strip()
+    subject = disambiguate_subject_label(subject_type_label, category=category)
     lo = clamp_n_colours(min_colours, minimum=min_colours, maximum=max_colours)
     hi = clamp_n_colours(max_colours, minimum=min_colours, maximum=max_colours)
     style = (
@@ -94,14 +95,24 @@ def illustration_prompt(
         "clearly defined eyes with dark pupils and light eye highlights, "
         "warm natural colours"
     )
+    negative = CATEGORY_NEGATIVE_CUES.get(category or "", "")
+    negative_suffix = f", {negative}" if negative else ""
     if category == "aircraft":
-        return f"{subject} side view, clear silhouette, {style}"
+        return (
+            f"{subject} side view, clear silhouette, vehicle only"
+            f"{negative_suffix}, {style}"
+        )
     if category == "flowers":
         return f"{subject} centred portrait, {style}"
     if category == "birds":
         return f"{subject} centred portrait, {animal_detail}, {style}"
     if category in EARTHY_CATEGORIES:
         return f"{subject} portrait, centred subject, {animal_detail}, {style}"
+    if category in {"cars", "boats"}:
+        return (
+            f"{subject} side view, clear silhouette, vehicle only"
+            f"{negative_suffix}, {style}"
+        )
     return f"{subject} portrait, centred subject, {style}"
 
 
