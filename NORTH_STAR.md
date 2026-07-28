@@ -59,9 +59,23 @@ Use short gated phases. Exit a phase only when its gate passes; do not open para
 
 ### Phase A — Subject control (gate: no wrong-entity plates)
 
-- Disambiguate ambiguous names (`spitfire` → WWII fighter aircraft, not a person/character).
-- Category negatives (no people on vehicle plates).
-- Manual spot-check: 10 generations across aircraft/animals with zero category errors.
+**Global fix (preferred over per-name patches):**
+
+1. **Category hypernym** — always name the kind (`pug` → `pug dog`, `rose` → `rose flower`).
+2. **Kind frame** — prompt lead-in: “subject kind: aircraft/dog/…; depict only this kind.”
+3. **Category negatives** — block the usual failure mode (people/characters on non-person plates).
+4. **Hard overrides** — only for stubborn collisions (`spitfire` → Supermarine Spitfire WWII fighter aircraft).
+
+Do not grow an endless name list; add an override only when hypernym + negatives still fail.
+
+- Manual spot-check: 10 generations across aircraft/animals/flowers with zero wrong-entity plates.
+
+### Next step (recommended now)
+
+**Close Phase A, then start Phase B.**
+
+1. Spot-check the global disambiguation on a mixed batch (aircraft + dogs + flowers).
+2. **Phase B:** pick **one** primary rights-safe generator backend and lock a pass/fail plate checklist (palette, region size, numbered outline reconstructibility) on a single subject before building sets.
 
 ### Phase B — Plate quality bar (gate: colourable reconstructible single plate)
 

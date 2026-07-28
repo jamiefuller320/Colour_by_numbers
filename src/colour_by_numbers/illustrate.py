@@ -18,7 +18,11 @@ from dataclasses import dataclass
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
-from .discover import CATEGORY_NEGATIVE_CUES, disambiguate_subject_label
+from .discover import (
+    CATEGORY_NEGATIVE_CUES,
+    disambiguate_subject_label,
+    subject_kind_frame,
+)
 from .palette import (
     DEFAULT_ILLUSTRATION_COLOURS,
     EARTHY_CATEGORIES,
@@ -97,23 +101,31 @@ def illustration_prompt(
     )
     negative = CATEGORY_NEGATIVE_CUES.get(category or "", "")
     negative_suffix = f", {negative}" if negative else ""
+    kind = subject_kind_frame(category)
+    kind_prefix = f"{kind}. " if kind else ""
     if category == "aircraft":
         return (
-            f"{subject} side view, clear silhouette, vehicle only"
+            f"{kind_prefix}{subject} side view, clear silhouette, vehicle only"
             f"{negative_suffix}, {style}"
         )
     if category == "flowers":
-        return f"{subject} centred portrait, {style}"
+        return f"{kind_prefix}{subject} centred portrait{negative_suffix}, {style}"
     if category == "birds":
-        return f"{subject} centred portrait, {animal_detail}, {style}"
-    if category in EARTHY_CATEGORIES:
-        return f"{subject} portrait, centred subject, {animal_detail}, {style}"
-    if category in {"cars", "boats"}:
         return (
-            f"{subject} side view, clear silhouette, vehicle only"
+            f"{kind_prefix}{subject} centred portrait, {animal_detail}"
             f"{negative_suffix}, {style}"
         )
-    return f"{subject} portrait, centred subject, {style}"
+    if category in EARTHY_CATEGORIES:
+        return (
+            f"{kind_prefix}{subject} portrait, centred subject, {animal_detail}"
+            f"{negative_suffix}, {style}"
+        )
+    if category in {"cars", "boats"}:
+        return (
+            f"{kind_prefix}{subject} side view, clear silhouette, vehicle only"
+            f"{negative_suffix}, {style}"
+        )
+    return f"{kind_prefix}{subject} portrait, centred subject{negative_suffix}, {style}"
 
 
 def prepare_illustration_for_colouring(
