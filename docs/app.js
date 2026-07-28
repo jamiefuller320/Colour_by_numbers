@@ -58,7 +58,7 @@ const EARTHY_CATEGORIES = new Set([
 ]);
 const MIN_COLOURS = 8;
 const MAX_COLOURS = 16;
-const MIN_REGION_MM = 5;
+const MIN_REGION_MM = 8;
 const A4_MM = [210, 297];
 const OUTLINE_LINE_WIDTH = 1; // single-pixel edges (no thicken pass)
 const DETAIL_INK_RGB = [18, 18, 18];

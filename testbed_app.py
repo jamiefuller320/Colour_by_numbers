@@ -22,6 +22,7 @@ from colour_by_numbers.illustrate import (
     AVAILABLE_ILLUSTRATION_BACKENDS,
     illustration_prompt,
 )
+from colour_by_numbers.quality import PHASE_B_MIN_REGION_MM, PHASE_B_PRIMARY_BACKEND
 
 
 st.set_page_config(
@@ -46,11 +47,16 @@ with st.sidebar:
         index=sorted(CATEGORY_TYPES.keys()).index("dogs"),
     )
     discover = st.checkbox("Rank types from live search", value=True)
+    backends = [b for b in AVAILABLE_ILLUSTRATION_BACKENDS if b != "replicate"]
     backend = st.selectbox(
         "Illustration backend",
-        options=[b for b in AVAILABLE_ILLUSTRATION_BACKENDS if b != "replicate"],
-        index=1 if "pollinations" in AVAILABLE_ILLUSTRATION_BACKENDS else 0,
-        help="pollinations = free text-to-image, no subscription.",
+        options=backends,
+        index=(
+            backends.index(PHASE_B_PRIMARY_BACKEND)
+            if PHASE_B_PRIMARY_BACKEND in backends
+            else 0
+        ),
+        help="Phase B primary = pollinations (rights-safe text-to-image).",
     )
     pollinations_model = st.selectbox(
         "Pollinations model",
@@ -71,11 +77,11 @@ with st.sidebar:
         "Min colourable block on A4 (mm wide & high)",
         min_value=3.0,
         max_value=12.0,
-        value=5.0,
+        value=float(PHASE_B_MIN_REGION_MM),
         step=0.5,
         help=(
             "Each colour fill must be at least this wide and high (fits a tip "
-            "of that diameter). Smaller features become black line detail."
+            "of that diameter). Phase B default is 8mm."
         ),
     )
     seed = st.number_input(
@@ -86,6 +92,11 @@ with st.sidebar:
         step=1,
     )
     run_cbn = st.checkbox("Also build colour-by-numbers plate", value=True)
+    require_quality = st.checkbox(
+        "Require Phase B quality gate",
+        value=False,
+        help="Fail the run if the plate checklist does not pass.",
+    )
 
 
 def _png(image) -> bytes:
@@ -162,13 +173,21 @@ if generate:
                 pollinations_model=pollinations_model,
                 seed=None if seed < 0 else int(seed),
                 min_region_mm=min_region_mm,
+                check_quality=True,
+                require_quality=require_quality,
             )
             st.session_state.testbed_illustration = page.illustration
             st.session_state.testbed_result = page.result if run_cbn else None
             st.session_state.testbed_type = chosen.label
+            st.session_state.testbed_quality = page.quality
             st.success(
                 f"Generated “{chosen.label}” via {page.illustration.backend}"
             )
+            if page.quality is not None:
+                if page.quality.passed:
+                    st.info(page.quality.summary())
+                else:
+                    st.warning(page.quality.summary())
         except Exception as exc:  # noqa: BLE001
             st.error(f"Generation failed: {exc}")
 

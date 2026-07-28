@@ -72,16 +72,38 @@ Do not grow an endless name list; add an override only when hypernym + negatives
 
 ### Next step (recommended now)
 
-**Close Phase A, then start Phase B.**
-
-1. Spot-check the global disambiguation on a mixed batch (aircraft + dogs + flowers).
-2. **Phase B:** pick **one** primary rights-safe generator backend and lock a pass/fail plate checklist (palette, region size, numbered outline reconstructibility) on a single subject before building sets.
+Phase B is the active build gate (see below). After a single subject passes the
+checklist on the primary backend, move to Phase C (format brief).
 
 ### Phase B — Plate quality bar (gate: colourable reconstructible single plate)
 
-- Lock backend(s) that meet quality (see models note below).
-- Palette, region size, outline numbering stable for one subject.
-- Pass/fail checklist: readable outline, every block numbered, hand-colourable regions, reconstructible vs colour plate.
+**Locked choices**
+
+| Item | Value |
+|------|--------|
+| Primary backend | `pollinations` (`flux`) — rights-safe generation, no scraped photos in the publish path |
+| Fallback | `local_stylize` / `openai` (optional; not the default) |
+| Min colourable block | **8mm × 8mm** on A4 |
+| Palette budget | **8–16** colours |
+
+**Checklist** (implemented in `colour_by_numbers.quality` / `scripts/phase_b_plate_check.py`):
+
+- Palette within 8–16 colours
+- Every connected colour block listed and numbered; numbers ⊆ colour key
+- Outline labels + palette reconstruct the colour plate
+- Illustration agrees with the simplified plate after palette mapping
+- No colourable blocks below the 8mm A4 floor
+- Outline has readable ink; legend present
+
+```bash
+# Offline gate (synthetic plate, no network)
+python scripts/phase_b_plate_check.py --offline --require
+
+# Live primary backend
+python scripts/phase_b_plate_check.py --query dogs --type pug --require
+```
+
+CLI: `--illustrate` defaults to Pollinations; add `--require-quality` to fail on checklist miss.
 
 ### Phase C — Format brief from references (gate: written page/cover spec)
 

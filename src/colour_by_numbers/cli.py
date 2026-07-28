@@ -240,10 +240,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--illustration-backend",
         choices=["local_stylize", "pollinations", "openai", "replicate"],
-        default="local_stylize",
+        default="pollinations",
         help=(
-            "Illustration generator backend (default: local_stylize). "
-            "pollinations = free text-to-image, no paid subscription."
+            "Illustration generator backend (default: pollinations — Phase B "
+            "rights-safe primary). local_stylize needs a reference photo."
         ),
     )
     parser.add_argument(
@@ -266,11 +266,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--min-region-mm",
         type=float,
-        default=5.0,
+        default=8.0,
         help=(
             "Minimum colourable-block width and height in mm on A4 "
-            "(default: 5; finer detail becomes black line drawing)"
+            "(default: 8; finer detail becomes black line drawing)"
         ),
+    )
+    parser.add_argument(
+        "--require-quality",
+        action="store_true",
+        help="Fail the run if the Phase B plate-quality checklist does not pass",
+    )
+    parser.add_argument(
+        "--no-quality-check",
+        action="store_true",
+        help="Skip attaching the Phase B plate-quality report",
     )
     return parser
 
@@ -354,6 +364,8 @@ def main(argv: list[str] | None = None) -> int:
             structure_size=args.structure_size,
             pollinations_model=args.pollinations_model,
             min_region_mm=args.min_region_mm,
+            check_quality=not args.no_quality_check,
+            require_quality=args.require_quality,
         )
         result = page.result
         stem_base = page.subject_type.label
@@ -366,6 +378,8 @@ def main(argv: list[str] | None = None) -> int:
         paths["illustration"] = illustration_path
         print(f"Illustration backend: {page.illustration.backend}")
         print(f"Subject type: {page.subject_type.label}")
+        if page.quality is not None:
+            print(page.quality.summary())
         if page.illustration.prompt:
             print(f"Prompt: {page.illustration.prompt}")
         if page.illustration.reference_url:
