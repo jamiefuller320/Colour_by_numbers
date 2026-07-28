@@ -2,6 +2,8 @@
 
 Search the web for images by description (for example `aircraft` or `dogs`), map them onto a **standardised 32-colour** colouring palette, and export a numbered outline page suitable for colouring books.
 
+**North star:** generate rights-safe, varied colour plate *sets* from a keyword/phrase, convert them into correctly labelled outlines a person can colour to reconstruct each image, add full-colour covers, and compile a printable book. See [NORTH_STAR.md](NORTH_STAR.md).
+
 ## What it produces
 
 For each source image the tool writes:
