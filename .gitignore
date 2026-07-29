@@ -11,5 +11,6 @@ build/
 venv/
 output/
 samples/*.png
+data/subject_lessons.jsonl
 .DS_Store
 .streamlit/secrets.toml

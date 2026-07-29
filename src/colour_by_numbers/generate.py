@@ -14,11 +14,14 @@ from .discover import (
     pick_subject_type,
     search_images_for_type,
 )
+from .feedback import FeedbackLoopResult, run_subject_feedback_loop
 from .illustrate import (
     DEFAULT_ILLUSTRATION_SIZE,
     AVAILABLE_ILLUSTRATION_BACKENDS,
     IllustrationResult,
     generate_illustration,
+    illustration_prompt,
+    prepare_illustration_for_colouring,
 )
 from .palette import DEFAULT_ILLUSTRATION_COLOURS, MAX_N_COLOURS, clamp_n_colours
 from .pipeline import ColourByNumbersResult, create_colour_by_numbers
@@ -48,6 +51,7 @@ class GeneratedPage:
     subject_type: SubjectType
     reference_hit: ImageHit | None = None
     quality: PlateQualityReport | None = None
+    feedback: FeedbackLoopResult | None = None
 
 
 def gather_reference_hits(
@@ -137,6 +141,11 @@ def generate_colouring_page(
     seed: int | None = None,
     check_quality: bool = True,
     require_quality: bool = False,
+    subject_feedback: bool = False,
+    critique_mode: str = "rules",
+    max_feedback_attempts: int = 3,
+    lessons_file: str | None = None,
+    record_lessons: bool = True,
     **pipeline_kwargs,
 ) -> GeneratedPage:
     """Discover type → gather references → illustrate → colour-by-numbers.
@@ -150,6 +159,11 @@ def generate_colouring_page(
     Phase B: default backend is ``pollinations`` (rights-safe generation).
     When ``check_quality`` is True, attach a ``PlateQualityReport``. When
     ``require_quality`` is True, fail the run if the checklist does not pass.
+
+    When ``subject_feedback`` is True (API backends only), run a critique →
+    revise → retry loop that asks whether the plate is recognisable as the
+    requested subject and how the prompt should improve. Lessons are stored
+    for later runs of the same subject.
     """
     discovery = discover_subject_types(
         query,
@@ -170,19 +184,79 @@ def generate_colouring_page(
         )
         reference_image, reference_hit, _ = select_best_reference(hits)
 
-    illustration = generate_illustration(
-        reference_image,
-        subject_type_label=chosen.label,
-        category=chosen.category,
-        backend=backend,
-        n_colours=illustration_colours,
-        output_size=illustration_size,
-        openai_api_key=openai_api_key,
-        prompt_override=prompt_override,
-        pollinations_model=pollinations_model,
-        seed=seed,
-        min_region_mm=min_region_mm,
+    feedback_result: FeedbackLoopResult | None = None
+    effective_prompt = prompt_override
+    use_feedback = (
+        subject_feedback
+        and backend != "local_stylize"
+        and max_feedback_attempts > 0
     )
+
+    if use_feedback:
+        base_prompt = prompt_override or illustration_prompt(
+            chosen.label, category=chosen.category
+        )
+
+        def _generate_once(prompt: str) -> Image.Image:
+            # Skip colouring prep inside the loop; apply once on the winner.
+            one = generate_illustration(
+                None,
+                subject_type_label=chosen.label,
+                category=chosen.category,
+                backend=backend,
+                n_colours=illustration_colours,
+                output_size=illustration_size,
+                openai_api_key=openai_api_key,
+                prompt_override=prompt,
+                pollinations_model=pollinations_model,
+                seed=seed,
+                min_region_mm=min_region_mm,
+                prepare_for_colouring=False,
+            )
+            return one.image
+
+        feedback_result = run_subject_feedback_loop(
+            subject_label=chosen.label,
+            category=chosen.category,
+            initial_prompt=base_prompt,
+            generate_fn=_generate_once,
+            critique_mode=critique_mode,
+            max_attempts=max_feedback_attempts,
+            api_key=openai_api_key,
+            lessons_file=lessons_file,
+            record=record_lessons,
+        )
+        effective_prompt = feedback_result.prompt
+        # Final plate: prepare the accepted (or last) image for colouring.
+        cleaned, used = prepare_illustration_for_colouring(
+            feedback_result.image,
+            n_colours=illustration_colours,
+            min_region_mm=min_region_mm,
+            category=chosen.category,
+        )
+        notes = feedback_result.notes
+        illustration = IllustrationResult(
+            image=cleaned,
+            backend=backend,
+            subject_type_label=chosen.label,
+            n_colours=used,
+            prompt=effective_prompt,
+            notes=notes,
+        )
+    else:
+        illustration = generate_illustration(
+            reference_image,
+            subject_type_label=chosen.label,
+            category=chosen.category,
+            backend=backend,
+            n_colours=illustration_colours,
+            output_size=illustration_size,
+            openai_api_key=openai_api_key,
+            prompt_override=effective_prompt,
+            pollinations_model=pollinations_model,
+            seed=seed,
+            min_region_mm=min_region_mm,
+        )
     if reference_hit is not None:
         illustration = IllustrationResult(
             image=illustration.image,
@@ -265,4 +339,5 @@ def generate_colouring_page(
         subject_type=chosen,
         reference_hit=reference_hit,
         quality=quality,
+        feedback=feedback_result,
     )

@@ -97,6 +97,29 @@ with st.sidebar:
         value=False,
         help="Fail the run if the plate checklist does not pass.",
     )
+    subject_feedback = st.checkbox(
+        "Subject recognition feedback loop",
+        value=False,
+        help=(
+            "Ask whether the plate is recognisable as the requested subject; "
+            "revise the prompt and retry. Stores lessons in data/subject_lessons.jsonl."
+        ),
+        disabled=backend == "local_stylize",
+    )
+    critique_mode = st.selectbox(
+        "Critique mode",
+        options=["rules", "openai"],
+        index=0,
+        disabled=not subject_feedback,
+        help="rules = offline feature cues; openai = vision (needs OPENAI_API_KEY). Use CLI --critique-mode human for interactive review.",
+    )
+    max_feedback_attempts = st.slider(
+        "Feedback attempts",
+        min_value=1,
+        max_value=5,
+        value=3,
+        disabled=not subject_feedback,
+    )
 
 
 def _png(image) -> bytes:
@@ -175,14 +198,26 @@ if generate:
                 min_region_mm=min_region_mm,
                 check_quality=True,
                 require_quality=require_quality,
+                subject_feedback=subject_feedback,
+                critique_mode=critique_mode,
+                max_feedback_attempts=max_feedback_attempts,
             )
             st.session_state.testbed_illustration = page.illustration
             st.session_state.testbed_result = page.result if run_cbn else None
             st.session_state.testbed_type = chosen.label
             st.session_state.testbed_quality = page.quality
+            st.session_state.testbed_feedback = page.feedback
             st.success(
                 f"Generated “{chosen.label}” via {page.illustration.backend}"
             )
+            if page.feedback is not None:
+                st.info(page.feedback.notes)
+                for i, attempt in enumerate(page.feedback.attempts, start=1):
+                    c = attempt.critique
+                    st.caption(
+                        f"Attempt {i}: recognisable={c.recognisable} "
+                        f"confidence={c.confidence:.2f} accepted={attempt.accepted}"
+                    )
             if page.quality is not None:
                 if page.quality.passed:
                     st.info(page.quality.summary())

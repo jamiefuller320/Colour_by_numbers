@@ -105,6 +105,29 @@ python scripts/phase_b_plate_check.py --query dogs --type pug --require
 
 CLI: `--illustrate` defaults to Pollinations; add `--require-quality` to fail on checklist miss.
 
+**Subject-recognition feedback loop** (Phase B support for weak entities like Spitfire):
+
+After each generation the pipeline can ask:
+
+1. Is this recognisable as the requested subject?
+2. How should the generation prompt improve?
+
+Critics: `rules` (offline feature cues), `openai` (vision, needs `OPENAI_API_KEY`), `human` (interactive). Failed → revise prompt → retry (default 3 attempts). Accepted revisions append to `data/subject_lessons.jsonl` and seed later runs of the same subject.
+
+```bash
+# Dry-run: show seeded prompt + rules critique (no network)
+python scripts/subject_feedback_loop.py --query aircraft --type spitfire --dry-run
+
+# Live loop on Pollinations
+python scripts/subject_feedback_loop.py --query aircraft --type spitfire
+
+# Or via CLI
+colour-by-numbers --query aircraft --type spitfire --illustrate \
+  --subject-feedback --critique-mode rules --output output
+```
+
+This does **not** retrain Pollinations/Flux. It improves *our* prompts and stores lessons so agent/human feedback compounds. Vision (`openai`) or human critique is what actually judges pixels; `rules` strengthens known hard cases (elliptical wings, breed features, no-people cues) before and between retries.
+
 ### Phase C — Format brief from references (gate: written page/cover spec)
 
 - Study **rights-safe** colour-by-numbers examples (own purchases, public-domain / explicitly licensed pages)—**not** scraped commercial books as training or copy targets.

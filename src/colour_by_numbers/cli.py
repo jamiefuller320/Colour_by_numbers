@@ -282,6 +282,30 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip attaching the Phase B plate-quality report",
     )
+    parser.add_argument(
+        "--subject-feedback",
+        action="store_true",
+        help=(
+            "Critique → revise → retry loop: is the plate recognisable as the "
+            "requested subject, and how should the prompt improve? "
+            "(API backends only; stores lessons under data/subject_lessons.jsonl)"
+        ),
+    )
+    parser.add_argument(
+        "--critique-mode",
+        choices=["rules", "openai", "human"],
+        default="rules",
+        help=(
+            "Subject-feedback critic: rules (offline), openai (vision, needs "
+            "OPENAI_API_KEY), or human (interactive). Default: rules"
+        ),
+    )
+    parser.add_argument(
+        "--max-feedback-attempts",
+        type=int,
+        default=3,
+        help="Max generate/critique rounds when --subject-feedback is set (default: 3)",
+    )
     return parser
 
 
@@ -366,6 +390,9 @@ def main(argv: list[str] | None = None) -> int:
             min_region_mm=args.min_region_mm,
             check_quality=not args.no_quality_check,
             require_quality=args.require_quality,
+            subject_feedback=args.subject_feedback,
+            critique_mode=args.critique_mode,
+            max_feedback_attempts=args.max_feedback_attempts,
         )
         result = page.result
         stem_base = page.subject_type.label
@@ -380,6 +407,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Subject type: {page.subject_type.label}")
         if page.quality is not None:
             print(page.quality.summary())
+        if page.feedback is not None:
+            print(page.feedback.notes)
+            for i, attempt in enumerate(page.feedback.attempts, start=1):
+                c = attempt.critique
+                print(
+                    f"  attempt {i}: recognisable={c.recognisable} "
+                    f"confidence={c.confidence:.2f} accepted={attempt.accepted}"
+                )
+                for issue in c.issues:
+                    print(f"    issue: {issue}")
+                for tip in c.improvements[:3]:
+                    print(f"    improve: {tip}")
         if page.illustration.prompt:
             print(f"Prompt: {page.illustration.prompt}")
         if page.illustration.reference_url:
