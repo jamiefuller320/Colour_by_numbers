@@ -56,6 +56,12 @@ colour-by-numbers --query dogs --type "pug" --illustrate --output output
 colour-by-numbers --query dogs --type "pug" --illustrate \
   --illustration-backend pollinations --output output
 
+# Subject-recognition feedback loop (critique → revise → retry → learn)
+colour-by-numbers --query aircraft --type spitfire --illustrate \
+  --subject-feedback --critique-mode rules --output output
+# Dry-run the critic/revise path without generating:
+#   python scripts/subject_feedback_loop.py --query aircraft --type spitfire --dry-run
+
 # Optional OpenAI Images backend (requires OPENAI_API_KEY)
 colour-by-numbers --query dogs --type "pug" --illustrate \
   --illustration-backend openai --output output
