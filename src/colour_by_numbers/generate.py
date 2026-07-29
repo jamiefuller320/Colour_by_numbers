@@ -16,15 +16,27 @@ from .discover import (
 )
 from .illustrate import (
     DEFAULT_ILLUSTRATION_SIZE,
+    AVAILABLE_ILLUSTRATION_BACKENDS,
     IllustrationResult,
     generate_illustration,
 )
 from .palette import DEFAULT_ILLUSTRATION_COLOURS, MAX_N_COLOURS, clamp_n_colours
 from .pipeline import ColourByNumbersResult, create_colour_by_numbers
-from .print_resolution import DEFAULT_MIN_REGION_MM, evaluate_print_resolution
+from .print_resolution import evaluate_print_resolution
+from .quality import (
+    PHASE_B_MIN_REGION_MM,
+    PHASE_B_PRIMARY_BACKEND,
+    PlateQualityReport,
+    assert_plate_quality,
+    evaluate_plate_quality,
+)
 from .search import ImageHit, download_image
 
 logger = logging.getLogger(__name__)
+
+# Phase B lock: rights-safe text-to-image is the default publish path.
+DEFAULT_ILLUSTRATION_BACKEND = PHASE_B_PRIMARY_BACKEND
+assert DEFAULT_ILLUSTRATION_BACKEND in AVAILABLE_ILLUSTRATION_BACKENDS
 
 
 @dataclass(frozen=True)
@@ -35,6 +47,7 @@ class GeneratedPage:
     result: ColourByNumbersResult
     subject_type: SubjectType
     reference_hit: ImageHit | None = None
+    quality: PlateQualityReport | None = None
 
 
 def gather_reference_hits(
@@ -109,7 +122,7 @@ def generate_colouring_page(
     subject_type: str | None = None,
     type_pick: int = 0,
     discover_types: bool = True,
-    backend: str = "local_stylize",
+    backend: str = DEFAULT_ILLUSTRATION_BACKEND,
     n_colours: int = DEFAULT_ILLUSTRATION_COLOURS,
     illustration_colours: int = DEFAULT_ILLUSTRATION_COLOURS,
     illustration_size: int = DEFAULT_ILLUSTRATION_SIZE,
@@ -117,11 +130,13 @@ def generate_colouring_page(
     complexity: str = "fine",
     subject_mode: str = "off",
     min_a4_dpi: float | None = None,
-    min_region_mm: float = DEFAULT_MIN_REGION_MM,
+    min_region_mm: float = PHASE_B_MIN_REGION_MM,
     openai_api_key: str | None = None,
     prompt_override: str | None = None,
     pollinations_model: str = "flux",
     seed: int | None = None,
+    check_quality: bool = True,
+    require_quality: bool = False,
     **pipeline_kwargs,
 ) -> GeneratedPage:
     """Discover type → gather references → illustrate → colour-by-numbers.
@@ -131,6 +146,10 @@ def generate_colouring_page(
     Illustration colour counts are clamped to 8–16; colouring regions are
     floored so each colourable block is at least ``min_region_mm`` wide and
     high on A4; finer detail becomes black line drawing.
+
+    Phase B: default backend is ``pollinations`` (rights-safe generation).
+    When ``check_quality`` is True, attach a ``PlateQualityReport``. When
+    ``require_quality`` is True, fail the run if the checklist does not pass.
     """
     discovery = discover_subject_types(
         query,
@@ -222,9 +241,28 @@ def generate_colouring_page(
         subject_type_label=chosen.label,
         subject_type_query=chosen.search_query,
     )
+
+    quality: PlateQualityReport | None = None
+    if check_quality or require_quality:
+        if require_quality:
+            quality = assert_plate_quality(
+                result,
+                colour_plate=illustration.image,
+                min_region_mm=min_region_mm,
+            )
+        else:
+            quality = evaluate_plate_quality(
+                result,
+                colour_plate=illustration.image,
+                min_region_mm=min_region_mm,
+            )
+            if not quality.passed:
+                logger.warning("Plate quality gate:\n%s", quality.summary())
+
     return GeneratedPage(
         illustration=illustration,
         result=result,
         subject_type=chosen,
         reference_hit=reference_hit,
+        quality=quality,
     )

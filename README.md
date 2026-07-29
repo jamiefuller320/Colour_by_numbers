@@ -4,6 +4,8 @@ Search the web for images by description (for example `aircraft` or `dogs`), map
 
 **North star:** generate rights-safe, varied colour plate *sets* from a keyword/phrase, convert them into correctly labelled outlines a person can colour to reconstruct each image, add full-colour covers, and compile a printable book. See [NORTH_STAR.md](NORTH_STAR.md).
 
+**Phase B (active):** primary generator is Pollinations; every plate can be scored with the pass/fail checklist (`python scripts/phase_b_plate_check.py --offline --require`).
+
 ## What it produces
 
 For each source image the tool writes:
