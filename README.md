@@ -73,11 +73,12 @@ colour-by-numbers --query dogs --type "pug" --illustrate \
   --illustration-backend openai --output output
 ```
 
-**Test bed UI** (best place to compare backends):
+**Test bed UI** (best place to compare backends and Phase D sets):
 
 ```bash
 # Local Streamlit (full Python pipeline)
 streamlit run testbed_app.py --server.port 8502
+# Sidebar → enable “Set mode (varied plates)” to plan/generate aspect–scene sets
 ```
 
 **GitHub Pages (static Pollinations test bed)** — no install, runs in the browser:
