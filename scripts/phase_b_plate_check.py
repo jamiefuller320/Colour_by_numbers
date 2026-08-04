@@ -32,14 +32,14 @@ from colour_by_numbers.quality import (  # noqa: E402
 
 
 def _synthetic_plate(size: int = 420) -> Image.Image:
-    """Large flat colour blocks that should pass the 8mm A4 gate."""
+    """Subject-heavy flat blocks that pass Phase B + C format-brief gates."""
     image = Image.new("RGB", (size, size), (240, 238, 232))
     draw = ImageDraw.Draw(image)
-    draw.ellipse((40, 40, 200, 200), fill=(230, 170, 60))
-    draw.rectangle((220, 40, 380, 200), fill=(50, 110, 210))
-    draw.rectangle((40, 220, 200, 380), fill=(90, 50, 30))
-    draw.ellipse((220, 220, 380, 380), fill=(50, 150, 60))
-    draw.ellipse((140, 140, 180, 180), fill=(18, 18, 18))
+    draw.ellipse((30, 30, 250, 250), fill=(230, 170, 60))
+    draw.rectangle((200, 40, 390, 210), fill=(50, 110, 210))
+    draw.rectangle((30, 200, 220, 390), fill=(90, 50, 30))
+    draw.ellipse((200, 200, 390, 390), fill=(50, 150, 60))
+    draw.ellipse((140, 140, 190, 190), fill=(18, 18, 18))
     return image
 
 

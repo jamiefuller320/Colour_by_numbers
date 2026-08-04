@@ -1,4 +1,4 @@
-"""Tests for Phase B plate-quality gate."""
+"""Tests for Phase B / C plate-quality gate."""
 
 from __future__ import annotations
 
@@ -8,21 +8,36 @@ from PIL import Image, ImageDraw
 
 from colour_by_numbers.pipeline import create_colour_by_numbers
 from colour_by_numbers.quality import (
+    COLOURABLE_FILL_MIN,
+    MAX_COLOUR_SHARE,
     PHASE_B_MIN_REGION_MM,
     PHASE_B_PRIMARY_BACKEND,
+    SUBJECT_FILL_MIN,
     PlateQualityError,
     assert_plate_quality,
     evaluate_plate_quality,
+    max_colour_share,
+    subject_fill_fraction,
 )
 
 
 def _large_block_plate(size: int = 420) -> Image.Image:
+    """Subject-heavy plate aligned with the Phase C format brief."""
     image = Image.new("RGB", (size, size), (240, 238, 232))
     draw = ImageDraw.Draw(image)
-    draw.ellipse((40, 40, 200, 200), fill=(230, 170, 60))
-    draw.rectangle((220, 40, 380, 200), fill=(50, 110, 210))
-    draw.rectangle((40, 220, 200, 380), fill=(90, 50, 30))
-    draw.ellipse((220, 220, 380, 380), fill=(50, 150, 60))
+    # Large subject fills most of the frame; thin pale margin as background.
+    draw.ellipse((30, 30, 250, 250), fill=(230, 170, 60))
+    draw.rectangle((200, 40, 390, 210), fill=(50, 110, 210))
+    draw.rectangle((30, 200, 220, 390), fill=(90, 50, 30))
+    draw.ellipse((200, 200, 390, 390), fill=(50, 150, 60))
+    return image
+
+
+def _empty_field_plate(size: int = 420) -> Image.Image:
+    """Tiny subject on a flooded background — should fail format-brief metrics."""
+    image = Image.new("RGB", (size, size), (240, 238, 232))
+    draw = ImageDraw.Draw(image)
+    draw.ellipse((180, 180, 240, 240), fill=(230, 170, 60))
     return image
 
 
@@ -107,3 +122,52 @@ def test_quality_gate_flags_tiny_speckles() -> None:
     )
     names = {check.name: check for check in report.checks}
     assert not names["colourable_block_size"].passed
+
+
+def test_format_brief_thresholds_are_documented_defaults() -> None:
+    assert COLOURABLE_FILL_MIN == 0.90
+    assert MAX_COLOUR_SHARE == 0.50
+    assert SUBJECT_FILL_MIN == 0.50
+
+
+def test_quality_gate_passes_format_brief_composition() -> None:
+    plate = _large_block_plate()
+    result = create_colour_by_numbers(
+        plate,
+        n_colours=12,
+        max_size=420,
+        complexity="simple",
+        subject_mode="off",
+        palette_mode="standard",
+        min_region_mm=PHASE_B_MIN_REGION_MM,
+        min_a4_dpi=None,
+    )
+    report = evaluate_plate_quality(
+        result, colour_plate=plate, min_region_mm=PHASE_B_MIN_REGION_MM
+    )
+    names = {check.name: check for check in report.checks}
+    assert names["colourable_fill_fraction"].passed, report.summary()
+    assert names["max_colour_share"].passed, report.summary()
+    assert names["subject_fill_fraction"].passed, report.summary()
+    assert max_colour_share(result.page.labels) <= MAX_COLOUR_SHARE
+    assert subject_fill_fraction(result.page.labels) >= SUBJECT_FILL_MIN
+
+
+def test_quality_gate_fails_empty_background_field() -> None:
+    plate = _empty_field_plate()
+    result = create_colour_by_numbers(
+        plate,
+        n_colours=8,
+        max_size=420,
+        complexity="simple",
+        subject_mode="off",
+        palette_mode="standard",
+        min_region_mm=PHASE_B_MIN_REGION_MM,
+        min_a4_dpi=None,
+    )
+    report = evaluate_plate_quality(
+        result, colour_plate=plate, min_region_mm=PHASE_B_MIN_REGION_MM
+    )
+    names = {check.name: check for check in report.checks}
+    assert not names["max_colour_share"].passed or not names["subject_fill_fraction"].passed
+    assert not report.passed

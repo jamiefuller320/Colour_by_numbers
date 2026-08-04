@@ -72,8 +72,9 @@ Do not grow an endless name list; add an override only when hypernym + negatives
 
 ### Next step (recommended now)
 
-Phase B is the active build gate (see below). After a single subject passes the
-checklist on the primary backend, move to Phase C (format brief).
+Phase C format brief is written and its composition metrics are in the quality
+gate. After plates reliably pass B+C on the primary backend, move to Phase D
+(set generation).
 
 ### Phase B — Plate quality bar (gate: colourable reconstructible single plate)
 
@@ -130,9 +131,23 @@ This does **not** retrain Pollinations/Flux. It improves *our* prompts and store
 
 ### Phase C — Format brief from references (gate: written page/cover spec)
 
+**Status:** brief landed in [`FORMAT_BRIEF.md`](FORMAT_BRIEF.md); composition checks encoded in `colour_by_numbers.quality`.
+
 - Study **rights-safe** colour-by-numbers examples (own purchases, public-domain / explicitly licensed pages)—**not** scraped commercial books as training or copy targets.
 - Extract a short **format brief**: typical page layout, subject fill, legend placement, cover formula, difficulty banding.
 - Encode that brief as generation + layout constraints (this repo’s print rules), not as cloned artwork.
+
+**Encoded composition metrics** (defaults; tune only with evidence):
+
+| Check | Threshold |
+|-------|-----------|
+| Colourable fill (not ink/line) | ≥ **90%** of page |
+| Max single colour share | ≤ **50%** of page |
+| Subject fill (non-background colours) | ≥ **50%** of page |
+
+```bash
+python scripts/phase_b_plate_check.py --offline --require
+```
 
 ### Phase D — Set generation (gate: N varied plates, one phrase)
 
