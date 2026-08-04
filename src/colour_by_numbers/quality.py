@@ -1,7 +1,10 @@
-"""Phase B plate-quality gate: pass/fail checks for a single colouring plate.
+"""Plate-quality gate: pass/fail checks for a single colouring plate.
 
-The north-star unit before sets/covers is one rights-safe plate that a human
-can colour from the numbered outline to reconstruct the flat colour image.
+Phase B: rights-safe plate a human can colour from the numbered outline to
+reconstruct the flat colour image.
+
+Phase C: format-brief composition metrics (colourable fill, dominant-colour
+cap, subject fill) from ``FORMAT_BRIEF.md``.
 """
 
 from __future__ import annotations
@@ -30,6 +33,11 @@ PHASE_B_PRIMARY_MODEL = "flux"
 RECONSTRUCT_MATCH_MIN = 0.995
 # Mean |RGB| difference between illustration and flat colour plate on fill pixels.
 ILLUSTRATION_MEAN_DIFF_MAX = 45.0
+
+# Phase C format-brief composition bar (see FORMAT_BRIEF.md).
+COLOURABLE_FILL_MIN = 0.90
+MAX_COLOUR_SHARE = 0.50
+SUBJECT_FILL_MIN = 0.50
 
 
 @dataclass(frozen=True)
@@ -104,6 +112,42 @@ def _undersized_region_count(
     return bad
 
 
+def _border_dominant_label(labels: np.ndarray) -> int:
+    """Palette index that dominates the image border (proxy for background)."""
+    border = np.concatenate(
+        [
+            labels[0, :].ravel(),
+            labels[-1, :].ravel(),
+            labels[:, 0].ravel(),
+            labels[:, -1].ravel(),
+        ]
+    )
+    return int(np.bincount(border.astype(np.int64)).argmax())
+
+
+def colourable_fill_fraction(ink_mask: np.ndarray) -> float:
+    """Fraction of pixels that are fillable (not outline/line ink)."""
+    if ink_mask.size == 0:
+        return 0.0
+    return float((~ink_mask).mean())
+
+
+def max_colour_share(labels: np.ndarray) -> float:
+    """Largest single palette-index share of the page."""
+    if labels.size == 0:
+        return 1.0
+    counts = np.bincount(labels.astype(np.int64).ravel())
+    return float(counts.max() / labels.size)
+
+
+def subject_fill_fraction(labels: np.ndarray) -> float:
+    """Fraction of pixels that are not the border-dominant background colour."""
+    if labels.size == 0:
+        return 0.0
+    background = _border_dominant_label(labels)
+    return float(np.mean(labels != background))
+
+
 def evaluate_plate_quality(
     result: ColourByNumbersResult,
     *,
@@ -111,6 +155,9 @@ def evaluate_plate_quality(
     min_region_mm: float = PHASE_B_MIN_REGION_MM,
     min_colours: int = MIN_N_COLOURS,
     max_colours: int = MAX_N_COLOURS,
+    min_colourable_fill: float = COLOURABLE_FILL_MIN,
+    max_single_colour_share: float = MAX_COLOUR_SHARE,
+    min_subject_fill: float = SUBJECT_FILL_MIN,
 ) -> PlateQualityReport:
     """Run the Phase B pass/fail checklist on a colour-by-numbers result.
 
@@ -243,6 +290,43 @@ def evaluate_plate_quality(
         )
     )
 
+    # Phase C format-brief composition metrics.
+    fill_fraction = colourable_fill_fraction(ink)
+    checks.append(
+        QualityCheck(
+            name="colourable_fill_fraction",
+            passed=fill_fraction >= min_colourable_fill,
+            detail=(
+                f"{fill_fraction:.1%} of page is colourable fill "
+                f"(min {min_colourable_fill:.0%})"
+            ),
+        )
+    )
+
+    dominant_share = max_colour_share(labels)
+    checks.append(
+        QualityCheck(
+            name="max_colour_share",
+            passed=dominant_share <= max_single_colour_share,
+            detail=(
+                f"largest single colour covers {dominant_share:.1%} of page "
+                f"(max {max_single_colour_share:.0%})"
+            ),
+        )
+    )
+
+    subject_fraction = subject_fill_fraction(labels)
+    checks.append(
+        QualityCheck(
+            name="subject_fill_fraction",
+            passed=subject_fraction >= min_subject_fill,
+            detail=(
+                f"non-background colours cover {subject_fraction:.1%} of page "
+                f"(min {min_subject_fill:.0%})"
+            ),
+        )
+    )
+
     return PlateQualityReport(checks=tuple(checks), min_region_mm=min_region_mm)
 
 
@@ -266,9 +350,15 @@ __all__ = [
     "PHASE_B_MIN_REGION_MM",
     "PHASE_B_PRIMARY_BACKEND",
     "PHASE_B_PRIMARY_MODEL",
+    "COLOURABLE_FILL_MIN",
+    "MAX_COLOUR_SHARE",
+    "SUBJECT_FILL_MIN",
     "QualityCheck",
     "PlateQualityReport",
     "PlateQualityError",
+    "colourable_fill_fraction",
+    "max_colour_share",
+    "subject_fill_fraction",
     "evaluate_plate_quality",
     "assert_plate_quality",
     "DEFAULT_MIN_REGION_MM",
