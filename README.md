@@ -4,7 +4,7 @@ Search the web for images by description (for example `aircraft` or `dogs`), map
 
 **North star:** generate rights-safe, varied colour plate *sets* from a keyword/phrase, convert them into correctly labelled outlines a person can colour to reconstruct each image, add full-colour covers, and compile a printable book. See [NORTH_STAR.md](NORTH_STAR.md).
 
-**Phase B + C:** primary generator is Pollinations; plates are scored with the reconstructibility checklist plus format-brief composition metrics (colourable fill ≥90%, max colour ≤50%, subject fill ≥50%). See [FORMAT_BRIEF.md](FORMAT_BRIEF.md) and `python scripts/phase_b_plate_check.py --offline --require`.
+**Phase B–D:** Pollinations primary generator; single plates use the B/C quality checklist ([FORMAT_BRIEF.md](FORMAT_BRIEF.md)); sets use `--set-size` / `python scripts/phase_d_set_generate.py --plan-only`.
 
 ## What it produces
 
@@ -61,6 +61,12 @@ colour-by-numbers --query aircraft --type spitfire --illustrate \
   --subject-feedback --critique-mode rules --output output
 # Dry-run the critic/revise path without generating:
 #   python scripts/subject_feedback_loop.py --query aircraft --type spitfire --dry-run
+
+# Phase D: varied set from one phrase (aspect/scene slots)
+colour-by-numbers --query aircraft --type spitfire --illustrate \
+  --set-size 6 --plan-only --output output/spitfire-set
+colour-by-numbers --query dogs --type pug --illustrate \
+  --set-size 4 --seed 100 --output output/pug-set
 
 # Optional OpenAI Images backend (requires OPENAI_API_KEY)
 colour-by-numbers --query dogs --type "pug" --illustrate \

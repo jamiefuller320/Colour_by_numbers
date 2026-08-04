@@ -51,7 +51,14 @@ visual family rules.
 |------|--------|-------|
 | Simple | Fewer, larger fills | Younger colourists; still ≥8mm blocks |
 | Standard (default) | 8–16 colours, mixed region sizes above the floor | Current Phase B path |
-| Busy | More regions / scene elements | Only after set planner exists; never below 8mm fills |
+| Busy | More regions / scene elements | Phase D set slots may add light scene cues; never below 8mm fills |
+
+## Set variety (Phase D)
+
+One keyword/phrase → N plates that keep **the same subject identity** but change
+**aspect** (pose/angle) and **scene** (simple setting). Scene cues stay light so
+subject-fill ≥50% remains achievable. Reject near-duplicate plates and any plate
+that fails the interior metrics above.
 
 ## Encoded metrics (this repo)
 
