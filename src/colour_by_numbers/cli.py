@@ -306,6 +306,32 @@ def build_parser() -> argparse.ArgumentParser:
         default=3,
         help="Max generate/critique rounds when --subject-feedback is set (default: 3)",
     )
+    parser.add_argument(
+        "--set-size",
+        type=int,
+        default=0,
+        help=(
+            "Phase D: generate N varied aspect/scene plates for one phrase "
+            "(requires --illustrate). 0 = single plate (default)"
+        ),
+    )
+    parser.add_argument(
+        "--set-attempts",
+        type=int,
+        default=3,
+        help="Retries per set slot when quality/duplicate checks fail (default: 3)",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Base seed for illustration / set slots (default: unset / 0 for sets)",
+    )
+    parser.add_argument(
+        "--plan-only",
+        action="store_true",
+        help="With --set-size: print/write the set plan only (no image generation)",
+    )
     return parser
 
 
@@ -365,6 +391,69 @@ def main(argv: list[str] | None = None) -> int:
         if not args.query:
             print("--illustrate requires --query", file=sys.stderr)
             return 2
+
+        if args.set_size and args.set_size > 0:
+            import json
+
+            from .set_generate import generate_colouring_set
+            from .set_plan import plan_colouring_set
+
+            plan = plan_colouring_set(
+                args.query,
+                subject_type=args.subject_type,
+                type_pick=args.type_pick,
+                n_plates=args.set_size,
+                base_seed=args.seed if args.seed is not None else 0,
+                discover_types=not args.no_discover,
+            )
+            output_dir.mkdir(parents=True, exist_ok=True)
+            if args.plan_only:
+                (output_dir / "plan.json").write_text(
+                    json.dumps(plan.to_dict(), indent=2), encoding="utf-8"
+                )
+                print(f"Subject: {plan.subject_type.label} ({plan.subject_type.category})")
+                print(f"Planned {plan.n_plates} slots:")
+                for slot in plan.slots:
+                    print(
+                        f"  {slot.index:02d}. {slot.aspect} / {slot.scene} "
+                        f"(seed {slot.seed})"
+                    )
+                    print(f"      {slot.prompt[:120]}…")
+                print(f"Wrote {output_dir / 'plan.json'}")
+                return 0
+
+            generated = generate_colouring_set(
+                args.query,
+                plan=plan,
+                attempts_per_slot=args.set_attempts,
+                require_plate_quality=not args.no_quality_check,
+                output_dir=output_dir,
+                backend=args.illustration_backend,
+                illustration_colours=args.illustration_colours,
+                illustration_size=args.illustration_size,
+                n_colours=min(args.colours, 16) if args.colours else 12,
+                complexity=args.complexity,
+                subject_mode="off",
+                pollinations_model=args.pollinations_model,
+                min_region_mm=args.min_region_mm,
+                subject_feedback=args.subject_feedback,
+                critique_mode=args.critique_mode,
+                max_feedback_attempts=args.max_feedback_attempts,
+                max_size=args.max_size,
+                line_width=args.line_width,
+                max_regions=args.max_regions,
+                min_region_area=args.min_region_area,
+                structure_size=args.structure_size,
+                min_adjacent_delta_e=args.min_adjacent_delta_e,
+            )
+            print(f"Subject: {generated.plan.subject_type.label}")
+            for item in generated.results:
+                print(f"  {item.slot.slug}: {item.status} ({item.reason})")
+            if generated.quality is not None:
+                print(generated.quality.summary())
+            print(f"Wrote set under {output_dir}")
+            return 0 if generated.passed or not args.require_quality else 1
+
         from .generate import generate_colouring_page
 
         page = generate_colouring_page(
@@ -388,6 +477,7 @@ def main(argv: list[str] | None = None) -> int:
             structure_size=args.structure_size,
             pollinations_model=args.pollinations_model,
             min_region_mm=args.min_region_mm,
+            seed=args.seed,
             check_quality=not args.no_quality_check,
             require_quality=args.require_quality,
             subject_feedback=args.subject_feedback,

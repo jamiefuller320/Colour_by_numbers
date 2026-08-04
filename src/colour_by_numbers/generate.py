@@ -281,6 +281,9 @@ def generate_colouring_page(
         )
 
     # Illustrations are already flat; keep A4 filter off unless requested.
+    # Strip keys we set explicitly so CLI **kwargs cannot collide.
+    for key in ("palette_mode", "palette_category", "firm_border", "colour_refine"):
+        pipeline_kwargs.pop(key, None)
     pipeline_kwargs.setdefault("min_region_mm", min_region_mm)
     result = create_colour_by_numbers(
         illustration.image,

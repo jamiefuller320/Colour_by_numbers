@@ -1,5 +1,7 @@
 """Streamlit test bed for illustration backends (Pollinations / local / OpenAI).
 
+Supports single-plate runs and Phase D set generation (aspect/scene slots).
+
 Run with::
 
     streamlit run testbed_app.py --server.port 8502
@@ -23,6 +25,8 @@ from colour_by_numbers.illustrate import (
     illustration_prompt,
 )
 from colour_by_numbers.quality import PHASE_B_MIN_REGION_MM, PHASE_B_PRIMARY_BACKEND
+from colour_by_numbers.set_generate import generate_colouring_set
+from colour_by_numbers.set_plan import plan_colouring_set
 
 
 st.set_page_config(
@@ -36,7 +40,8 @@ st.write(
     "Try illustration backends for colouring pages. "
     "**Pollinations** needs no paid subscription. "
     "**Local stylize** uses a real reference photo. "
-    "**OpenAI** needs `OPENAI_API_KEY`."
+    "**OpenAI** needs `OPENAI_API_KEY`. "
+    "Use **Set mode** for Phase D aspect/scene variety."
 )
 
 with st.sidebar:
@@ -85,7 +90,7 @@ with st.sidebar:
         ),
     )
     seed = st.number_input(
-        "Seed (−1 = random)",
+        "Seed (−1 = random / 0 base for sets)",
         min_value=-1,
         max_value=999_999,
         value=-1,
@@ -93,10 +98,40 @@ with st.sidebar:
     )
     run_cbn = st.checkbox("Also build colour-by-numbers plate", value=True)
     require_quality = st.checkbox(
-        "Require Phase B quality gate",
+        "Require Phase B/C quality gate",
         value=False,
         help="Fail the run if the plate checklist does not pass.",
     )
+
+    st.divider()
+    st.subheader("Phase D — Set")
+    set_mode = st.checkbox(
+        "Set mode (varied plates)",
+        value=False,
+        help=(
+            "Plan/generate N aspect/scene plates for the chosen type. "
+            "Slot prompts replace the single prompt box."
+        ),
+        disabled=backend == "local_stylize",
+    )
+    set_size = st.slider(
+        "Set size (plates)",
+        min_value=2,
+        max_value=8,
+        value=4,
+        disabled=not set_mode,
+    )
+    set_attempts = st.slider(
+        "Attempts per slot",
+        min_value=1,
+        max_value=5,
+        value=2,
+        disabled=not set_mode,
+        help="Retries when a plate fails quality or is a near-duplicate.",
+    )
+
+    st.divider()
+    st.subheader("Subject feedback")
     subject_feedback = st.checkbox(
         "Subject recognition feedback loop",
         value=False,
@@ -111,7 +146,10 @@ with st.sidebar:
         options=["rules", "openai"],
         index=0,
         disabled=not subject_feedback,
-        help="rules = offline feature cues; openai = vision (needs OPENAI_API_KEY). Use CLI --critique-mode human for interactive review.",
+        help=(
+            "rules = offline feature cues; openai = vision (needs OPENAI_API_KEY). "
+            "Use CLI --critique-mode human for interactive review."
+        ),
     )
     max_feedback_attempts = st.slider(
         "Feedback attempts",
@@ -169,17 +207,82 @@ choice = st.selectbox(
 )
 chosen = types[choice]
 
-default_prompt = illustration_prompt(chosen.label, category=chosen.category)
-prompt = st.text_area("Illustration prompt", value=default_prompt, height=100)
+base_seed = 0 if seed < 0 else int(seed)
+planned = None
+if set_mode:
+    planned = plan_colouring_set(
+        category,
+        subject_type=chosen.label,
+        n_plates=set_size,
+        base_seed=base_seed,
+        discover_types=False,
+    )
+    st.markdown("**Set plan** (aspect / scene)")
+    for slot in planned.slots:
+        st.caption(f"{slot.index:02d}. **{slot.aspect}** — {slot.scene}")
+    with st.expander("Slot prompts"):
+        for slot in planned.slots:
+            st.markdown(f"**{slot.slug}**")
+            st.code(slot.prompt)
+else:
+    default_prompt = illustration_prompt(chosen.label, category=chosen.category)
+    prompt = st.text_area("Illustration prompt", value=default_prompt, height=100)
 
 with col_gen:
-    generate = st.button(
-        f"Generate with {backend}",
-        type="primary",
-        use_container_width=True,
-    )
+    if set_mode:
+        generate = st.button(
+            f"Generate set of {set_size} with {backend}",
+            type="primary",
+            use_container_width=True,
+        )
+    else:
+        generate = st.button(
+            f"Generate with {backend}",
+            type="primary",
+            use_container_width=True,
+        )
 
-if generate:
+if generate and set_mode and planned is not None:
+    with st.spinner(
+        f"Generating {set_size}-plate set via {backend}… "
+        "(Pollinations is slow / rate-limited; several minutes is normal)"
+    ):
+        try:
+            generated = generate_colouring_set(
+                category,
+                plan=planned,
+                attempts_per_slot=set_attempts,
+                require_plate_quality=require_quality,
+                backend=backend,
+                n_colours=n_colours,
+                illustration_colours=n_colours,
+                illustration_size=illustration_size,
+                complexity="fine",
+                subject_mode="off",
+                pollinations_model=pollinations_model,
+                min_region_mm=min_region_mm,
+                subject_feedback=subject_feedback,
+                critique_mode=critique_mode,
+                max_feedback_attempts=max_feedback_attempts,
+            )
+            st.session_state.testbed_set = generated
+            st.session_state.testbed_illustration = None
+            st.session_state.testbed_result = None
+            accepted = len(generated.accepted)
+            st.success(
+                f"Set for “{chosen.label}”: {accepted}/{planned.n_plates} accepted"
+            )
+            if generated.quality is not None:
+                if generated.quality.passed:
+                    st.info(generated.quality.summary())
+                else:
+                    st.warning(generated.quality.summary())
+            for item in generated.results:
+                st.caption(f"{item.slot.slug}: {item.status} — {item.reason}")
+        except Exception as exc:  # noqa: BLE001
+            st.error(f"Set generation failed: {exc}")
+
+elif generate and not set_mode:
     with st.spinner(f"Generating via {backend}… (Pollinations can take 20–60s)"):
         try:
             page = generate_colouring_page(
@@ -202,6 +305,7 @@ if generate:
                 critique_mode=critique_mode,
                 max_feedback_attempts=max_feedback_attempts,
             )
+            st.session_state.testbed_set = None
             st.session_state.testbed_illustration = page.illustration
             st.session_state.testbed_result = page.result if run_cbn else None
             st.session_state.testbed_type = chosen.label
@@ -226,10 +330,74 @@ if generate:
         except Exception as exc:  # noqa: BLE001
             st.error(f"Generation failed: {exc}")
 
+generated_set = st.session_state.get("testbed_set")
 illustration = st.session_state.get("testbed_illustration")
 result = st.session_state.get("testbed_result")
 
-if illustration is not None:
+if generated_set is not None:
+    st.divider()
+    st.subheader("Set results")
+    st.caption(
+        f"Subject “{generated_set.plan.subject_type.label}” · "
+        f"{len(generated_set.accepted)}/{generated_set.plan.n_plates} accepted"
+    )
+    if generated_set.quality is not None:
+        with st.expander("Set quality gate", expanded=not generated_set.quality.passed):
+            st.text(generated_set.quality.summary())
+
+    for item in generated_set.results:
+        status_icon = {"accepted": "✅", "rejected": "⚠️", "error": "❌"}.get(
+            item.status, "•"
+        )
+        with st.expander(
+            f"{status_icon} {item.slot.index:02d}. {item.slot.aspect} / "
+            f"{item.slot.scene} — {item.status}",
+            expanded=item.status == "accepted",
+        ):
+            st.caption(
+                f"{item.reason} · {item.attempts} attempt(s) · seed base {item.slot.seed}"
+            )
+            if item.page is None:
+                st.info("No plate for this slot.")
+                continue
+            page = item.page
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("**Illustration**")
+                st.image(page.illustration.image, use_container_width=True)
+                st.download_button(
+                    "Download illustration PNG",
+                    data=_png(page.illustration.image),
+                    file_name=f"{item.slot.slug}_illustration.png",
+                    mime="image/png",
+                    key=f"dl_illu_{item.slot.slug}",
+                    use_container_width=True,
+                )
+                if page.illustration.prompt:
+                    with st.expander("Prompt used"):
+                        st.code(page.illustration.prompt)
+            with c2:
+                st.markdown("**Colour-by-numbers outline**")
+                st.image(page.result.page.outline, use_container_width=True)
+                st.caption(
+                    f"{len(page.result.page.regions)} numbered blocks · "
+                    f"{page.result.quantized.n_colours} colours"
+                )
+                st.download_button(
+                    "Download outline PNG",
+                    data=_png(page.result.page.outline),
+                    file_name=f"{item.slot.slug}_outline.png",
+                    mime="image/png",
+                    key=f"dl_out_{item.slot.slug}",
+                    use_container_width=True,
+                )
+                if page.quality is not None:
+                    st.text(page.quality.summary())
+                with st.expander("Colour preview + key"):
+                    st.image(page.result.quantized.preview, use_container_width=True)
+                    st.image(page.result.page.legend, use_container_width=True)
+
+elif illustration is not None:
     st.divider()
     st.subheader("Results")
     st.caption(
@@ -257,7 +425,7 @@ if illustration is not None:
             st.markdown("**Colour-by-numbers outline**")
             st.image(result.page.outline, use_container_width=True)
             st.caption(
-                f"{len(result.page.regions)} numbered blocks · "
+                f"{len(result.page.regions)} numbered regions · "
                 f"{result.quantized.n_colours} colours"
             )
             st.download_button(

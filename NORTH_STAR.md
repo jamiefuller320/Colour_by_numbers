@@ -72,9 +72,9 @@ Do not grow an endless name list; add an override only when hypernym + negatives
 
 ### Next step (recommended now)
 
-Phase C format brief is written and its composition metrics are in the quality
-gate. After plates reliably pass B+C on the primary backend, move to Phase D
-(set generation).
+Phase D set generation is available (`--set-size` / `plan_colouring_set`).
+After sets reliably pass the set gate on the primary backend, move to Phase E
+(covers + book compile).
 
 ### Phase B — Plate quality bar (gate: colourable reconstructible single plate)
 
@@ -151,9 +151,25 @@ python scripts/phase_b_plate_check.py --offline --require
 
 ### Phase D — Set generation (gate: N varied plates, one phrase)
 
+**Status:** planner + set runner landed (`set_plan` / `set_generate`).
+
 - Planner turns a keyword/phrase into aspect/scene slots (e.g. side view / takeoff / hangar).
 - Generate the set with shared palette language and subject identity.
-- Reject duplicates and off-brief plates.
+- Reject duplicates and off-brief plates (near-duplicate dHash + per-plate B/C checklist).
+
+```bash
+# Plan only (no network)
+python scripts/phase_d_set_generate.py --query aircraft --type spitfire \
+  --set-size 6 --plan-only
+
+# Live set via CLI
+colour-by-numbers --query dogs --type pug --illustrate \
+  --set-size 4 --seed 100 --output output/pug-set
+```
+
+Set gate (`evaluate_set_quality`): enough accepted plates, unique aspect/scene
+plan, each accepted plate passes Phase B/C, no near-duplicates, shared subject
+label. Manifest: `plan.json` + `manifest.json` under the output directory.
 
 ### Phase E — Covers + book compile (gate: print-ready PDF)
 
