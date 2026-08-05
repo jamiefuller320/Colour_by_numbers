@@ -54,6 +54,15 @@
           Seed (blank = random / 0 base for sets)
           <input id="seed" type="number" placeholder="e.g. 42" />
         </label>
+        <label class="full">
+          Pollinations API key
+          <input id="api-key" type="password" autocomplete="off" placeholder="sk_… or pk_… from enter.pollinations.ai" />
+        </label>
+        <p class="fineprint key-hint">
+          Pollinations now requires a key + a little
+          <a href="https://enter.pollinations.ai" target="_blank" rel="noopener">Pollen</a>
+          credit. The key stays in this browser only (localStorage).
+        </p>
 
         <fieldset class="set-controls">
           <legend>Phase D — Set</legend>
@@ -80,8 +89,7 @@
         <p class="fineprint">
           Animal plates keep warm earthy darks. Colourable fills must be at
           least ~8×8&nbsp;mm on A4; finer leftovers stay as black line detail.
-          Anonymous Pollinations use is rate-limited (~1 request / 15s) —
-          set mode waits between plates. Works on phone/tablet browsers.
+          Set mode waits ~16s between plates. Works on phone/tablet browsers.
         </p>
       </section>
 
