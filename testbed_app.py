@@ -38,7 +38,8 @@ st.set_page_config(
 st.title("Illustration test bed")
 st.write(
     "Try illustration backends for colouring pages. "
-    "**Pollinations** needs no paid subscription. "
+    "**Pollinations** needs `POLLINATIONS_API_KEY` + Pollen credit "
+    "(enter.pollinations.ai) — anonymous calls currently fail. "
     "**Local stylize** uses a real reference photo. "
     "**OpenAI** needs `OPENAI_API_KEY`. "
     "Use **Set mode** for Phase D aspect/scene variety."

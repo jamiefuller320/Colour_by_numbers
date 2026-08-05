@@ -3,8 +3,10 @@ const typeSelect = document.getElementById("type");
 const modelSelect = document.getElementById("model");
 const sizeSelect = document.getElementById("size");
 const seedInput = document.getElementById("seed");
+const apiKeyInput = document.getElementById("api-key");
 const coloursInput = document.getElementById("colours");
 const promptInput = document.getElementById("prompt");
+const API_KEY_STORAGE = "pollinations_api_key";
 const promptLabel = document.getElementById("prompt-label");
 const setModeInput = document.getElementById("set-mode");
 const setSizeInput = document.getElementById("set-size");
@@ -373,8 +375,34 @@ function showSetPreview() {
   setPreview.hidden = false;
 }
 
-function pollinationsUrl(prompt, { width, height, model, seed }) {
+function getPollinationsApiKey() {
+  const typed = (apiKeyInput?.value || "").trim();
+  if (typed) return typed;
+  try {
+    return (localStorage.getItem(API_KEY_STORAGE) || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function persistPollinationsApiKey() {
+  const key = (apiKeyInput?.value || "").trim();
+  try {
+    if (key) localStorage.setItem(API_KEY_STORAGE, key);
+    else localStorage.removeItem(API_KEY_STORAGE);
+  } catch {
+    /* private mode */
+  }
+}
+
+function pollinationsUrl(prompt, { width, height, model, seed, includeKey = true }) {
   const encoded = encodeURIComponent(prompt);
+  const key = getPollinationsApiKey();
+  // Authenticated path uses the current gateway; legacy host still accepts
+  // anonymous calls but currently fails with pollen/402 wrapped as HTTP 500.
+  const base = key
+    ? `https://gen.pollinations.ai/image/${encoded}`
+    : `https://image.pollinations.ai/prompt/${encoded}`;
   const params = new URLSearchParams({
     width: String(width),
     height: String(height),
@@ -385,11 +413,68 @@ function pollinationsUrl(prompt, { width, height, model, seed }) {
   if (seed !== null && seed !== undefined && seed !== "") {
     params.set("seed", String(seed));
   }
-  // Cache-bust so Generate always requests a fresh image when seed is blank.
   if (seed === null || seed === undefined || seed === "") {
     params.set("_", String(Date.now()));
   }
-  return `https://image.pollinations.ai/prompt/${encoded}?${params.toString()}`;
+  if (includeKey && key) {
+    params.set("key", key);
+  }
+  return `${base}?${params.toString()}`;
+}
+
+function explainPollinationsFailure(status, bodyText) {
+  let message = bodyText || "";
+  try {
+    const data = JSON.parse(bodyText);
+    message =
+      data?.error?.message ||
+      data?.message ||
+      (typeof data?.error === "string" ? data.error : "") ||
+      message;
+  } catch {
+    /* keep raw */
+  }
+  const lower = String(message).toLowerCase();
+  if (
+    lower.includes("insufficient balance") ||
+    lower.includes("payment_required") ||
+    lower.includes("pollen")
+  ) {
+    return (
+      "Pollinations needs Pollen credit (and usually an API key). " +
+      "Get a key / top up at enter.pollinations.ai, paste the key above, then retry. " +
+      `(${message.slice(0, 180)})`
+    );
+  }
+  if (
+    status === 401 ||
+    lower.includes("authentication required") ||
+    lower.includes("unauthorized")
+  ) {
+    return (
+      "Pollinations authentication required. Paste an API key from " +
+      "enter.pollinations.ai into the field above. " +
+      `(HTTP ${status})`
+    );
+  }
+  return `Pollinations failed (HTTP ${status}): ${message.slice(0, 240) || "unknown error"}`;
+}
+
+async function fetchPollinationsImage(url) {
+  const key = getPollinationsApiKey();
+  const headers = key ? { Authorization: `Bearer ${key}` } : {};
+  const response = await fetch(url, { mode: "cors", headers });
+  if (!response.ok) {
+    const bodyText = await response.text();
+    throw new Error(explainPollinationsFailure(response.status, bodyText));
+  }
+  const blob = await response.blob();
+  if (!blob.type.startsWith("image/")) {
+    // Some gateways return JSON errors with 200 + wrong type; surface them.
+    const text = await blob.text();
+    throw new Error(explainPollinationsFailure(response.status, text));
+  }
+  return blob;
 }
 
 function mmPerPixelOnA4(width, height) {
@@ -1147,21 +1232,28 @@ function clearOutlinePreview() {
 async function generateOnePlate({ prompt, seed, stem, updateMainPreview }) {
   const size = Number(sizeSelect.value);
   const nColours = clampColours(coloursInput?.value || 12);
+  if (!getPollinationsApiKey()) {
+    throw new Error(
+      "Add a Pollinations API key above (enter.pollinations.ai). " +
+        "Anonymous generation currently fails with insufficient Pollen."
+    );
+  }
+  persistPollinationsApiKey();
   const url = pollinationsUrl(prompt, {
     width: size,
     height: size,
     model: modelSelect.value,
     seed,
   });
+  const publicUrl = pollinationsUrl(prompt, {
+    width: size,
+    height: size,
+    model: modelSelect.value,
+    seed,
+    includeKey: false,
+  });
 
-  const response = await fetch(url, { mode: "cors" });
-  if (!response.ok) {
-    throw new Error(`Pollinations returned HTTP ${response.status}`);
-  }
-  const blob = await response.blob();
-  if (!blob.type.startsWith("image/")) {
-    throw new Error(`Unexpected content type: ${blob.type || "unknown"}`);
-  }
+  const blob = await fetchPollinationsImage(url);
 
   const rawUrl = URL.createObjectURL(blob);
   try {
@@ -1192,7 +1284,7 @@ async function generateOnePlate({ prompt, seed, stem, updateMainPreview }) {
     if (updateMainPreview) {
       showImage(imageEl, frame, objectUrl);
       showImage(outlineImageEl, outlineFrame, outlineUrl);
-      openDirect.href = url;
+      openDirect.href = publicUrl;
       openDirect.hidden = false;
       downloadLink.href = objectUrl;
       downloadLink.download = `${stem}.png`;
@@ -1203,7 +1295,7 @@ async function generateOnePlate({ prompt, seed, stem, updateMainPreview }) {
     }
 
     return {
-      url,
+      url: publicUrl,
       objectUrl,
       outlineUrl,
       usedColours: prepared.usedColours,
@@ -1338,26 +1430,8 @@ async function generate() {
       "ok"
     );
   } catch (err) {
-    const size = Number(sizeSelect.value);
-    const url = pollinationsUrl(prompt, {
-      width: size,
-      height: size,
-      model: modelSelect.value,
-      seed,
-    });
-    // Fallback: embed directly (works even if CORS fetch fails).
-    imageEl.src = url;
-    imageEl.hidden = false;
-    frame.classList.remove("empty");
-    frame.querySelector(".placeholder")?.remove();
-    openDirect.href = url;
-    openDirect.hidden = false;
-    downloadLink.hidden = true;
     clearOutlinePreview();
-    setStatus(
-      `Showing raw Pollinations image (post-process skipped: ${err.message}).`,
-      "ok"
-    );
+    setStatus(err.message || String(err), "error");
   } finally {
     generateBtn.disabled = false;
   }
@@ -1380,10 +1454,24 @@ async function init() {
   }
   fillTypes();
   refreshSetPlan();
+  try {
+    const saved = localStorage.getItem(API_KEY_STORAGE) || "";
+    if (apiKeyInput && saved) apiKeyInput.value = saved;
+  } catch {
+    /* ignore */
+  }
+  if (!getPollinationsApiKey()) {
+    setStatus(
+      "Pollinations now needs an API key + Pollen credit. " +
+        "Add a key from enter.pollinations.ai before generating.",
+      "error"
+    );
+  }
   categorySelect.addEventListener("change", fillTypes);
   typeSelect.addEventListener("change", resetPrompt);
   coloursInput?.addEventListener("change", resetPrompt);
   seedInput?.addEventListener("change", refreshSetPlan);
+  apiKeyInput?.addEventListener("change", persistPollinationsApiKey);
   setModeInput?.addEventListener("change", refreshSetPlan);
   setSizeInput?.addEventListener("change", refreshSetPlan);
   resetBtn.addEventListener("click", resetPrompt);
