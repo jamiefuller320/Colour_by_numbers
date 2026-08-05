@@ -5,6 +5,14 @@ const sizeSelect = document.getElementById("size");
 const seedInput = document.getElementById("seed");
 const coloursInput = document.getElementById("colours");
 const promptInput = document.getElementById("prompt");
+const promptLabel = document.getElementById("prompt-label");
+const setModeInput = document.getElementById("set-mode");
+const setSizeInput = document.getElementById("set-size");
+const setPlanEl = document.getElementById("set-plan");
+const singlePreview = document.getElementById("single-preview");
+const setPreview = document.getElementById("set-preview");
+const setSummary = document.getElementById("set-summary");
+const setGallery = document.getElementById("set-gallery");
 const generateBtn = document.getElementById("generate");
 const resetBtn = document.getElementById("reset-prompt");
 const statusEl = document.getElementById("status");
@@ -15,6 +23,91 @@ const outlineImageEl = document.getElementById("outline-image");
 const openDirect = document.getElementById("open-direct");
 const downloadLink = document.getElementById("download");
 const downloadOutline = document.getElementById("download-outline");
+
+// Keep in sync with colour_by_numbers.set_plan.CATEGORY_SLOT_BANK
+const CATEGORY_SLOT_BANK = {
+  aircraft: [
+    ["side view", "clear sky", "full aeroplane silhouette, side profile"],
+    ["three-quarter view", "airfield", "parked on tarmac, wheels visible"],
+    ["front view", "runway", "nose and propeller facing the viewer"],
+    ["in flight", "above soft clouds", "banking gently, wheels up"],
+    ["takeoff", "runway", "wheels just leaving the ground"],
+    ["hangar", "hangar doorway", "aeroplane framed in hangar opening"],
+    ["landing", "runway approach", "low approach, landing gear down"],
+    ["top view", "plain background", "plan-view silhouette, wings spread"],
+  ],
+  dogs: [
+    ["portrait", "plain background", "head and shoulders facing viewer"],
+    ["sitting", "garden lawn", "full body sitting, tail visible"],
+    ["standing side view", "park path", "full body side profile"],
+    ["lying down", "rug", "relaxed dog lying facing viewer"],
+    ["running", "open field", "dog in mid-stride, simple ground"],
+    ["puppy pose", "plain background", "playful sit, oversized paws"],
+    ["looking up", "kitchen floor", "head tilted upward"],
+    ["three-quarter view", "yard", "standing three-quarter body view"],
+  ],
+  cats: [
+    ["portrait", "plain background", "head and shoulders facing viewer"],
+    ["sitting", "windowsill", "cat sitting upright, full body"],
+    ["side view", "garden", "standing side profile"],
+    ["curled sleeping", "cushion", "cat curled asleep"],
+    ["stretching", "plain background", "cat in long stretch pose"],
+    ["crouching", "grass", "alert crouch, simple ground"],
+    ["looking back", "plain background", "over-shoulder glance"],
+    ["kitten pose", "blanket", "small kitten sitting"],
+  ],
+  birds: [
+    ["perched side view", "branch", "bird on simple branch, side profile"],
+    ["portrait", "plain background", "head and chest facing viewer"],
+    ["wings spread", "clear sky", "bird gliding, wings open"],
+    ["taking off", "branch", "wings raised leaving perch"],
+    ["standing", "ground", "full body standing bird"],
+    ["three-quarter view", "plain background", "body angled toward viewer"],
+    ["nesting", "nest", "bird on simple nest"],
+    ["in flight", "sky", "side flying silhouette"],
+  ],
+  flowers: [
+    ["centred portrait", "plain background", "single bloom filling the frame"],
+    ["side view", "plain background", "bloom and stem from the side"],
+    ["bud and bloom", "plain background", "open flower beside a bud"],
+    ["top view", "plain background", "looking down into the bloom"],
+    ["in a pot", "simple pot", "potted plant, centred"],
+    ["bouquet pair", "plain background", "two stems, still simple"],
+    ["close petal study", "plain background", "large centred bloom"],
+    ["garden patch", "simple ground", "one main flower, minimal leaves"],
+  ],
+  cars: [
+    ["side view", "road", "full car silhouette, side profile"],
+    ["three-quarter front", "driveway", "front and side visible"],
+    ["front view", "plain background", "headlights facing viewer"],
+    ["rear three-quarter", "street", "rear and side visible"],
+    ["parked", "garage", "car beside simple garage"],
+    ["on the road", "open road", "driving scene, simple horizon"],
+    ["top view", "plain background", "plan-view car silhouette"],
+    ["classic pose", "showroom", "centred three-quarter display"],
+  ],
+  boats: [
+    ["side view", "calm water", "full boat silhouette on water"],
+    ["three-quarter view", "harbour", "boat angled toward viewer"],
+    ["front view", "water", "bow facing viewer"],
+    ["sailing", "open sea", "under sail, simple waves"],
+    ["docked", "pier", "tied at a simple pier"],
+    ["top view", "plain water", "plan-view boat silhouette"],
+    ["rowing", "lake", "small boat with oars"],
+    ["at anchor", "bay", "boat floating, simple shoreline"],
+  ],
+};
+const DEFAULT_SLOT_BANK = [
+  ["portrait", "plain background", "centred subject, clear silhouette"],
+  ["side view", "plain background", "full side profile"],
+  ["three-quarter view", "simple setting", "angled toward the viewer"],
+  ["action pose", "open space", "subject mid-action, simple ground"],
+  ["close-up", "plain background", "head or main feature fills frame"],
+  ["full body", "simple ground", "entire subject visible"],
+  ["looking left", "plain background", "subject facing left"],
+  ["looking right", "plain background", "subject facing right"],
+];
+const POLLINATIONS_GAP_MS = 16000;
 
 // Standard crayon set aligned with Python STANDARD_PALETTE_32 (truncated to 24
 // for the browser path; darks / earths are kept dense for animal subjects).
@@ -195,6 +288,89 @@ function resetPrompt() {
   const category = categorySelect.value;
   const label = typeSelect.value;
   promptInput.value = buildPrompt(label, category, coloursInput?.value);
+  refreshSetPlan();
+}
+
+function slotSlug(index, aspect, scene) {
+  const raw = `${String(index).padStart(2, "0")}-${aspect}-${scene}`;
+  return raw
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60);
+}
+
+function composeSlotPrompt(label, category, aspect, scene, composition) {
+  const base = buildPrompt(label, category, coloursInput?.value);
+  return (
+    `${base}, aspect: ${aspect}, scene: ${scene}, ${composition}, ` +
+    `same subject identity, distinct pose from other pages in the set, ` +
+    `subject fills most of the frame`
+  );
+}
+
+function planSetSlots() {
+  const category = categorySelect.value;
+  const label = typeSelect.value;
+  const n = Math.max(2, Math.min(8, Number(setSizeInput.value) || 4));
+  const seedRaw = seedInput.value.trim();
+  const baseSeed = seedRaw === "" ? 0 : Number(seedRaw) || 0;
+  const bank = CATEGORY_SLOT_BANK[category] || DEFAULT_SLOT_BANK;
+  const slots = [];
+  for (let i = 0; i < n; i += 1) {
+    let [aspect, scene, composition] = bank[i % bank.length];
+    if (i >= bank.length) {
+      scene = `${scene} variant ${Math.floor(i / bank.length) + 1}`;
+    }
+    slots.push({
+      index: i + 1,
+      aspect,
+      scene,
+      composition,
+      seed: baseSeed + i,
+      slug: slotSlug(i + 1, aspect, scene),
+      prompt: composeSlotPrompt(label, category, aspect, scene, composition),
+    });
+  }
+  return slots;
+}
+
+function refreshSetPlan() {
+  const on = Boolean(setModeInput?.checked);
+  setSizeInput.disabled = !on;
+  promptLabel.hidden = on;
+  promptInput.disabled = on;
+  setPlanEl.hidden = !on;
+  generateBtn.textContent = on
+    ? `Generate set of ${Math.max(2, Math.min(8, Number(setSizeInput.value) || 4))}`
+    : "Generate illustration";
+  if (!on) {
+    setPlanEl.innerHTML = "";
+    return;
+  }
+  const slots = planSetSlots();
+  setPlanEl.innerHTML = slots
+    .map(
+      (slot) =>
+        `<div><strong>${String(slot.index).padStart(2, "0")}.</strong> ` +
+        `${slot.aspect} — ${slot.scene}</div>`
+    )
+    .join("");
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function showSinglePreview() {
+  singlePreview.hidden = false;
+  setPreview.hidden = true;
+}
+
+function showSetPreview() {
+  singlePreview.hidden = true;
+  setPreview.hidden = false;
 }
 
 function pollinationsUrl(prompt, { width, height, model, seed }) {
@@ -968,17 +1144,9 @@ function clearOutlinePreview() {
   outlineImageEl.removeAttribute("src");
 }
 
-async function generate() {
-  const prompt = promptInput.value.trim();
-  if (!prompt) {
-    setStatus("Add a prompt first.", "error");
-    return;
-  }
-
+async function generateOnePlate({ prompt, seed, stem, updateMainPreview }) {
   const size = Number(sizeSelect.value);
   const nColours = clampColours(coloursInput?.value || 12);
-  const seedRaw = seedInput.value.trim();
-  const seed = seedRaw === "" ? null : Number(seedRaw);
   const url = pollinationsUrl(prompt, {
     width: size,
     height: size,
@@ -986,26 +1154,17 @@ async function generate() {
     seed,
   });
 
-  generateBtn.disabled = true;
-  setStatus("Generating via Pollinations… this can take 15–60 seconds.");
-  frame.classList.add("empty");
-  imageEl.hidden = true;
-  openDirect.hidden = true;
-  downloadLink.hidden = true;
-  clearOutlinePreview();
+  const response = await fetch(url, { mode: "cors" });
+  if (!response.ok) {
+    throw new Error(`Pollinations returned HTTP ${response.status}`);
+  }
+  const blob = await response.blob();
+  if (!blob.type.startsWith("image/")) {
+    throw new Error(`Unexpected content type: ${blob.type || "unknown"}`);
+  }
 
+  const rawUrl = URL.createObjectURL(blob);
   try {
-    // Prefer fetch so we can offer a real download blob; fall back to img src.
-    const response = await fetch(url, { mode: "cors" });
-    if (!response.ok) {
-      throw new Error(`Pollinations returned HTTP ${response.status}`);
-    }
-    const blob = await response.blob();
-    if (!blob.type.startsWith("image/")) {
-      throw new Error(`Unexpected content type: ${blob.type || "unknown"}`);
-    }
-
-    const rawUrl = URL.createObjectURL(blob);
     const rawImage = await new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
@@ -1013,18 +1172,13 @@ async function generate() {
       img.src = rawUrl;
     });
 
-    setStatus("Clamping to 8–16 flat colours; colourable blocks ≥5×5mm…");
     const prepared = prepareIllustrationCanvas(
       rawImage,
       nColours,
       categorySelect.value
     );
     const preparedBlob = await blobFromCanvas(prepared.canvas);
-    URL.revokeObjectURL(rawUrl);
     const objectUrl = URL.createObjectURL(preparedBlob);
-    showImage(imageEl, frame, objectUrl);
-
-    setStatus("Building numbered outline with line detail…");
     const outline = buildOutlineCanvas(
       prepared.labels,
       prepared.palette,
@@ -1034,25 +1188,163 @@ async function generate() {
     );
     const outlineBlob = await blobFromCanvas(outline.canvas);
     const outlineUrl = URL.createObjectURL(outlineBlob);
-    showImage(outlineImageEl, outlineFrame, outlineUrl);
 
-    openDirect.href = url;
-    openDirect.hidden = false;
-    const stem = typeSelect.value.replace(/\s+/g, "_") || "illustration";
-    downloadLink.href = objectUrl;
-    downloadLink.download = `${stem}.png`;
-    downloadLink.hidden = false;
-    downloadOutline.href = outlineUrl;
-    downloadOutline.download = `${stem}_outline.png`;
-    downloadOutline.hidden = false;
+    if (updateMainPreview) {
+      showImage(imageEl, frame, objectUrl);
+      showImage(outlineImageEl, outlineFrame, outlineUrl);
+      openDirect.href = url;
+      openDirect.hidden = false;
+      downloadLink.href = objectUrl;
+      downloadLink.download = `${stem}.png`;
+      downloadLink.hidden = false;
+      downloadOutline.href = outlineUrl;
+      downloadOutline.download = `${stem}_outline.png`;
+      downloadOutline.hidden = false;
+    }
+
+    return {
+      url,
+      objectUrl,
+      outlineUrl,
+      usedColours: prepared.usedColours,
+      regionCount: outline.regionCount,
+      minSidePx: prepared.minSidePx,
+    };
+  } finally {
+    URL.revokeObjectURL(rawUrl);
+  }
+}
+
+function appendSetCard(slot, plate, errorMessage) {
+  const card = document.createElement("article");
+  card.className = "set-card";
+  if (errorMessage) {
+    card.innerHTML =
+      `<h3>${String(slot.index).padStart(2, "0")}. ${slot.aspect} / ${slot.scene}</h3>` +
+      `<p class="meta">Failed: ${errorMessage}</p>`;
+    setGallery.appendChild(card);
+    return;
+  }
+
+  const illuName = `${slot.slug}_illustration.png`;
+  const outName = `${slot.slug}_outline.png`;
+  card.innerHTML =
+    `<h3>${String(slot.index).padStart(2, "0")}. ${slot.aspect} / ${slot.scene}</h3>` +
+    `<p class="meta">${plate.usedColours} colours · ${plate.regionCount} blocks · seed ${slot.seed}</p>` +
+    `<div class="pair">` +
+    `<figure><img alt="Flat plate ${slot.slug}" /><figcaption>Flat colour plate</figcaption></figure>` +
+    `<figure><img alt="Outline ${slot.slug}" /><figcaption>Numbered outline</figcaption></figure>` +
+    `</div>` +
+    `<div class="card-actions">` +
+    `<a class="ghost link" download="${illuName}">Download plate</a>` +
+    `<a class="ghost link" download="${outName}">Download outline</a>` +
+    `</div>`;
+  const imgs = card.querySelectorAll("img");
+  imgs[0].src = plate.objectUrl;
+  imgs[1].src = plate.outlineUrl;
+  const links = card.querySelectorAll("a");
+  links[0].href = plate.objectUrl;
+  links[1].href = plate.outlineUrl;
+  setGallery.appendChild(card);
+}
+
+async function generateSet() {
+  const slots = planSetSlots();
+  showSetPreview();
+  setGallery.innerHTML = "";
+  setSummary.textContent = `Generating ${slots.length} plates for “${typeSelect.value}”…`;
+  generateBtn.disabled = true;
+
+  let accepted = 0;
+  try {
+    for (let i = 0; i < slots.length; i += 1) {
+      const slot = slots[i];
+      setStatus(
+        `Set plate ${i + 1}/${slots.length}: ${slot.aspect} / ${slot.scene}…`,
+        ""
+      );
+      try {
+        const plate = await generateOnePlate({
+          prompt: slot.prompt,
+          seed: slot.seed,
+          stem: slot.slug,
+          updateMainPreview: false,
+        });
+        appendSetCard(slot, plate, null);
+        accepted += 1;
+      } catch (err) {
+        appendSetCard(slot, null, err.message || String(err));
+      }
+      setSummary.textContent =
+        `“${typeSelect.value}” set: ${accepted}/${slots.length} generated so far.`;
+      if (i + 1 < slots.length) {
+        setStatus(
+          `Waiting ${Math.round(POLLINATIONS_GAP_MS / 1000)}s for Pollinations rate limit…`,
+          ""
+        );
+        await sleep(POLLINATIONS_GAP_MS);
+      }
+    }
     setStatus(
-      `Generated “${typeSelect.value}” · ${prepared.usedColours} colours · ` +
-        `${outline.regionCount} colourable blocks · ` +
-        `min block ${prepared.minSidePx}×${prepared.minSidePx}px ` +
+      `Set complete: ${accepted}/${slots.length} plates for “${typeSelect.value}”.`,
+      accepted ? "ok" : "error"
+    );
+    setSummary.textContent =
+      `“${typeSelect.value}” set: ${accepted}/${slots.length} plates. ` +
+      `Scroll the gallery to review / download each page.`;
+  } finally {
+    generateBtn.disabled = false;
+    refreshSetPlan();
+  }
+}
+
+async function generate() {
+  if (setModeInput?.checked) {
+    await generateSet();
+    return;
+  }
+
+  const prompt = promptInput.value.trim();
+  if (!prompt) {
+    setStatus("Add a prompt first.", "error");
+    return;
+  }
+
+  const seedRaw = seedInput.value.trim();
+  const seed = seedRaw === "" ? null : Number(seedRaw);
+  const stem = typeSelect.value.replace(/\s+/g, "_") || "illustration";
+
+  generateBtn.disabled = true;
+  showSinglePreview();
+  setStatus("Generating via Pollinations… this can take 15–60 seconds.");
+  frame.classList.add("empty");
+  imageEl.hidden = true;
+  openDirect.hidden = true;
+  downloadLink.hidden = true;
+  clearOutlinePreview();
+
+  try {
+    const plate = await generateOnePlate({
+      prompt,
+      seed,
+      stem,
+      updateMainPreview: true,
+    });
+    setStatus(
+      `Generated “${typeSelect.value}” · ${plate.usedColours} colours · ` +
+        `${plate.regionCount} colourable blocks · ` +
+        `min block ${plate.minSidePx}×${plate.minSidePx}px ` +
         `(≥${MIN_REGION_MM}mm wide & high on A4).`,
       "ok"
     );
   } catch (err) {
+    const size = Number(sizeSelect.value);
+    const url = pollinationsUrl(prompt, {
+      width: size,
+      height: size,
+      model: modelSelect.value,
+      seed,
+    });
     // Fallback: embed directly (works even if CORS fetch fails).
     imageEl.src = url;
     imageEl.hidden = false;
@@ -1087,9 +1379,13 @@ async function init() {
     categorySelect.appendChild(opt);
   }
   fillTypes();
+  refreshSetPlan();
   categorySelect.addEventListener("change", fillTypes);
   typeSelect.addEventListener("change", resetPrompt);
   coloursInput?.addEventListener("change", resetPrompt);
+  seedInput?.addEventListener("change", refreshSetPlan);
+  setModeInput?.addEventListener("change", refreshSetPlan);
+  setSizeInput?.addEventListener("change", refreshSetPlan);
   resetBtn.addEventListener("click", resetPrompt);
   generateBtn.addEventListener("click", generate);
 }
