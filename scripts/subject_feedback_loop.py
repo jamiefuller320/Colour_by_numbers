@@ -118,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
         args.query,
         subject_type=args.subject_type,
         discover_types=False,
-        backend="pollinations",
+        backend="fal",
         subject_feedback=True,
         critique_mode=args.critique_mode,
         max_feedback_attempts=args.max_attempts,
