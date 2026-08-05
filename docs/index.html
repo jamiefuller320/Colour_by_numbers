@@ -16,7 +16,8 @@
       <h1>Illustration test bed</h1>
       <p class="lede">
         Generate type-specific colouring-book style images with
-        <strong>Pollinations.ai</strong> (free, no subscription). Runs entirely in your browser on GitHub Pages.
+        <strong>Pollinations.ai</strong> (free, no subscription). Runs entirely in your browser on GitHub Pages —
+        works on iPad; no localhost required.
       </p>
     </header>
 
@@ -50,10 +51,24 @@
           <input id="colours" type="number" min="8" max="16" value="12" />
         </label>
         <label>
-          Seed (blank = random)
+          Seed (blank = random / 0 base for sets)
           <input id="seed" type="number" placeholder="e.g. 42" />
         </label>
-        <label class="full">
+
+        <fieldset class="set-controls">
+          <legend>Phase D — Set</legend>
+          <label class="check">
+            <input id="set-mode" type="checkbox" />
+            Set mode (varied aspect / scene plates)
+          </label>
+          <label>
+            Set size
+            <input id="set-size" type="number" min="2" max="8" value="4" disabled />
+          </label>
+          <div id="set-plan" class="set-plan" hidden></div>
+        </fieldset>
+
+        <label class="full" id="prompt-label">
           Prompt
           <textarea id="prompt" rows="5"></textarea>
         </label>
@@ -64,31 +79,38 @@
         <p id="status" class="status" aria-live="polite"></p>
         <p class="fineprint">
           Animal plates keep warm earthy darks. Colourable fills must be at
-          least ~5×5&nbsp;mm on A4; nearby same colours merge, and white eye
-          highlights are all-or-none. Finer leftovers stay as black line
-          detail. Anonymous Pollinations use is rate-limited (~1 request / 15s)
-          and may watermark.
+          least ~8×8&nbsp;mm on A4; finer leftovers stay as black line detail.
+          Anonymous Pollinations use is rate-limited (~1 request / 15s) —
+          set mode waits between plates. Works on phone/tablet browsers.
         </p>
       </section>
 
       <section class="panel preview">
-        <h2>Flat colour plate</h2>
-        <div id="result-frame" class="result-frame empty">
-          <p class="placeholder">Choose a type and generate to see an image here.</p>
-          <img id="result-image" alt="Generated flat colour illustration" hidden />
-        </div>
-        <div class="preview-actions">
-          <a id="open-direct" class="ghost link" href="#" target="_blank" rel="noopener" hidden>Open Pollinations URL</a>
-          <a id="download" class="ghost link" href="#" download="illustration.png" hidden>Download flat PNG</a>
+        <div id="single-preview">
+          <h2>Flat colour plate</h2>
+          <div id="result-frame" class="result-frame empty">
+            <p class="placeholder">Choose a type and generate to see an image here.</p>
+            <img id="result-image" alt="Generated flat colour illustration" hidden />
+          </div>
+          <div class="preview-actions">
+            <a id="open-direct" class="ghost link" href="#" target="_blank" rel="noopener" hidden>Open Pollinations URL</a>
+            <a id="download" class="ghost link" href="#" download="illustration.png" hidden>Download flat PNG</a>
+          </div>
+
+          <h2 class="outline-heading">Colour-by-numbers outline</h2>
+          <div id="outline-frame" class="result-frame empty">
+            <p class="placeholder outline-placeholder">The numbered outline appears here after generation.</p>
+            <img id="outline-image" alt="Numbered colour-by-numbers outline" hidden />
+          </div>
+          <div class="preview-actions">
+            <a id="download-outline" class="ghost link" href="#" download="outline.png" hidden>Download outline PNG</a>
+          </div>
         </div>
 
-        <h2 class="outline-heading">Colour-by-numbers outline</h2>
-        <div id="outline-frame" class="result-frame empty">
-          <p class="placeholder outline-placeholder">The numbered outline appears here after generation.</p>
-          <img id="outline-image" alt="Numbered colour-by-numbers outline" hidden />
-        </div>
-        <div class="preview-actions">
-          <a id="download-outline" class="ghost link" href="#" download="outline.png" hidden>Download outline PNG</a>
+        <div id="set-preview" hidden>
+          <h2>Set results</h2>
+          <p id="set-summary" class="set-summary"></p>
+          <div id="set-gallery" class="set-gallery"></div>
         </div>
       </section>
     </main>
