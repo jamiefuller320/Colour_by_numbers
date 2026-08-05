@@ -127,6 +127,62 @@ def test_openai_backend_requires_key(monkeypatch) -> None:
         )
 
 
+def test_fal_backend_mocked(monkeypatch) -> None:
+    from colour_by_numbers.illustrate import generate_illustration_fal
+
+    class FakePostResponse:
+        ok = True
+        status_code = 200
+
+        def json(self):
+            return {"images": [{"url": "https://example.com/out.png"}]}
+
+    class FakeGetResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        @property
+        def content(self) -> bytes:
+            buf = __import__("io").BytesIO()
+            Image.new("RGB", (64, 64), (200, 100, 40)).save(buf, format="PNG")
+            return buf.getvalue()
+
+    def fake_request(method, url, **kwargs):
+        if method == "POST":
+            assert "fal.run" in url
+            assert "fal-ai/flux/schnell" in url
+            assert kwargs["headers"]["Authorization"] == "Key test-key"
+            return FakePostResponse()
+        return FakeGetResponse()
+
+    monkeypatch.setenv("FAL_KEY", "test-key")
+    monkeypatch.setattr(
+        "requests.post",
+        lambda url, **kwargs: fake_request("POST", url, **kwargs),
+    )
+    monkeypatch.setattr(
+        "requests.get",
+        lambda url, **kwargs: fake_request("GET", url, **kwargs),
+    )
+    result = generate_illustration_fal(
+        "pug portrait colouring book",
+        width=64,
+        height=64,
+        model="schnell",
+        seed=1,
+    )
+    assert result.backend == "fal"
+    assert result.image.size == (64, 64)
+
+
+def test_fal_backend_requires_key(monkeypatch) -> None:
+    from colour_by_numbers.illustrate import generate_illustration_fal
+
+    monkeypatch.delenv("FAL_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="FAL_KEY"):
+        generate_illustration_fal("pug", width=64, height=64)
+
+
 def test_pollinations_backend_mocked(monkeypatch) -> None:
     from colour_by_numbers.illustrate import generate_illustration_pollinations
 

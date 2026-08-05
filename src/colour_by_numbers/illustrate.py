@@ -57,9 +57,24 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_ILLUSTRATION_SIZE = 1600
 DEFAULT_PAGE_BACKGROUND = (248, 248, 252)
-AVAILABLE_ILLUSTRATION_BACKENDS = ("local_stylize", "pollinations", "openai", "replicate")
+AVAILABLE_ILLUSTRATION_BACKENDS = (
+    "fal",
+    "local_stylize",
+    "pollinations",
+    "openai",
+    "replicate",
+)
 POLLINATIONS_IMAGE_URL = "https://image.pollinations.ai/prompt/{prompt}"
 POLLINATIONS_GEN_IMAGE_URL = "https://gen.pollinations.ai/image/{prompt}"
+FAL_RUN_URL = "https://fal.run/{model_id}"
+DEFAULT_FAL_MODEL = "fal-ai/flux/schnell"
+FAL_MODEL_ALIASES = {
+    "schnell": "fal-ai/flux/schnell",
+    "flux": "fal-ai/flux/schnell",
+    "flux-schnell": "fal-ai/flux/schnell",
+    "dev": "fal-ai/flux/dev",
+    "flux-dev": "fal-ai/flux/dev",
+}
 
 
 @dataclass(frozen=True)
@@ -305,6 +320,88 @@ def stylize_reference_to_illustration(
     )
 
 
+def resolve_fal_model_id(model: str | None = None) -> str:
+    """Map short aliases (schnell/dev) to fal endpoint ids."""
+    raw = (model or DEFAULT_FAL_MODEL).strip()
+    return FAL_MODEL_ALIASES.get(raw.lower(), raw)
+
+
+def generate_illustration_fal(
+    prompt: str,
+    *,
+    width: int = 1024,
+    height: int = 1024,
+    model: str = DEFAULT_FAL_MODEL,
+    seed: int | None = None,
+    api_key: str | None = None,
+    timeout: float = 180.0,
+    num_inference_steps: int = 4,
+) -> IllustrationResult:
+    """Generate an image via fal.ai (Flux). Requires ``FAL_KEY``.
+
+    Uses the synchronous ``fal.run`` HTTP API (no extra SDK dependency).
+    """
+    import io
+    import os
+
+    import requests
+
+    key = (api_key or os.environ.get("FAL_KEY") or "").strip()
+    if not key:
+        raise RuntimeError(
+            "fal backend requested but FAL_KEY is not set. "
+            "Create a key at https://fal.ai/dashboard/keys and export FAL_KEY."
+        )
+
+    model_id = resolve_fal_model_id(model)
+    url = FAL_RUN_URL.format(model_id=model_id)
+    payload: dict = {
+        "prompt": prompt,
+        "image_size": {"width": int(width), "height": int(height)},
+        "num_images": 1,
+        "enable_safety_checker": True,
+        "output_format": "png",
+        "num_inference_steps": int(num_inference_steps),
+    }
+    if seed is not None:
+        payload["seed"] = int(seed)
+
+    response = requests.post(
+        url,
+        headers={
+            "Authorization": f"Key {key}",
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=timeout,
+    )
+    if not response.ok:
+        detail = (response.text or "")[:300]
+        raise RuntimeError(
+            f"fal.ai request failed (HTTP {response.status_code}): {detail}"
+        )
+    body = response.json()
+    images = body.get("images") or []
+    if not images:
+        raise RuntimeError("fal.ai response missing images")
+    image_url = images[0].get("url")
+    if not image_url:
+        raise RuntimeError("fal.ai response missing image URL")
+
+    image_response = requests.get(image_url, timeout=timeout)
+    image_response.raise_for_status()
+    image = Image.open(io.BytesIO(image_response.content)).convert("RGB")
+    return IllustrationResult(
+        image=image,
+        backend="fal",
+        prompt=prompt,
+        notes=(
+            f"Generated via fal.ai ({model_id}). "
+            "Production primary backend; requires FAL_KEY."
+        ),
+    )
+
+
 def _pollinations_error_message(response) -> str:
     """Turn Pollinations JSON / wrapped 402 pollen errors into a clear message."""
     text = (response.text or "").strip()
@@ -354,11 +451,11 @@ def generate_illustration_pollinations(
     timeout: float = 120.0,
     api_key: str | None = None,
 ) -> IllustrationResult:
-    """Generate an image via Pollinations.ai.
+    """Legacy Pollinations backend (optional fallback).
 
-    Pollinations now expects an API key and Pollen balance for reliable use.
-    Set ``POLLINATIONS_API_KEY`` (or pass *api_key*). Without a key the legacy
-    anonymous host is tried, but it often fails with a wrapped HTTP 500 / 402.
+    Prefer ``fal``. Pollinations expects an API key and Pollen balance for
+    reliable use; without a key the anonymous host often fails with a wrapped
+    HTTP 500 / 402.
     """
     import io
     import os
@@ -402,8 +499,8 @@ def generate_illustration_pollinations(
         backend="pollinations",
         prompt=prompt,
         notes=(
-            f"Generated via Pollinations.ai ({model}, {auth_note}). "
-            "Requires API key + Pollen credit for reliable generation."
+            f"Generated via Pollinations.ai ({model}, {auth_note}) — "
+            "legacy fallback. Production primary is fal.ai."
         ),
     )
 
@@ -421,7 +518,7 @@ def generate_illustration_openai(
     if not key:
         raise RuntimeError(
             "OpenAI backend requested but OPENAI_API_KEY is not set. "
-            "Use backend='pollinations' or 'local_stylize', or export an API key."
+            "Use backend='fal' or 'local_stylize', or export an API key."
         )
     try:
         import urllib.request
@@ -471,8 +568,10 @@ def generate_illustration(
     n_colours: int = DEFAULT_ILLUSTRATION_COLOURS,
     output_size: int = DEFAULT_ILLUSTRATION_SIZE,
     openai_api_key: str | None = None,
+    fal_api_key: str | None = None,
     pollinations_api_key: str | None = None,
     prompt_override: str | None = None,
+    fal_model: str = DEFAULT_FAL_MODEL,
     pollinations_model: str = "flux",
     seed: int | None = None,
     min_region_mm: float = DEFAULT_MIN_REGION_MM,
@@ -493,9 +592,17 @@ def generate_illustration(
         else None
     )
 
-    if backend == "pollinations":
-        # Prefer square-ish canvas near output_size for colouring pages.
-        side = max(512, min(int(output_size), 1280))
+    side = max(512, min(int(output_size), 1280))
+    if backend == "fal":
+        result = generate_illustration_fal(
+            prompt or "colouring book illustration of a clear subject",
+            width=side,
+            height=side,
+            model=fal_model,
+            seed=seed,
+            api_key=fal_api_key,
+        )
+    elif backend == "pollinations":
         result = generate_illustration_pollinations(
             prompt or "colouring book illustration of a clear subject",
             width=side,
@@ -511,7 +618,7 @@ def generate_illustration(
     elif backend == "replicate":
         raise RuntimeError(
             "Replicate backend is reserved but not configured. "
-            "Use backend='pollinations', 'local_stylize', or 'openai'."
+            "Use backend='fal', 'local_stylize', or 'openai'."
         )
     else:
         if reference is None:

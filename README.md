@@ -4,7 +4,7 @@ Search the web for images by description (for example `aircraft` or `dogs`), map
 
 **North star:** generate rights-safe, varied colour plate *sets* from a keyword/phrase, convert them into correctly labelled outlines a person can colour to reconstruct each image, add full-colour covers, and compile a printable book. See [NORTH_STAR.md](NORTH_STAR.md).
 
-**Phase B–D:** Pollinations primary generator; single plates use the B/C quality checklist ([FORMAT_BRIEF.md](FORMAT_BRIEF.md)); sets use `--set-size` / `python scripts/phase_d_set_generate.py --plan-only`.
+**Phase B–D:** primary generator is **fal.ai Flux** (`FAL_KEY`); single plates use the B/C quality checklist ([FORMAT_BRIEF.md](FORMAT_BRIEF.md)); sets use `--set-size`. GitHub Pages is a **viewer** (upload plate → outline), not a generator.
 
 ## What it produces
 
@@ -49,18 +49,13 @@ In the Streamlit UI, searching `dogs` shows a breed shortlist first; choosing on
 ### Illustration-first generation
 
 ```bash
-# Discover type → reference photo → flat illustration → colour-by-numbers
+# Production path: fal.ai Flux (export FAL_KEY from https://fal.ai/dashboard/keys)
+export FAL_KEY=...
 colour-by-numbers --query dogs --type "pug" --illustrate --output output
-
-# Free text-to-image via Pollinations (no paid subscription)
-colour-by-numbers --query dogs --type "pug" --illustrate \
-  --illustration-backend pollinations --output output
 
 # Subject-recognition feedback loop (critique → revise → retry → learn)
 colour-by-numbers --query aircraft --type spitfire --illustrate \
   --subject-feedback --critique-mode rules --output output
-# Dry-run the critic/revise path without generating:
-#   python scripts/subject_feedback_loop.py --query aircraft --type spitfire --dry-run
 
 # Phase D: varied set from one phrase (aspect/scene slots)
 colour-by-numbers --query aircraft --type spitfire --illustrate \
@@ -68,26 +63,26 @@ colour-by-numbers --query aircraft --type spitfire --illustrate \
 colour-by-numbers --query dogs --type pug --illustrate \
   --set-size 4 --seed 100 --output output/pug-set
 
-# Optional OpenAI Images backend (requires OPENAI_API_KEY)
-colour-by-numbers --query dogs --type "pug" --illustrate \
+# Optional backends
+colour-by-numbers --query dogs --type pug --illustrate \
   --illustration-backend openai --output output
+colour-by-numbers --query dogs --type pug --illustrate \
+  --illustration-backend pollinations --output output   # legacy
 ```
 
-**Test bed UI** (best place to compare backends and Phase D sets):
+**Test bed UI** (generate + Phase D sets):
 
 ```bash
-# Local Streamlit (full Python pipeline)
+export FAL_KEY=...
 streamlit run testbed_app.py --server.port 8502
-# Sidebar → enable “Set mode (varied plates)” to plan/generate aspect–scene sets
+# Sidebar → enable “Set mode (varied plates)”
 ```
 
-**GitHub Pages (static Pollinations test bed)** — no install, runs in the browser (including **iPad**):
+**GitHub Pages viewer** (iPad-friendly; no keys):
 
 `https://jamiefuller320.github.io/Colour_by_numbers/`
 
-Enable **Set mode** on that page for Phase D aspect/scene sets. After merge, Pages deploys via GitHub Actions (or run “Deploy GitHub Pages test bed” manually).
-
-Local stylize isolates a real reference photo (Streamlit only). Pollinations generates from the type prompt (free, rate-limited). The Pages site includes browser-side flat-colour + numbered outline post-process; Streamlit remains the fuller Python test bed.
+Upload a plate from Streamlit/CLI to preview the flat palette + numbered outline. Generation stays off Pages on purpose.
 
 ### Subject engine
 

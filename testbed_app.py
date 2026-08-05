@@ -38,11 +38,11 @@ st.set_page_config(
 st.title("Illustration test bed")
 st.write(
     "Try illustration backends for colouring pages. "
-    "**Pollinations** needs `POLLINATIONS_API_KEY` + Pollen credit "
-    "(enter.pollinations.ai) — anonymous calls currently fail. "
-    "**Local stylize** uses a real reference photo. "
-    "**OpenAI** needs `OPENAI_API_KEY`. "
-    "Use **Set mode** for Phase D aspect/scene variety."
+    "**fal** (primary) needs `FAL_KEY`. "
+    "**Local stylize** uses a reference photo. "
+    "**OpenAI** / **Pollinations** are optional fallbacks. "
+    "Use **Set mode** for Phase D aspect/scene variety. "
+    "GitHub Pages is a plate/outline viewer only — generate here or via CLI."
 )
 
 with st.sidebar:
@@ -62,10 +62,16 @@ with st.sidebar:
             if PHASE_B_PRIMARY_BACKEND in backends
             else 0
         ),
-        help="Phase B primary = pollinations (rights-safe text-to-image).",
+        help="Phase B primary = fal (Flux via fal.ai; needs FAL_KEY).",
+    )
+    fal_model = st.selectbox(
+        "fal model",
+        options=["fal-ai/flux/schnell", "fal-ai/flux/dev"],
+        index=0,
+        disabled=backend != "fal",
     )
     pollinations_model = st.selectbox(
-        "Pollinations model",
+        "Pollinations model (legacy)",
         options=["flux", "turbo"],
         index=0,
         disabled=backend != "pollinations",
@@ -260,6 +266,7 @@ if generate and set_mode and planned is not None:
                 illustration_size=illustration_size,
                 complexity="fine",
                 subject_mode="off",
+                fal_model=fal_model,
                 pollinations_model=pollinations_model,
                 min_region_mm=min_region_mm,
                 subject_feedback=subject_feedback,
@@ -297,6 +304,7 @@ elif generate and not set_mode:
                 complexity="fine",
                 subject_mode="off",
                 prompt_override=prompt,
+                fal_model=fal_model,
                 pollinations_model=pollinations_model,
                 seed=None if seed < 0 else int(seed),
                 min_region_mm=min_region_mm,

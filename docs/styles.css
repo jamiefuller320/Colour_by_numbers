@@ -165,11 +165,10 @@ a.ghost {
   color: var(--muted);
 }
 
-.fineprint.key-hint {
-  margin-top: -0.35rem;
+.fineprint code {
+  font-size: 0.8em;
+  word-break: break-word;
 }
-
-.fineprint a { color: var(--accent); }
 
 .preview h2 {
   margin: 0 0 0.85rem;

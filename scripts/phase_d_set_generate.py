@@ -6,7 +6,7 @@ Examples::
     python scripts/phase_d_set_generate.py --query aircraft --type spitfire \\
       --set-size 6 --plan-only
 
-    # Live Pollinations set (needs network; slow / rate-limited)
+    # Live fal.ai set (needs FAL_KEY)
     python scripts/phase_d_set_generate.py --query dogs --type pug --set-size 4
 """
 
@@ -73,7 +73,8 @@ def main(argv: list[str] | None = None) -> int:
         attempts_per_slot=args.set_attempts,
         require_plate_quality=True,
         output_dir=args.output,
-        backend="pollinations",
+        backend="fal",
+        fal_model="fal-ai/flux/schnell",
         illustration_size=args.illustration_size,
         subject_mode="off",
     )

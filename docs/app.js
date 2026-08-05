@@ -1,118 +1,18 @@
 const categorySelect = document.getElementById("category");
-const typeSelect = document.getElementById("type");
-const modelSelect = document.getElementById("model");
-const sizeSelect = document.getElementById("size");
-const seedInput = document.getElementById("seed");
-const apiKeyInput = document.getElementById("api-key");
 const coloursInput = document.getElementById("colours");
-const promptInput = document.getElementById("prompt");
-const API_KEY_STORAGE = "pollinations_api_key";
-const promptLabel = document.getElementById("prompt-label");
-const setModeInput = document.getElementById("set-mode");
-const setSizeInput = document.getElementById("set-size");
-const setPlanEl = document.getElementById("set-plan");
-const singlePreview = document.getElementById("single-preview");
-const setPreview = document.getElementById("set-preview");
-const setSummary = document.getElementById("set-summary");
-const setGallery = document.getElementById("set-gallery");
-const generateBtn = document.getElementById("generate");
-const resetBtn = document.getElementById("reset-prompt");
+const fileInput = document.getElementById("file-input");
+const processBtn = document.getElementById("process");
 const statusEl = document.getElementById("status");
 const frame = document.getElementById("result-frame");
 const imageEl = document.getElementById("result-image");
 const outlineFrame = document.getElementById("outline-frame");
 const outlineImageEl = document.getElementById("outline-image");
-const openDirect = document.getElementById("open-direct");
 const downloadLink = document.getElementById("download");
 const downloadOutline = document.getElementById("download-outline");
 
-// Keep in sync with colour_by_numbers.set_plan.CATEGORY_SLOT_BANK
-const CATEGORY_SLOT_BANK = {
-  aircraft: [
-    ["side view", "clear sky", "full aeroplane silhouette, side profile"],
-    ["three-quarter view", "airfield", "parked on tarmac, wheels visible"],
-    ["front view", "runway", "nose and propeller facing the viewer"],
-    ["in flight", "above soft clouds", "banking gently, wheels up"],
-    ["takeoff", "runway", "wheels just leaving the ground"],
-    ["hangar", "hangar doorway", "aeroplane framed in hangar opening"],
-    ["landing", "runway approach", "low approach, landing gear down"],
-    ["top view", "plain background", "plan-view silhouette, wings spread"],
-  ],
-  dogs: [
-    ["portrait", "plain background", "head and shoulders facing viewer"],
-    ["sitting", "garden lawn", "full body sitting, tail visible"],
-    ["standing side view", "park path", "full body side profile"],
-    ["lying down", "rug", "relaxed dog lying facing viewer"],
-    ["running", "open field", "dog in mid-stride, simple ground"],
-    ["puppy pose", "plain background", "playful sit, oversized paws"],
-    ["looking up", "kitchen floor", "head tilted upward"],
-    ["three-quarter view", "yard", "standing three-quarter body view"],
-  ],
-  cats: [
-    ["portrait", "plain background", "head and shoulders facing viewer"],
-    ["sitting", "windowsill", "cat sitting upright, full body"],
-    ["side view", "garden", "standing side profile"],
-    ["curled sleeping", "cushion", "cat curled asleep"],
-    ["stretching", "plain background", "cat in long stretch pose"],
-    ["crouching", "grass", "alert crouch, simple ground"],
-    ["looking back", "plain background", "over-shoulder glance"],
-    ["kitten pose", "blanket", "small kitten sitting"],
-  ],
-  birds: [
-    ["perched side view", "branch", "bird on simple branch, side profile"],
-    ["portrait", "plain background", "head and chest facing viewer"],
-    ["wings spread", "clear sky", "bird gliding, wings open"],
-    ["taking off", "branch", "wings raised leaving perch"],
-    ["standing", "ground", "full body standing bird"],
-    ["three-quarter view", "plain background", "body angled toward viewer"],
-    ["nesting", "nest", "bird on simple nest"],
-    ["in flight", "sky", "side flying silhouette"],
-  ],
-  flowers: [
-    ["centred portrait", "plain background", "single bloom filling the frame"],
-    ["side view", "plain background", "bloom and stem from the side"],
-    ["bud and bloom", "plain background", "open flower beside a bud"],
-    ["top view", "plain background", "looking down into the bloom"],
-    ["in a pot", "simple pot", "potted plant, centred"],
-    ["bouquet pair", "plain background", "two stems, still simple"],
-    ["close petal study", "plain background", "large centred bloom"],
-    ["garden patch", "simple ground", "one main flower, minimal leaves"],
-  ],
-  cars: [
-    ["side view", "road", "full car silhouette, side profile"],
-    ["three-quarter front", "driveway", "front and side visible"],
-    ["front view", "plain background", "headlights facing viewer"],
-    ["rear three-quarter", "street", "rear and side visible"],
-    ["parked", "garage", "car beside simple garage"],
-    ["on the road", "open road", "driving scene, simple horizon"],
-    ["top view", "plain background", "plan-view car silhouette"],
-    ["classic pose", "showroom", "centred three-quarter display"],
-  ],
-  boats: [
-    ["side view", "calm water", "full boat silhouette on water"],
-    ["three-quarter view", "harbour", "boat angled toward viewer"],
-    ["front view", "water", "bow facing viewer"],
-    ["sailing", "open sea", "under sail, simple waves"],
-    ["docked", "pier", "tied at a simple pier"],
-    ["top view", "plain water", "plan-view boat silhouette"],
-    ["rowing", "lake", "small boat with oars"],
-    ["at anchor", "bay", "boat floating, simple shoreline"],
-  ],
-};
-const DEFAULT_SLOT_BANK = [
-  ["portrait", "plain background", "centred subject, clear silhouette"],
-  ["side view", "plain background", "full side profile"],
-  ["three-quarter view", "simple setting", "angled toward the viewer"],
-  ["action pose", "open space", "subject mid-action, simple ground"],
-  ["close-up", "plain background", "head or main feature fills frame"],
-  ["full body", "simple ground", "entire subject visible"],
-  ["looking left", "plain background", "subject facing left"],
-  ["looking right", "plain background", "subject facing right"],
-];
-const POLLINATIONS_GAP_MS = 16000;
+let categories = {};
+let pendingImage = null;
 
-// Standard crayon set aligned with Python STANDARD_PALETTE_32 (truncated to 24
-// for the browser path; darks / earths are kept dense for animal subjects).
 const STANDARD_PALETTE = [
   [18, 18, 18],
   [42, 36, 32],
@@ -158,7 +58,7 @@ const A4_MM = [210, 297];
 const OUTLINE_LINE_WIDTH = 1; // single-pixel edges (no thicken pass)
 const DETAIL_INK_RGB = [18, 18, 18];
 
-let categories = {};
+
 
 function clampColours(n) {
   const value = Number(n);
@@ -166,316 +66,12 @@ function clampColours(n) {
   return Math.max(MIN_COLOURS, Math.min(MAX_COLOURS, Math.round(value)));
 }
 
-function disambiguateSubject(label, category) {
-  const overrides = {
-    aircraft: {
-      spitfire: "Supermarine Spitfire WWII fighter aircraft",
-      biplane: "vintage biplane aeroplane",
-      "fighter jet": "modern fighter jet aeroplane",
-      airliner: "commercial airliner aeroplane",
-      helicopter: "helicopter aircraft",
-      seaplane: "seaplane aeroplane on water",
-      glider: "sailplane glider aircraft",
-      cessna: "Cessna light aeroplane",
-      concorde: "Concorde supersonic airliner aeroplane",
-      "hot air balloon": "hot air balloon aircraft in the sky",
-    },
-  };
-  const hypernyms = {
-    dogs: "dog",
-    cats: "cat",
-    horses: "horse",
-    birds: "bird",
-    aircraft: "aircraft aeroplane",
-    flowers: "flower blossom",
-    cars: "car automobile",
-    boats: "boat watercraft",
-  };
-  const kinds = {
-    dogs: "dog",
-    cats: "cat",
-    horses: "horse",
-    birds: "bird",
-    aircraft: "aircraft",
-    flowers: "flower",
-    cars: "car",
-    boats: "boat",
-  };
-  const negatives = {
-    aircraft:
-      "no people, no person, no man, no woman, no human face, no comic character",
-    cars: "no people, no person, no driver visible, no human face",
-    boats: "no people, no person, no human face",
-    dogs: "no people, no human face, real dog animal only",
-    cats: "no people, no human face, real cat animal only",
-    horses: "no people, no rider, no human face, real horse animal only",
-    birds: "no people, no human face, real bird animal only",
-    flowers: "no people, no human face, flower plant only",
-  };
-
-  const cleaned = String(label || "").trim();
-  let subject = cleaned;
-  const catOverrides = overrides[category] || {};
-  if (catOverrides[cleaned.toLowerCase()]) {
-    subject = catOverrides[cleaned.toLowerCase()];
-  } else {
-    const hyper = hypernyms[category];
-    if (hyper) {
-      const lower = cleaned.toLowerCase();
-      const missing = hyper
-        .toLowerCase()
-        .split(/\s+/)
-        .filter((t) => t.length > 2)
-        .every((t) => !lower.includes(t));
-      if (missing) subject = `${cleaned} ${hyper}`;
-    }
-  }
-
-  const kind = kinds[category];
-  const kindPrefix = kind
-    ? `subject kind: ${kind} (depict only this kind of thing, not a person or unrelated character). `
-    : "";
-  const negative = negatives[category] ? `, ${negatives[category]}` : "";
-  return { subject, kindPrefix, negative };
-}
-
-function buildPrompt(label, category, nColours = 12) {
-  const colours = clampColours(nColours);
-  const { subject, kindPrefix, negative } = disambiguateSubject(label, category);
-  const style =
-    `children's colouring book illustration, thick clean black outlines, ` +
-    `flat cel fills using between ${MIN_COLOURS} and ${colours} solid colours only, ` +
-    `colourable blocks at least ${MIN_REGION_MM}mm wide and ${MIN_REGION_MM}mm high ` +
-    `when printed on A4 with finer detail as black line drawing, ` +
-    `high subject-background contrast, no gradients, no photorealism, no text, white background`;
-  if (category === "aircraft") {
-    return (
-      `${kindPrefix}${subject} side view, clear silhouette, vehicle only` +
-      `${negative}, ${style}`
-    );
-  }
-  if (category === "flowers") {
-    return `${kindPrefix}${subject} centred portrait${negative}, ${style}`;
-  }
-  if (EARTHY_CATEGORIES.has(category)) {
-    const detail =
-      "clearly defined eyes with dark pupils and light eye highlights, warm natural colours";
-    if (category === "birds") {
-      return `${kindPrefix}${subject} centred portrait, ${detail}${negative}, ${style}`;
-    }
-    return `${kindPrefix}${subject} portrait, centred subject, ${detail}${negative}, ${style}`;
-  }
-  return `${kindPrefix}${subject} portrait, centred subject${negative}, ${style}`;
-}
 
 function setStatus(message, kind = "") {
   statusEl.textContent = message;
   statusEl.className = `status ${kind}`.trim();
 }
 
-function fillTypes() {
-  const category = categorySelect.value;
-  const types = categories[category] || [];
-  typeSelect.innerHTML = "";
-  for (const label of types) {
-    const opt = document.createElement("option");
-    opt.value = label;
-    opt.textContent = label;
-    typeSelect.appendChild(opt);
-  }
-  resetPrompt();
-}
-
-function resetPrompt() {
-  const category = categorySelect.value;
-  const label = typeSelect.value;
-  promptInput.value = buildPrompt(label, category, coloursInput?.value);
-  refreshSetPlan();
-}
-
-function slotSlug(index, aspect, scene) {
-  const raw = `${String(index).padStart(2, "0")}-${aspect}-${scene}`;
-  return raw
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 60);
-}
-
-function composeSlotPrompt(label, category, aspect, scene, composition) {
-  const base = buildPrompt(label, category, coloursInput?.value);
-  return (
-    `${base}, aspect: ${aspect}, scene: ${scene}, ${composition}, ` +
-    `same subject identity, distinct pose from other pages in the set, ` +
-    `subject fills most of the frame`
-  );
-}
-
-function planSetSlots() {
-  const category = categorySelect.value;
-  const label = typeSelect.value;
-  const n = Math.max(2, Math.min(8, Number(setSizeInput.value) || 4));
-  const seedRaw = seedInput.value.trim();
-  const baseSeed = seedRaw === "" ? 0 : Number(seedRaw) || 0;
-  const bank = CATEGORY_SLOT_BANK[category] || DEFAULT_SLOT_BANK;
-  const slots = [];
-  for (let i = 0; i < n; i += 1) {
-    let [aspect, scene, composition] = bank[i % bank.length];
-    if (i >= bank.length) {
-      scene = `${scene} variant ${Math.floor(i / bank.length) + 1}`;
-    }
-    slots.push({
-      index: i + 1,
-      aspect,
-      scene,
-      composition,
-      seed: baseSeed + i,
-      slug: slotSlug(i + 1, aspect, scene),
-      prompt: composeSlotPrompt(label, category, aspect, scene, composition),
-    });
-  }
-  return slots;
-}
-
-function refreshSetPlan() {
-  const on = Boolean(setModeInput?.checked);
-  setSizeInput.disabled = !on;
-  promptLabel.hidden = on;
-  promptInput.disabled = on;
-  setPlanEl.hidden = !on;
-  generateBtn.textContent = on
-    ? `Generate set of ${Math.max(2, Math.min(8, Number(setSizeInput.value) || 4))}`
-    : "Generate illustration";
-  if (!on) {
-    setPlanEl.innerHTML = "";
-    return;
-  }
-  const slots = planSetSlots();
-  setPlanEl.innerHTML = slots
-    .map(
-      (slot) =>
-        `<div><strong>${String(slot.index).padStart(2, "0")}.</strong> ` +
-        `${slot.aspect} — ${slot.scene}</div>`
-    )
-    .join("");
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function showSinglePreview() {
-  singlePreview.hidden = false;
-  setPreview.hidden = true;
-}
-
-function showSetPreview() {
-  singlePreview.hidden = true;
-  setPreview.hidden = false;
-}
-
-function getPollinationsApiKey() {
-  const typed = (apiKeyInput?.value || "").trim();
-  if (typed) return typed;
-  try {
-    return (localStorage.getItem(API_KEY_STORAGE) || "").trim();
-  } catch {
-    return "";
-  }
-}
-
-function persistPollinationsApiKey() {
-  const key = (apiKeyInput?.value || "").trim();
-  try {
-    if (key) localStorage.setItem(API_KEY_STORAGE, key);
-    else localStorage.removeItem(API_KEY_STORAGE);
-  } catch {
-    /* private mode */
-  }
-}
-
-function pollinationsUrl(prompt, { width, height, model, seed, includeKey = true }) {
-  const encoded = encodeURIComponent(prompt);
-  const key = getPollinationsApiKey();
-  // Authenticated path uses the current gateway; legacy host still accepts
-  // anonymous calls but currently fails with pollen/402 wrapped as HTTP 500.
-  const base = key
-    ? `https://gen.pollinations.ai/image/${encoded}`
-    : `https://image.pollinations.ai/prompt/${encoded}`;
-  const params = new URLSearchParams({
-    width: String(width),
-    height: String(height),
-    model,
-    nologo: "true",
-    enhance: "true",
-  });
-  if (seed !== null && seed !== undefined && seed !== "") {
-    params.set("seed", String(seed));
-  }
-  if (seed === null || seed === undefined || seed === "") {
-    params.set("_", String(Date.now()));
-  }
-  if (includeKey && key) {
-    params.set("key", key);
-  }
-  return `${base}?${params.toString()}`;
-}
-
-function explainPollinationsFailure(status, bodyText) {
-  let message = bodyText || "";
-  try {
-    const data = JSON.parse(bodyText);
-    message =
-      data?.error?.message ||
-      data?.message ||
-      (typeof data?.error === "string" ? data.error : "") ||
-      message;
-  } catch {
-    /* keep raw */
-  }
-  const lower = String(message).toLowerCase();
-  if (
-    lower.includes("insufficient balance") ||
-    lower.includes("payment_required") ||
-    lower.includes("pollen")
-  ) {
-    return (
-      "Pollinations needs Pollen credit (and usually an API key). " +
-      "Get a key / top up at enter.pollinations.ai, paste the key above, then retry. " +
-      `(${message.slice(0, 180)})`
-    );
-  }
-  if (
-    status === 401 ||
-    lower.includes("authentication required") ||
-    lower.includes("unauthorized")
-  ) {
-    return (
-      "Pollinations authentication required. Paste an API key from " +
-      "enter.pollinations.ai into the field above. " +
-      `(HTTP ${status})`
-    );
-  }
-  return `Pollinations failed (HTTP ${status}): ${message.slice(0, 240) || "unknown error"}`;
-}
-
-async function fetchPollinationsImage(url) {
-  const key = getPollinationsApiKey();
-  const headers = key ? { Authorization: `Bearer ${key}` } : {};
-  const response = await fetch(url, { mode: "cors", headers });
-  if (!response.ok) {
-    const bodyText = await response.text();
-    throw new Error(explainPollinationsFailure(response.status, bodyText));
-  }
-  const blob = await response.blob();
-  if (!blob.type.startsWith("image/")) {
-    // Some gateways return JSON errors with 200 + wrong type; surface them.
-    const text = await blob.text();
-    throw new Error(explainPollinationsFailure(response.status, text));
-  }
-  return blob;
-}
 
 function mmPerPixelOnA4(width, height) {
   const [shortMm, longMm] = A4_MM;
@@ -1229,48 +825,42 @@ function clearOutlinePreview() {
   outlineImageEl.removeAttribute("src");
 }
 
-async function generateOnePlate({ prompt, seed, stem, updateMainPreview }) {
-  const size = Number(sizeSelect.value);
-  const nColours = clampColours(coloursInput?.value || 12);
-  if (!getPollinationsApiKey()) {
-    throw new Error(
-      "Add a Pollinations API key above (enter.pollinations.ai). " +
-        "Anonymous generation currently fails with insufficient Pollen."
-    );
-  }
-  persistPollinationsApiKey();
-  const url = pollinationsUrl(prompt, {
-    width: size,
-    height: size,
-    model: modelSelect.value,
-    seed,
-  });
-  const publicUrl = pollinationsUrl(prompt, {
-    width: size,
-    height: size,
-    model: modelSelect.value,
-    seed,
-    includeKey: false,
-  });
 
-  const blob = await fetchPollinationsImage(url);
-
-  const rawUrl = URL.createObjectURL(blob);
+async function loadImageFromFile(file) {
+  const url = URL.createObjectURL(file);
   try {
-    const rawImage = await new Promise((resolve, reject) => {
+    const image = await new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("Failed to decode generated image"));
-      img.src = rawUrl;
+      img.onerror = () => reject(new Error("Could not decode image"));
+      img.src = url;
     });
+    return image;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 
+async function processPending() {
+  if (!pendingImage) {
+    setStatus("Choose an image first.", "error");
+    return;
+  }
+  const nColours = clampColours(coloursInput?.value || 12);
+  processBtn.disabled = true;
+  setStatus("Clamping to 8–16 flat colours; colourable blocks ≥8×8mm…");
+  clearOutlinePreview();
+  try {
     const prepared = prepareIllustrationCanvas(
-      rawImage,
+      pendingImage,
       nColours,
       categorySelect.value
     );
     const preparedBlob = await blobFromCanvas(prepared.canvas);
     const objectUrl = URL.createObjectURL(preparedBlob);
+    showImage(imageEl, frame, objectUrl);
+
+    setStatus("Building numbered outline…");
     const outline = buildOutlineCanvas(
       prepared.labels,
       prepared.palette,
@@ -1280,160 +870,23 @@ async function generateOnePlate({ prompt, seed, stem, updateMainPreview }) {
     );
     const outlineBlob = await blobFromCanvas(outline.canvas);
     const outlineUrl = URL.createObjectURL(outlineBlob);
+    showImage(outlineImageEl, outlineFrame, outlineUrl);
 
-    if (updateMainPreview) {
-      showImage(imageEl, frame, objectUrl);
-      showImage(outlineImageEl, outlineFrame, outlineUrl);
-      openDirect.href = publicUrl;
-      openDirect.hidden = false;
-      downloadLink.href = objectUrl;
-      downloadLink.download = `${stem}.png`;
-      downloadLink.hidden = false;
-      downloadOutline.href = outlineUrl;
-      downloadOutline.download = `${stem}_outline.png`;
-      downloadOutline.hidden = false;
-    }
-
-    return {
-      url: publicUrl,
-      objectUrl,
-      outlineUrl,
-      usedColours: prepared.usedColours,
-      regionCount: outline.regionCount,
-      minSidePx: prepared.minSidePx,
-    };
-  } finally {
-    URL.revokeObjectURL(rawUrl);
-  }
-}
-
-function appendSetCard(slot, plate, errorMessage) {
-  const card = document.createElement("article");
-  card.className = "set-card";
-  if (errorMessage) {
-    card.innerHTML =
-      `<h3>${String(slot.index).padStart(2, "0")}. ${slot.aspect} / ${slot.scene}</h3>` +
-      `<p class="meta">Failed: ${errorMessage}</p>`;
-    setGallery.appendChild(card);
-    return;
-  }
-
-  const illuName = `${slot.slug}_illustration.png`;
-  const outName = `${slot.slug}_outline.png`;
-  card.innerHTML =
-    `<h3>${String(slot.index).padStart(2, "0")}. ${slot.aspect} / ${slot.scene}</h3>` +
-    `<p class="meta">${plate.usedColours} colours · ${plate.regionCount} blocks · seed ${slot.seed}</p>` +
-    `<div class="pair">` +
-    `<figure><img alt="Flat plate ${slot.slug}" /><figcaption>Flat colour plate</figcaption></figure>` +
-    `<figure><img alt="Outline ${slot.slug}" /><figcaption>Numbered outline</figcaption></figure>` +
-    `</div>` +
-    `<div class="card-actions">` +
-    `<a class="ghost link" download="${illuName}">Download plate</a>` +
-    `<a class="ghost link" download="${outName}">Download outline</a>` +
-    `</div>`;
-  const imgs = card.querySelectorAll("img");
-  imgs[0].src = plate.objectUrl;
-  imgs[1].src = plate.outlineUrl;
-  const links = card.querySelectorAll("a");
-  links[0].href = plate.objectUrl;
-  links[1].href = plate.outlineUrl;
-  setGallery.appendChild(card);
-}
-
-async function generateSet() {
-  const slots = planSetSlots();
-  showSetPreview();
-  setGallery.innerHTML = "";
-  setSummary.textContent = `Generating ${slots.length} plates for “${typeSelect.value}”…`;
-  generateBtn.disabled = true;
-
-  let accepted = 0;
-  try {
-    for (let i = 0; i < slots.length; i += 1) {
-      const slot = slots[i];
-      setStatus(
-        `Set plate ${i + 1}/${slots.length}: ${slot.aspect} / ${slot.scene}…`,
-        ""
-      );
-      try {
-        const plate = await generateOnePlate({
-          prompt: slot.prompt,
-          seed: slot.seed,
-          stem: slot.slug,
-          updateMainPreview: false,
-        });
-        appendSetCard(slot, plate, null);
-        accepted += 1;
-      } catch (err) {
-        appendSetCard(slot, null, err.message || String(err));
-      }
-      setSummary.textContent =
-        `“${typeSelect.value}” set: ${accepted}/${slots.length} generated so far.`;
-      if (i + 1 < slots.length) {
-        setStatus(
-          `Waiting ${Math.round(POLLINATIONS_GAP_MS / 1000)}s for Pollinations rate limit…`,
-          ""
-        );
-        await sleep(POLLINATIONS_GAP_MS);
-      }
-    }
+    downloadLink.href = objectUrl;
+    downloadLink.download = "plate_flat.png";
+    downloadLink.hidden = false;
+    downloadOutline.href = outlineUrl;
+    downloadOutline.download = "plate_outline.png";
+    downloadOutline.hidden = false;
     setStatus(
-      `Set complete: ${accepted}/${slots.length} plates for “${typeSelect.value}”.`,
-      accepted ? "ok" : "error"
-    );
-    setSummary.textContent =
-      `“${typeSelect.value}” set: ${accepted}/${slots.length} plates. ` +
-      `Scroll the gallery to review / download each page.`;
-  } finally {
-    generateBtn.disabled = false;
-    refreshSetPlan();
-  }
-}
-
-async function generate() {
-  if (setModeInput?.checked) {
-    await generateSet();
-    return;
-  }
-
-  const prompt = promptInput.value.trim();
-  if (!prompt) {
-    setStatus("Add a prompt first.", "error");
-    return;
-  }
-
-  const seedRaw = seedInput.value.trim();
-  const seed = seedRaw === "" ? null : Number(seedRaw);
-  const stem = typeSelect.value.replace(/\s+/g, "_") || "illustration";
-
-  generateBtn.disabled = true;
-  showSinglePreview();
-  setStatus("Generating via Pollinations… this can take 15–60 seconds.");
-  frame.classList.add("empty");
-  imageEl.hidden = true;
-  openDirect.hidden = true;
-  downloadLink.hidden = true;
-  clearOutlinePreview();
-
-  try {
-    const plate = await generateOnePlate({
-      prompt,
-      seed,
-      stem,
-      updateMainPreview: true,
-    });
-    setStatus(
-      `Generated “${typeSelect.value}” · ${plate.usedColours} colours · ` +
-        `${plate.regionCount} colourable blocks · ` +
-        `min block ${plate.minSidePx}×${plate.minSidePx}px ` +
-        `(≥${MIN_REGION_MM}mm wide & high on A4).`,
+      `${prepared.usedColours} colours · ${outline.regionCount} colourable blocks · ` +
+        `min block ${prepared.minSidePx}×${prepared.minSidePx}px (≥${MIN_REGION_MM}mm on A4).`,
       "ok"
     );
   } catch (err) {
-    clearOutlinePreview();
     setStatus(err.message || String(err), "error");
   } finally {
-    generateBtn.disabled = false;
+    processBtn.disabled = !pendingImage;
   }
 }
 
@@ -1452,32 +905,27 @@ async function init() {
     if (name === "dogs") opt.selected = true;
     categorySelect.appendChild(opt);
   }
-  fillTypes();
-  refreshSetPlan();
-  try {
-    const saved = localStorage.getItem(API_KEY_STORAGE) || "";
-    if (apiKeyInput && saved) apiKeyInput.value = saved;
-  } catch {
-    /* ignore */
-  }
-  if (!getPollinationsApiKey()) {
-    setStatus(
-      "Pollinations now needs an API key + Pollen credit. " +
-        "Add a key from enter.pollinations.ai before generating.",
-      "error"
-    );
-  }
-  categorySelect.addEventListener("change", fillTypes);
-  typeSelect.addEventListener("change", resetPrompt);
-  coloursInput?.addEventListener("change", resetPrompt);
-  seedInput?.addEventListener("change", refreshSetPlan);
-  apiKeyInput?.addEventListener("change", persistPollinationsApiKey);
-  setModeInput?.addEventListener("change", refreshSetPlan);
-  setSizeInput?.addEventListener("change", refreshSetPlan);
-  resetBtn.addEventListener("click", resetPrompt);
-  generateBtn.addEventListener("click", generate);
+  setStatus("Upload a generated plate to preview the colour-by-numbers outline.");
+  fileInput?.addEventListener("change", async () => {
+    const file = fileInput.files?.[0];
+    if (!file) {
+      pendingImage = null;
+      processBtn.disabled = true;
+      return;
+    }
+    try {
+      pendingImage = await loadImageFromFile(file);
+      processBtn.disabled = false;
+      setStatus(`Loaded “${file.name}”. Tap Build colour-by-numbers.`);
+    } catch (err) {
+      pendingImage = null;
+      processBtn.disabled = true;
+      setStatus(err.message || String(err), "error");
+    }
+  });
+  processBtn?.addEventListener("click", processPending);
 }
 
 init().catch((err) => {
-  setStatus(`Failed to load categories: ${err.message}`, "error");
+  setStatus(`Failed to load viewer: ${err.message}`, "error");
 });

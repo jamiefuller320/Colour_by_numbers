@@ -5,7 +5,7 @@ Examples::
     # Offline synthetic plate (no network)
     python scripts/phase_b_plate_check.py --offline
 
-    # Live Pollinations primary backend (needs network)
+    # Live fal.ai primary backend (needs FAL_KEY + network)
     python scripts/phase_b_plate_check.py --query dogs --type pug --require
 """
 
@@ -89,7 +89,7 @@ def run_live(
             subject_type=subject_type,
             discover_types=False,
             backend=PHASE_B_PRIMARY_BACKEND,
-            pollinations_model=PHASE_B_PRIMARY_MODEL,
+            fal_model=PHASE_B_PRIMARY_MODEL,
             min_region_mm=PHASE_B_MIN_REGION_MM,
             illustration_size=768,
             check_quality=True,

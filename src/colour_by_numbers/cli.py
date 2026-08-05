@@ -239,17 +239,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--illustration-backend",
-        choices=["local_stylize", "pollinations", "openai", "replicate"],
-        default="pollinations",
+        choices=["fal", "local_stylize", "pollinations", "openai", "replicate"],
+        default="fal",
         help=(
-            "Illustration generator backend (default: pollinations — Phase B "
-            "rights-safe primary). local_stylize needs a reference photo."
+            "Illustration generator backend (default: fal — Phase B primary, "
+            "needs FAL_KEY). local_stylize needs a reference photo."
+        ),
+    )
+    parser.add_argument(
+        "--fal-model",
+        default="fal-ai/flux/schnell",
+        help=(
+            "fal.ai model id or alias (default: fal-ai/flux/schnell; "
+            "aliases: schnell, dev)"
         ),
     )
     parser.add_argument(
         "--pollinations-model",
         default="flux",
-        help="Pollinations model name (default: flux)",
+        help="Legacy Pollinations model name (default: flux)",
     )
     parser.add_argument(
         "--illustration-size",
@@ -434,6 +442,7 @@ def main(argv: list[str] | None = None) -> int:
                 n_colours=min(args.colours, 16) if args.colours else 12,
                 complexity=args.complexity,
                 subject_mode="off",
+                fal_model=args.fal_model,
                 pollinations_model=args.pollinations_model,
                 min_region_mm=args.min_region_mm,
                 subject_feedback=args.subject_feedback,
@@ -475,6 +484,7 @@ def main(argv: list[str] | None = None) -> int:
             max_regions=args.max_regions,
             min_region_area=args.min_region_area,
             structure_size=args.structure_size,
+            fal_model=args.fal_model,
             pollinations_model=args.pollinations_model,
             min_region_mm=args.min_region_mm,
             seed=args.seed,

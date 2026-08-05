@@ -26,8 +26,8 @@ from .quantize import QuantizedImage
 
 # Locked Phase B product bar (stricter than legacy 5mm experiments).
 PHASE_B_MIN_REGION_MM = 8.0
-PHASE_B_PRIMARY_BACKEND = "pollinations"
-PHASE_B_PRIMARY_MODEL = "flux"
+PHASE_B_PRIMARY_BACKEND = "fal"
+PHASE_B_PRIMARY_MODEL = "fal-ai/flux/schnell"
 
 # Reconstructibility: outline labels → palette must rebuild the colour plate.
 RECONSTRUCT_MATCH_MIN = 0.995

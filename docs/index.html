@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Colour by Numbers — Illustration Test Bed</title>
+  <title>Colour by Numbers — Plate Viewer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
@@ -13,121 +13,69 @@
   <div class="page">
     <header class="hero">
       <p class="brand">Colour by Numbers</p>
-      <h1>Illustration test bed</h1>
+      <h1>Plate viewer</h1>
       <p class="lede">
-        Generate type-specific colouring-book style images with
-        <strong>Pollinations.ai</strong> (free, no subscription). Runs entirely in your browser on GitHub Pages —
-        works on iPad; no localhost required.
+        Review a generated colour plate on any device (including iPad): upload an
+        image, clamp it to the colouring palette, and preview the numbered outline.
+        <strong>Generation runs in Streamlit/CLI via fal.ai</strong> — this page
+        does not call image APIs or need keys.
       </p>
     </header>
 
     <main class="layout">
       <section class="panel controls">
         <label>
-          Category
+          Category (palette bias)
           <select id="category"></select>
-        </label>
-        <label>
-          Specific type
-          <select id="type"></select>
-        </label>
-        <label>
-          Pollinations model
-          <select id="model">
-            <option value="flux" selected>flux</option>
-            <option value="turbo">turbo</option>
-          </select>
-        </label>
-        <label>
-          Size
-          <select id="size">
-            <option value="512">512 × 512</option>
-            <option value="768" selected>768 × 768</option>
-            <option value="1024">1024 × 1024</option>
-          </select>
         </label>
         <label>
           Max colours (8–16)
           <input id="colours" type="number" min="8" max="16" value="12" />
         </label>
-        <label>
-          Seed (blank = random / 0 base for sets)
-          <input id="seed" type="number" placeholder="e.g. 42" />
-        </label>
         <label class="full">
-          Pollinations API key
-          <input id="api-key" type="password" autocomplete="off" placeholder="sk_… or pk_… from enter.pollinations.ai" />
-        </label>
-        <p class="fineprint key-hint">
-          Pollinations now requires a key + a little
-          <a href="https://enter.pollinations.ai" target="_blank" rel="noopener">Pollen</a>
-          credit. The key stays in this browser only (localStorage).
-        </p>
-
-        <fieldset class="set-controls">
-          <legend>Phase D — Set</legend>
-          <label class="check">
-            <input id="set-mode" type="checkbox" />
-            Set mode (varied aspect / scene plates)
-          </label>
-          <label>
-            Set size
-            <input id="set-size" type="number" min="2" max="8" value="4" disabled />
-          </label>
-          <div id="set-plan" class="set-plan" hidden></div>
-        </fieldset>
-
-        <label class="full" id="prompt-label">
-          Prompt
-          <textarea id="prompt" rows="5"></textarea>
+          Upload colour plate
+          <input id="file-input" type="file" accept="image/*" />
         </label>
         <div class="actions">
-          <button id="generate" type="button">Generate illustration</button>
-          <button id="reset-prompt" type="button" class="ghost">Reset prompt</button>
+          <button id="process" type="button" disabled>Build colour-by-numbers</button>
         </div>
         <p id="status" class="status" aria-live="polite"></p>
         <p class="fineprint">
-          Animal plates keep warm earthy darks. Colourable fills must be at
-          least ~8×8&nbsp;mm on A4; finer leftovers stay as black line detail.
-          Set mode waits ~16s between plates. Works on phone/tablet browsers.
+          Generate sets locally with
+          <code>streamlit run testbed_app.py</code>
+          or
+          <code>colour-by-numbers --illustrate --set-size N</code>
+          using <code>FAL_KEY</code>, then upload plates here to inspect outlines
+          on a tablet.
         </p>
       </section>
 
       <section class="panel preview">
-        <div id="single-preview">
-          <h2>Flat colour plate</h2>
-          <div id="result-frame" class="result-frame empty">
-            <p class="placeholder">Choose a type and generate to see an image here.</p>
-            <img id="result-image" alt="Generated flat colour illustration" hidden />
-          </div>
-          <div class="preview-actions">
-            <a id="open-direct" class="ghost link" href="#" target="_blank" rel="noopener" hidden>Open Pollinations URL</a>
-            <a id="download" class="ghost link" href="#" download="illustration.png" hidden>Download flat PNG</a>
-          </div>
-
-          <h2 class="outline-heading">Colour-by-numbers outline</h2>
-          <div id="outline-frame" class="result-frame empty">
-            <p class="placeholder outline-placeholder">The numbered outline appears here after generation.</p>
-            <img id="outline-image" alt="Numbered colour-by-numbers outline" hidden />
-          </div>
-          <div class="preview-actions">
-            <a id="download-outline" class="ghost link" href="#" download="outline.png" hidden>Download outline PNG</a>
-          </div>
+        <h2>Flat colour plate</h2>
+        <div id="result-frame" class="result-frame empty">
+          <p class="placeholder">Upload a plate to preview the flat colour result.</p>
+          <img id="result-image" alt="Flat colour illustration" hidden />
+        </div>
+        <div class="preview-actions">
+          <a id="download" class="ghost link" href="#" download="illustration.png" hidden>Download flat PNG</a>
         </div>
 
-        <div id="set-preview" hidden>
-          <h2>Set results</h2>
-          <p id="set-summary" class="set-summary"></p>
-          <div id="set-gallery" class="set-gallery"></div>
+        <h2 class="outline-heading">Colour-by-numbers outline</h2>
+        <div id="outline-frame" class="result-frame empty">
+          <p class="placeholder outline-placeholder">The numbered outline appears here after processing.</p>
+          <img id="outline-image" alt="Numbered colour-by-numbers outline" hidden />
+        </div>
+        <div class="preview-actions">
+          <a id="download-outline" class="ghost link" href="#" download="outline.png" hidden>Download outline PNG</a>
         </div>
       </section>
     </main>
 
     <footer>
       <p>
-        Static test bed for
+        Viewer for
         <a href="https://github.com/jamiefuller320/Colour_by_numbers">Colour_by_numbers</a>.
-        Image generation via <a href="https://pollinations.ai" rel="noopener">Pollinations.ai</a>.
+        Production generation: <strong>fal.ai Flux</strong> (Python / Streamlit).
       </p>
     </footer>
   </div>

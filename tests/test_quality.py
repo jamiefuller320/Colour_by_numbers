@@ -41,8 +41,8 @@ def _empty_field_plate(size: int = 420) -> Image.Image:
     return image
 
 
-def test_phase_b_primary_backend_is_pollinations() -> None:
-    assert PHASE_B_PRIMARY_BACKEND == "pollinations"
+def test_phase_b_primary_backend_is_fal() -> None:
+    assert PHASE_B_PRIMARY_BACKEND == "fal"
     assert PHASE_B_MIN_REGION_MM == 8.0
 
 

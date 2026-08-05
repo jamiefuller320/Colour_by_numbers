@@ -82,8 +82,8 @@ After sets reliably pass the set gate on the primary backend, move to Phase E
 
 | Item | Value |
 |------|--------|
-| Primary backend | `pollinations` (`flux`) — rights-safe generation, no scraped photos in the publish path |
-| Fallback | `local_stylize` / `openai` (optional; not the default) |
+| Primary backend | `fal` (`fal-ai/flux/schnell`) — rights-safe generation via fal.ai; needs `FAL_KEY` |
+| Fallback | `local_stylize` / `openai` / legacy `pollinations` (optional) |
 | Min colourable block | **8mm × 8mm** on A4 |
 | Palette budget | **8–16** colours |
 
@@ -104,7 +104,7 @@ python scripts/phase_b_plate_check.py --offline --require
 python scripts/phase_b_plate_check.py --query dogs --type pug --require
 ```
 
-CLI: `--illustrate` defaults to Pollinations; add `--require-quality` to fail on checklist miss.
+CLI: `--illustrate` defaults to fal (`FAL_KEY`); add `--require-quality` to fail on checklist miss.
 
 **Subject-recognition feedback loop** (Phase B support for weak entities like Spitfire):
 
@@ -119,7 +119,7 @@ Critics: `rules` (offline feature cues), `openai` (vision, needs `OPENAI_API_KEY
 # Dry-run: show seeded prompt + rules critique (no network)
 python scripts/subject_feedback_loop.py --query aircraft --type spitfire --dry-run
 
-# Live loop on Pollinations
+# Live loop on fal (needs FAL_KEY)
 python scripts/subject_feedback_loop.py --query aircraft --type spitfire
 
 # Or via CLI
@@ -127,7 +127,7 @@ colour-by-numbers --query aircraft --type spitfire --illustrate \
   --subject-feedback --critique-mode rules --output output
 ```
 
-This does **not** retrain Pollinations/Flux. It improves *our* prompts and stores lessons so agent/human feedback compounds. Vision (`openai`) or human critique is what actually judges pixels; `rules` strengthens known hard cases (elliptical wings, breed features, no-people cues) before and between retries.
+This does **not** retrain Flux weights. It improves *our* prompts and stores lessons so agent/human feedback compounds. Vision (`openai`) or human critique is what actually judges pixels; `rules` strengthens known hard cases (elliptical wings, breed features, no-people cues) before and between retries.
 
 ### Phase C — Format brief from references (gate: written page/cover spec)
 
@@ -184,17 +184,20 @@ label. Manifest: `plan.json` + `manifest.json` under the output directory.
 
 ## Models, Cursor Pro+, and image quality
 
-**Cursor Pro+ improves the coding agent in Cursor; it does not automatically upgrade Pollinations or other image APIs used by this app.**
+**Cursor Pro+ improves the coding agent in Cursor; it does not automatically upgrade fal.ai or other image APIs used by this app.**
 
 Image quality depends on the **illustration backend** and its own plan/key:
 
 | Backend | Notes |
 |---------|--------|
-| `pollinations` | Needs API key + Pollen credit (`POLLINATIONS_API_KEY` / Pages key field). Anonymous host currently fails with wrapped 402/500. Model choice (`flux`, `turbo`, …) is Pollinations-side. |
-| `openai` | Needs `OPENAI_API_KEY`; quality follows your OpenAI image model access. |
-| `local_stylize` | No diffusion model; stylizes a reference photo. |
+| `fal` | **Primary.** Flux via fal.ai (`FAL_KEY`). Pay-as-you-go; production path for sets/books. |
+| `openai` | Optional; needs `OPENAI_API_KEY`. |
+| `pollinations` | Legacy fallback; anonymous tier is unreliable (Pollen/auth). |
+| `local_stylize` | No diffusion model; stylizes a reference photo (not the publish default). |
 
-Progression implication: pick **one primary rights-safe generator** in Phase B and optimize prompts/disambiguation against it; treat other backends as fallbacks, not a perpetual bake-off.
+**GitHub Pages** is a plate/outline **viewer** only (upload → palette/outline). Generation stays in Streamlit/CLI so API keys never sit in the browser.
+
+Progression implication: optimize prompts/disambiguation against **fal**; treat other backends as fallbacks, not a perpetual bake-off.
 
 ## Using existing colour-by-numbers pictures
 
