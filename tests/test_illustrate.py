@@ -181,3 +181,60 @@ def test_fal_backend_requires_key(monkeypatch) -> None:
     monkeypatch.delenv("FAL_KEY", raising=False)
     with pytest.raises(RuntimeError, match="FAL_KEY"):
         generate_illustration_fal("pug", width=64, height=64)
+
+
+def test_pollinations_backend_mocked(monkeypatch) -> None:
+    from colour_by_numbers.illustrate import generate_illustration_pollinations
+
+    class FakeResponse:
+        ok = True
+        status_code = 200
+        headers = {"Content-Type": "image/jpeg"}
+        text = ""
+
+        def raise_for_status(self) -> None:
+            return None
+
+        @property
+        def content(self) -> bytes:
+            buf = __import__("io").BytesIO()
+            Image.new("RGB", (64, 64), (200, 100, 40)).save(buf, format="JPEG")
+            return buf.getvalue()
+
+    def fake_get(url, params=None, headers=None, timeout=120.0):
+        assert "gen.pollinations.ai" in url
+        assert params and params.get("key") == "sk_test"
+        assert headers and "Bearer sk_test" in headers.get("Authorization", "")
+        return FakeResponse()
+
+    monkeypatch.setattr("requests.get", fake_get)
+    result = generate_illustration_pollinations(
+        "pug portrait colouring book",
+        width=64,
+        height=64,
+        model="flux",
+        seed=1,
+        api_key="sk_test",
+    )
+    assert result.backend == "pollinations"
+    assert result.image.size == (64, 64)
+
+
+def test_pollinations_pollen_error_is_readable(monkeypatch) -> None:
+    from colour_by_numbers.illustrate import generate_illustration_pollinations
+
+    class FakeResponse:
+        ok = False
+        status_code = 500
+        headers = {"Content-Type": "application/json"}
+        text = (
+            '{"error":"Internal Server Error","message":'
+            '"Gen Sana request failed with 402: '
+            '{\\"error\\":{\\"message\\":\\"Insufficient balance. '
+            'This request costs ~0.0001 pollen\\"}}"}'
+        )
+        content = text.encode()
+
+    monkeypatch.setattr("requests.get", lambda *a, **k: FakeResponse())
+    with pytest.raises(RuntimeError, match="Pollen"):
+        generate_illustration_pollinations("pug", width=64, height=64)

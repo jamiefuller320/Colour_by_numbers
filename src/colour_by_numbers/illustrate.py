@@ -65,6 +65,7 @@ AVAILABLE_ILLUSTRATION_BACKENDS = (
     "replicate",
 )
 POLLINATIONS_IMAGE_URL = "https://image.pollinations.ai/prompt/{prompt}"
+POLLINATIONS_GEN_IMAGE_URL = "https://gen.pollinations.ai/image/{prompt}"
 FAL_RUN_URL = "https://fal.run/{model_id}"
 DEFAULT_FAL_MODEL = "fal-ai/flux/schnell"
 FAL_MODEL_ALIASES = {
@@ -401,6 +402,45 @@ def generate_illustration_fal(
     )
 
 
+def _pollinations_error_message(response) -> str:
+    """Turn Pollinations JSON / wrapped 402 pollen errors into a clear message."""
+    text = (response.text or "").strip()
+    try:
+        import json
+
+        data = json.loads(text)
+    except Exception:  # noqa: BLE001
+        return text[:300] or f"HTTP {response.status_code}"
+
+    parts: list[str] = []
+    if isinstance(data, dict):
+        err = data.get("error")
+        if isinstance(err, dict) and err.get("message"):
+            parts.append(str(err["message"]))
+        elif isinstance(err, str) and err:
+            parts.append(err)
+        if data.get("message"):
+            parts.append(str(data["message"]))
+    message = " | ".join(parts) if parts else text[:300]
+    lower = message.lower()
+    if (
+        "insufficient balance" in lower
+        or "payment_required" in lower
+        or "pollen" in lower
+    ):
+        return (
+            "Pollinations needs Pollen credit and an API key "
+            "(enter.pollinations.ai → set POLLINATIONS_API_KEY). "
+            f"Server said: {message[:220]}"
+        )
+    if "authentication required" in lower or "unauthorized" in lower:
+        return (
+            "Pollinations authentication required. Export POLLINATIONS_API_KEY "
+            f"from enter.pollinations.ai. Server said: {message[:220]}"
+        )
+    return message[:300] or f"HTTP {response.status_code}"
+
+
 def generate_illustration_pollinations(
     prompt: str,
     *,
@@ -413,18 +453,22 @@ def generate_illustration_pollinations(
 ) -> IllustrationResult:
     """Legacy Pollinations backend (optional fallback).
 
-    Prefer ``fal``. Anonymous Pollinations often fails without Pollen credit;
-    set ``POLLINATIONS_API_KEY`` if you still use this path.
+    Prefer ``fal``. Pollinations expects an API key and Pollen balance for
+    reliable use; without a key the anonymous host often fails with a wrapped
+    HTTP 500 / 402.
     """
-    from urllib.parse import quote
     import io
     import os
+    from urllib.parse import quote
 
     import requests
 
     key = (api_key or os.environ.get("POLLINATIONS_API_KEY") or "").strip()
     encoded = quote(prompt, safe="")
-    url = POLLINATIONS_IMAGE_URL.format(prompt=encoded)
+    if key:
+        url = POLLINATIONS_GEN_IMAGE_URL.format(prompt=encoded)
+    else:
+        url = POLLINATIONS_IMAGE_URL.format(prompt=encoded)
     params: dict[str, str | int] = {
         "width": int(width),
         "height": int(height),
@@ -440,25 +484,23 @@ def generate_illustration_pollinations(
         headers["Authorization"] = f"Bearer {key}"
 
     response = requests.get(url, params=params, headers=headers, timeout=timeout)
-    if not response.ok:
-        raise RuntimeError(
-            "Pollinations failed "
-            f"(HTTP {response.status_code}): {(response.text or '')[:220]}. "
-            "Prefer backend='fal' with FAL_KEY for production."
-        )
     content_type = (response.headers.get("Content-Type") or "").lower()
+    if not response.ok:
+        raise RuntimeError(_pollinations_error_message(response))
     if content_type and not content_type.startswith("image/"):
         raise RuntimeError(
-            f"Pollinations returned non-image content-type {content_type!r}"
+            "Pollinations returned non-image content-type "
+            f"{content_type!r}: {_pollinations_error_message(response)}"
         )
     image = Image.open(io.BytesIO(response.content)).convert("RGB")
+    auth_note = "authenticated gateway" if key else "legacy anonymous host"
     return IllustrationResult(
         image=image,
         backend="pollinations",
         prompt=prompt,
         notes=(
-            f"Generated via Pollinations.ai ({model}) — legacy fallback. "
-            "Production primary is fal.ai."
+            f"Generated via Pollinations.ai ({model}, {auth_note}) — "
+            "legacy fallback. Production primary is fal.ai."
         ),
     )
 
