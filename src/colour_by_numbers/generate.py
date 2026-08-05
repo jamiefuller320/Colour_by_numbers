@@ -136,7 +136,10 @@ def generate_colouring_page(
     min_a4_dpi: float | None = None,
     min_region_mm: float = PHASE_B_MIN_REGION_MM,
     openai_api_key: str | None = None,
+    fal_api_key: str | None = None,
+    pollinations_api_key: str | None = None,
     prompt_override: str | None = None,
+    fal_model: str = "fal-ai/flux/schnell",
     pollinations_model: str = "flux",
     seed: int | None = None,
     check_quality: bool = True,
@@ -156,7 +159,7 @@ def generate_colouring_page(
     floored so each colourable block is at least ``min_region_mm`` wide and
     high on A4; finer detail becomes black line drawing.
 
-    Phase B: default backend is ``pollinations`` (rights-safe generation).
+    Phase B: default backend is ``fal`` (Flux via fal.ai; needs ``FAL_KEY``).
     When ``check_quality`` is True, attach a ``PlateQualityReport``. When
     ``require_quality`` is True, fail the run if the checklist does not pass.
 
@@ -207,7 +210,10 @@ def generate_colouring_page(
                 n_colours=illustration_colours,
                 output_size=illustration_size,
                 openai_api_key=openai_api_key,
+                fal_api_key=fal_api_key,
+                pollinations_api_key=pollinations_api_key,
                 prompt_override=prompt,
+                fal_model=fal_model,
                 pollinations_model=pollinations_model,
                 seed=seed,
                 min_region_mm=min_region_mm,
@@ -252,7 +258,10 @@ def generate_colouring_page(
             n_colours=illustration_colours,
             output_size=illustration_size,
             openai_api_key=openai_api_key,
+            fal_api_key=fal_api_key,
+            pollinations_api_key=pollinations_api_key,
             prompt_override=effective_prompt,
+            fal_model=fal_model,
             pollinations_model=pollinations_model,
             seed=seed,
             min_region_mm=min_region_mm,

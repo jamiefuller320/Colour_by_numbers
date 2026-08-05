@@ -165,6 +165,11 @@ a.ghost {
   color: var(--muted);
 }
 
+.fineprint code {
+  font-size: 0.8em;
+  word-break: break-word;
+}
+
 .preview h2 {
   margin: 0 0 0.85rem;
   font-family: var(--font-display);

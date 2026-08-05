@@ -82,8 +82,8 @@ After sets reliably pass the set gate on the primary backend, move to Phase E
 
 | Item | Value |
 |------|--------|
-| Primary backend | `pollinations` (`flux`) — rights-safe generation, no scraped photos in the publish path |
-| Fallback | `local_stylize` / `openai` (optional; not the default) |
+| Primary backend | `fal` (`fal-ai/flux/schnell`) — rights-safe generation via fal.ai; needs `FAL_KEY` |
+| Fallback | `local_stylize` / `openai` / legacy `pollinations` (optional) |
 | Min colourable block | **8mm × 8mm** on A4 |
 | Palette budget | **8–16** colours |
 
@@ -190,11 +190,14 @@ Image quality depends on the **illustration backend** and its own plan/key:
 
 | Backend | Notes |
 |---------|--------|
-| `pollinations` | Free/public; model choice (`flux`, `turbo`, …) is Pollinations-side, not Cursor-side. |
-| `openai` | Needs `OPENAI_API_KEY`; quality follows your OpenAI image model access. |
-| `local_stylize` | No diffusion model; stylizes a reference photo. |
+| `fal` | **Primary.** Flux via fal.ai (`FAL_KEY`). Pay-as-you-go; production path for sets/books. |
+| `openai` | Optional; needs `OPENAI_API_KEY`. |
+| `pollinations` | Legacy fallback; anonymous tier is unreliable (Pollen/auth). |
+| `local_stylize` | No diffusion model; stylizes a reference photo (not the publish default). |
 
-Progression implication: pick **one primary rights-safe generator** in Phase B and optimize prompts/disambiguation against it; treat other backends as fallbacks, not a perpetual bake-off.
+**GitHub Pages** is a plate/outline **viewer** only (upload → palette/outline). Generation stays in Streamlit/CLI so API keys never sit in the browser.
+
+Progression implication: optimize prompts/disambiguation against **fal**; treat other backends as fallbacks, not a perpetual bake-off.
 
 ## Using existing colour-by-numbers pictures
 
