@@ -104,7 +104,7 @@ python scripts/phase_b_plate_check.py --offline --require
 python scripts/phase_b_plate_check.py --query dogs --type pug --require
 ```
 
-CLI: `--illustrate` defaults to Pollinations; add `--require-quality` to fail on checklist miss.
+CLI: `--illustrate` defaults to fal (`FAL_KEY`); add `--require-quality` to fail on checklist miss.
 
 **Subject-recognition feedback loop** (Phase B support for weak entities like Spitfire):
 
@@ -119,7 +119,7 @@ Critics: `rules` (offline feature cues), `openai` (vision, needs `OPENAI_API_KEY
 # Dry-run: show seeded prompt + rules critique (no network)
 python scripts/subject_feedback_loop.py --query aircraft --type spitfire --dry-run
 
-# Live loop on Pollinations
+# Live loop on fal (needs FAL_KEY)
 python scripts/subject_feedback_loop.py --query aircraft --type spitfire
 
 # Or via CLI
@@ -127,7 +127,7 @@ colour-by-numbers --query aircraft --type spitfire --illustrate \
   --subject-feedback --critique-mode rules --output output
 ```
 
-This does **not** retrain Pollinations/Flux. It improves *our* prompts and stores lessons so agent/human feedback compounds. Vision (`openai`) or human critique is what actually judges pixels; `rules` strengthens known hard cases (elliptical wings, breed features, no-people cues) before and between retries.
+This does **not** retrain Flux weights. It improves *our* prompts and stores lessons so agent/human feedback compounds. Vision (`openai`) or human critique is what actually judges pixels; `rules` strengthens known hard cases (elliptical wings, breed features, no-people cues) before and between retries.
 
 ### Phase C — Format brief from references (gate: written page/cover spec)
 
@@ -184,7 +184,7 @@ label. Manifest: `plan.json` + `manifest.json` under the output directory.
 
 ## Models, Cursor Pro+, and image quality
 
-**Cursor Pro+ improves the coding agent in Cursor; it does not automatically upgrade Pollinations or other image APIs used by this app.**
+**Cursor Pro+ improves the coding agent in Cursor; it does not automatically upgrade fal.ai or other image APIs used by this app.**
 
 Image quality depends on the **illustration backend** and its own plan/key:
 

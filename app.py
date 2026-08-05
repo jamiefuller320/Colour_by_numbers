@@ -333,12 +333,12 @@ if source_mode == "Web search":
     )
     illustration_backend = st.selectbox(
         "Illustration backend",
-        options=["local_stylize", "pollinations", "openai"],
+        options=["fal", "local_stylize", "openai", "pollinations"],
         index=0,
         disabled=not illustrate_first,
         help=(
-            "pollinations = free text-to-image (no subscription). "
-            "openai requires OPENAI_API_KEY."
+            "fal = production Flux via fal.ai (needs FAL_KEY). "
+            "openai requires OPENAI_API_KEY. pollinations is legacy."
         ),
     )
     col_a, _col_b = st.columns([1, 3])
