@@ -59,6 +59,7 @@ DEFAULT_ILLUSTRATION_SIZE = 1600
 DEFAULT_PAGE_BACKGROUND = (248, 248, 252)
 AVAILABLE_ILLUSTRATION_BACKENDS = ("local_stylize", "pollinations", "openai", "replicate")
 POLLINATIONS_IMAGE_URL = "https://image.pollinations.ai/prompt/{prompt}"
+POLLINATIONS_GEN_IMAGE_URL = "https://gen.pollinations.ai/image/{prompt}"
 
 
 @dataclass(frozen=True)
@@ -304,6 +305,45 @@ def stylize_reference_to_illustration(
     )
 
 
+def _pollinations_error_message(response) -> str:
+    """Turn Pollinations JSON / wrapped 402 pollen errors into a clear message."""
+    text = (response.text or "").strip()
+    try:
+        import json
+
+        data = json.loads(text)
+    except Exception:  # noqa: BLE001
+        return text[:300] or f"HTTP {response.status_code}"
+
+    parts: list[str] = []
+    if isinstance(data, dict):
+        err = data.get("error")
+        if isinstance(err, dict) and err.get("message"):
+            parts.append(str(err["message"]))
+        elif isinstance(err, str) and err:
+            parts.append(err)
+        if data.get("message"):
+            parts.append(str(data["message"]))
+    message = " | ".join(parts) if parts else text[:300]
+    lower = message.lower()
+    if (
+        "insufficient balance" in lower
+        or "payment_required" in lower
+        or "pollen" in lower
+    ):
+        return (
+            "Pollinations needs Pollen credit and an API key "
+            "(enter.pollinations.ai → set POLLINATIONS_API_KEY). "
+            f"Server said: {message[:220]}"
+        )
+    if "authentication required" in lower or "unauthorized" in lower:
+        return (
+            "Pollinations authentication required. Export POLLINATIONS_API_KEY "
+            f"from enter.pollinations.ai. Server said: {message[:220]}"
+        )
+    return message[:300] or f"HTTP {response.status_code}"
+
+
 def generate_illustration_pollinations(
     prompt: str,
     *,
@@ -312,18 +352,26 @@ def generate_illustration_pollinations(
     model: str = "flux",
     seed: int | None = None,
     timeout: float = 120.0,
+    api_key: str | None = None,
 ) -> IllustrationResult:
-    """Generate an image via Pollinations.ai (no API key / no paid plan).
+    """Generate an image via Pollinations.ai.
 
-    Anonymous use is rate-limited (~1 request / 15s) and may watermark.
+    Pollinations now expects an API key and Pollen balance for reliable use.
+    Set ``POLLINATIONS_API_KEY`` (or pass *api_key*). Without a key the legacy
+    anonymous host is tried, but it often fails with a wrapped HTTP 500 / 402.
     """
-    from urllib.parse import quote
     import io
+    import os
+    from urllib.parse import quote
 
     import requests
 
+    key = (api_key or os.environ.get("POLLINATIONS_API_KEY") or "").strip()
     encoded = quote(prompt, safe="")
-    url = POLLINATIONS_IMAGE_URL.format(prompt=encoded)
+    if key:
+        url = POLLINATIONS_GEN_IMAGE_URL.format(prompt=encoded)
+    else:
+        url = POLLINATIONS_IMAGE_URL.format(prompt=encoded)
     params: dict[str, str | int] = {
         "width": int(width),
         "height": int(height),
@@ -333,22 +381,29 @@ def generate_illustration_pollinations(
     }
     if seed is not None:
         params["seed"] = int(seed)
+    headers: dict[str, str] = {}
+    if key:
+        params["key"] = key
+        headers["Authorization"] = f"Bearer {key}"
 
-    response = requests.get(url, params=params, timeout=timeout)
-    response.raise_for_status()
+    response = requests.get(url, params=params, headers=headers, timeout=timeout)
     content_type = (response.headers.get("Content-Type") or "").lower()
+    if not response.ok:
+        raise RuntimeError(_pollinations_error_message(response))
     if content_type and not content_type.startswith("image/"):
         raise RuntimeError(
-            f"Pollinations returned non-image content-type {content_type!r}"
+            "Pollinations returned non-image content-type "
+            f"{content_type!r}: {_pollinations_error_message(response)}"
         )
     image = Image.open(io.BytesIO(response.content)).convert("RGB")
+    auth_note = "authenticated gateway" if key else "legacy anonymous host"
     return IllustrationResult(
         image=image,
         backend="pollinations",
         prompt=prompt,
         notes=(
-            f"Generated via Pollinations.ai ({model}). "
-            "Free / no subscription; anonymous tier is rate-limited."
+            f"Generated via Pollinations.ai ({model}, {auth_note}). "
+            "Requires API key + Pollen credit for reliable generation."
         ),
     )
 
@@ -416,6 +471,7 @@ def generate_illustration(
     n_colours: int = DEFAULT_ILLUSTRATION_COLOURS,
     output_size: int = DEFAULT_ILLUSTRATION_SIZE,
     openai_api_key: str | None = None,
+    pollinations_api_key: str | None = None,
     prompt_override: str | None = None,
     pollinations_model: str = "flux",
     seed: int | None = None,
@@ -446,6 +502,7 @@ def generate_illustration(
             height=side,
             model=pollinations_model,
             seed=seed,
+            api_key=pollinations_api_key,
         )
     elif backend == "openai":
         result = generate_illustration_openai(

@@ -190,7 +190,7 @@ Image quality depends on the **illustration backend** and its own plan/key:
 
 | Backend | Notes |
 |---------|--------|
-| `pollinations` | Free/public; model choice (`flux`, `turbo`, …) is Pollinations-side, not Cursor-side. |
+| `pollinations` | Needs API key + Pollen credit (`POLLINATIONS_API_KEY` / Pages key field). Anonymous host currently fails with wrapped 402/500. Model choice (`flux`, `turbo`, …) is Pollinations-side. |
 | `openai` | Needs `OPENAI_API_KEY`; quality follows your OpenAI image model access. |
 | `local_stylize` | No diffusion model; stylizes a reference photo. |
 
