@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-08-07T10:00:00+00:00",
+  "generated_at": "2026-08-07T14:59:44+00:00",
   "issue_tags": {
     "nose_detail": "Nose / muzzle lacks nostrils, wrinkles, or definition",
     "eyes": "Eyes lack definition or need more colour separation",
@@ -11,26 +11,138 @@
     "proportions": "Head/body proportions or pose wrong",
     "background": "Background too busy or poor contrast",
     "missing_detail": "Important feature missing (generic)",
-    "too_simple": "Over-simplified — lost character",
+    "too_simple": "Over-simplified \u2014 lost character",
     "wrong_subject": "Wrong subject or unrecognisable",
     "composition": "Framing / cropping / centre of page",
     "other": "Other (describe in notes)"
   },
   "plates": [
     {
-      "id": "dogs-pug-001",
+      "id": "dogs-golden-retriever-001",
       "category": "dogs",
-      "subject": "pug",
-      "label": "Pug",
+      "subject": "golden retriever",
+      "label": "golden retriever",
       "backend": "fal",
-      "prompt": "subject kind: dog (depict only this kind of thing, not a person or unrelated character). pug dog portrait, centred subject, large expressive eyes with separate dark pupils and lighter iris or sclera fills (at least two colour regions per eye), sharp eye definition, warm natural colours, no people, no human face, real dog animal only, children's colouring book illustration…",
+      "prompt": "subject kind: dog (depict only this kind of thing, not a person or unrelated character). golden retriever dog portrait, centred subject, large expressive eyes, each eye with a separate dark pupil and lighter iris or sclera fill (at least two distinct colour regions per eye), clearly defined nose and muzzle with visible nostrils and wrinkles where applicable, sharp facial feature definition, warm natural colours, no people, no human face, real dog animal only, children's colouring book illustration, thick clean black outlines, flat cel fills using between 8 and 16 solid colours only, large simple colour regions (each colourable block at least 8mm wide and 8mm high when printed on A4, with finer detail as black line drawing), high subject-background contrast, no gradients, no photorealism, no text, white background, clearly defined nose with visible nostrils and muzzle wrinkles, nose as separate colour regions",
       "images": {
-        "illustration": "plates/dogs-pug-001/illustration.png",
-        "plate": "plates/dogs-pug-001/plate.png",
-        "outline": "plates/dogs-pug-001/outline.png",
-        "page": "plates/dogs-pug-001/page.png",
-        "plate_svg": "plates/dogs-pug-001/plate.svg",
-        "outline_svg": "plates/dogs-pug-001/outline.svg"
+        "illustration": "plates/dogs-golden-retriever-001/illustration.png",
+        "plate": "plates/dogs-golden-retriever-001/plate.png",
+        "plate_svg": "plates/dogs-golden-retriever-001/plate.svg",
+        "outline": "plates/dogs-golden-retriever-001/outline.png",
+        "outline_svg": "plates/dogs-golden-retriever-001/outline.svg",
+        "page": "plates/dogs-golden-retriever-001/page.png"
+      }
+    },
+    {
+      "id": "cats-tabby-cat-001",
+      "category": "cats",
+      "subject": "tabby cat",
+      "label": "tabby cat",
+      "backend": "fal",
+      "prompt": "subject kind: cat (depict only this kind of thing, not a person or unrelated character). tabby cat portrait, centred subject, large expressive eyes, each eye with a separate dark pupil and lighter iris or sclera fill (at least two distinct colour regions per eye), clearly defined nose and muzzle with visible nostrils and wrinkles where applicable, sharp facial feature definition, warm natural colours, no people, no human face, real cat animal only, children's colouring book illustration, thick clean black outlines, flat cel fills using between 8 and 16 solid colours only, large simple colour regions (each colourable block at least 8mm wide and 8mm high when printed on A4, with finer detail as black line drawing), high subject-background contrast, no gradients, no photorealism, no text, white background, clearly defined nose with visible nostrils and muzzle wrinkles, nose as separate colour regions, include all diagnostic breed or subject features as colour blocks",
+      "images": {
+        "illustration": "plates/cats-tabby-cat-001/illustration.png",
+        "plate": "plates/cats-tabby-cat-001/plate.png",
+        "plate_svg": "plates/cats-tabby-cat-001/plate.svg",
+        "outline": "plates/cats-tabby-cat-001/outline.png",
+        "outline_svg": "plates/cats-tabby-cat-001/outline.svg",
+        "page": "plates/cats-tabby-cat-001/page.png"
+      }
+    },
+    {
+      "id": "aircraft-biplane-001",
+      "category": "aircraft",
+      "subject": "biplane",
+      "label": "biplane",
+      "backend": "fal",
+      "prompt": "subject kind: aircraft (depict only this kind of thing, not a person or unrelated character). vintage biplane aeroplane side view, clear silhouette, vehicle only, no people, no person, no man, no woman, no human face, no comic character, no superhero, no mascot, children's colouring book illustration, thick clean black outlines, flat cel fills using between 8 and 16 solid colours only, large simple colour regions (each colourable block at least 8mm wide and 8mm high when printed on A4, with finer detail as black line drawing), high subject-background contrast, no gradients, no photorealism, no text, white background, clearly defined nose with visible nostrils and muzzle wrinkles, nose as separate colour regions, include all diagnostic breed or subject features as colour blocks",
+      "images": {
+        "illustration": "plates/aircraft-biplane-001/illustration.png",
+        "plate": "plates/aircraft-biplane-001/plate.png",
+        "plate_svg": "plates/aircraft-biplane-001/plate.svg",
+        "outline": "plates/aircraft-biplane-001/outline.png",
+        "outline_svg": "plates/aircraft-biplane-001/outline.svg",
+        "page": "plates/aircraft-biplane-001/page.png"
+      }
+    },
+    {
+      "id": "birds-robin-001",
+      "category": "birds",
+      "subject": "robin",
+      "label": "robin",
+      "backend": "fal",
+      "prompt": "subject kind: bird (depict only this kind of thing, not a person or unrelated character). robin bird centred portrait, large expressive eyes, each eye with a separate dark pupil and lighter iris or sclera fill (at least two distinct colour regions per eye), clearly defined nose and muzzle with visible nostrils and wrinkles where applicable, sharp facial feature definition, warm natural colours, no people, no human face, real bird animal only, children's colouring book illustration, thick clean black outlines, flat cel fills using between 8 and 16 solid colours only, large simple colour regions (each colourable block at least 8mm wide and 8mm high when printed on A4, with finer detail as black line drawing), high subject-background contrast, no gradients, no photorealism, no text, white background, clearly defined nose with visible nostrils and muzzle wrinkles, nose as separate colour regions, include all diagnostic breed or subject features as colour blocks",
+      "images": {
+        "illustration": "plates/birds-robin-001/illustration.png",
+        "plate": "plates/birds-robin-001/plate.png",
+        "plate_svg": "plates/birds-robin-001/plate.svg",
+        "outline": "plates/birds-robin-001/outline.png",
+        "outline_svg": "plates/birds-robin-001/outline.svg",
+        "page": "plates/birds-robin-001/page.png"
+      }
+    },
+    {
+      "id": "horses-thoroughbred-horse-001",
+      "category": "horses",
+      "subject": "thoroughbred horse",
+      "label": "thoroughbred horse",
+      "backend": "fal",
+      "prompt": "subject kind: horse (depict only this kind of thing, not a person or unrelated character). thoroughbred horse portrait, centred subject, large expressive eyes, each eye with a separate dark pupil and lighter iris or sclera fill (at least two distinct colour regions per eye), clearly defined nose and muzzle with visible nostrils and wrinkles where applicable, sharp facial feature definition, warm natural colours, no people, no rider, no human face, real horse animal only, children's colouring book illustration, thick clean black outlines, flat cel fills using between 8 and 16 solid colours only, large simple colour regions (each colourable block at least 8mm wide and 8mm high when printed on A4, with finer detail as black line drawing), high subject-background contrast, no gradients, no photorealism, no text, white background, clearly defined nose with visible nostrils and muzzle wrinkles, nose as separate colour regions, include all diagnostic breed or subject features as colour blocks",
+      "images": {
+        "illustration": "plates/horses-thoroughbred-horse-001/illustration.png",
+        "plate": "plates/horses-thoroughbred-horse-001/plate.png",
+        "plate_svg": "plates/horses-thoroughbred-horse-001/plate.svg",
+        "outline": "plates/horses-thoroughbred-horse-001/outline.png",
+        "outline_svg": "plates/horses-thoroughbred-horse-001/outline.svg",
+        "page": "plates/horses-thoroughbred-horse-001/page.png"
+      }
+    },
+    {
+      "id": "flowers-sunflower-001",
+      "category": "flowers",
+      "subject": "sunflower",
+      "label": "sunflower",
+      "backend": "fal",
+      "prompt": "subject kind: flower (depict only this kind of thing, not a person or unrelated character). sunflower centred portrait, no people, no human face, flower plant only, children's colouring book illustration, thick clean black outlines, flat cel fills using between 8 and 16 solid colours only, large simple colour regions (each colourable block at least 8mm wide and 8mm high when printed on A4, with finer detail as black line drawing), high subject-background contrast, no gradients, no photorealism, no text, white background, clearly defined nose with visible nostrils and muzzle wrinkles, nose as separate colour regions, include all diagnostic breed or subject features as colour blocks",
+      "images": {
+        "illustration": "plates/flowers-sunflower-001/illustration.png",
+        "plate": "plates/flowers-sunflower-001/plate.png",
+        "plate_svg": "plates/flowers-sunflower-001/plate.svg",
+        "outline": "plates/flowers-sunflower-001/outline.png",
+        "outline_svg": "plates/flowers-sunflower-001/outline.svg",
+        "page": "plates/flowers-sunflower-001/page.png"
+      }
+    },
+    {
+      "id": "cars-vintage-car-001",
+      "category": "cars",
+      "subject": "vintage car",
+      "label": "vintage car",
+      "backend": "fal",
+      "prompt": "subject kind: car (depict only this kind of thing, not a person or unrelated character). vintage car side view, clear silhouette, vehicle only, no people, no person, no driver visible, no human face, children's colouring book illustration, thick clean black outlines, flat cel fills using between 8 and 16 solid colours only, large simple colour regions (each colourable block at least 8mm wide and 8mm high when printed on A4, with finer detail as black line drawing), high subject-background contrast, no gradients, no photorealism, no text, white background, clearly defined nose with visible nostrils and muzzle wrinkles, nose as separate colour regions, include all diagnostic breed or subject features as colour blocks",
+      "images": {
+        "illustration": "plates/cars-vintage-car-001/illustration.png",
+        "plate": "plates/cars-vintage-car-001/plate.png",
+        "plate_svg": "plates/cars-vintage-car-001/plate.svg",
+        "outline": "plates/cars-vintage-car-001/outline.png",
+        "outline_svg": "plates/cars-vintage-car-001/outline.svg",
+        "page": "plates/cars-vintage-car-001/page.png"
+      }
+    },
+    {
+      "id": "boats-sailboat-001",
+      "category": "boats",
+      "subject": "sailboat",
+      "label": "sailboat",
+      "backend": "fal",
+      "prompt": "subject kind: boat (depict only this kind of thing, not a person or unrelated character). sailboat side view, clear silhouette, vehicle only, no people, no person, no human face, children's colouring book illustration, thick clean black outlines, flat cel fills using between 8 and 16 solid colours only, large simple colour regions (each colourable block at least 8mm wide and 8mm high when printed on A4, with finer detail as black line drawing), high subject-background contrast, no gradients, no photorealism, no text, white background, clearly defined nose with visible nostrils and muzzle wrinkles, nose as separate colour regions, include all diagnostic breed or subject features as colour blocks",
+      "images": {
+        "illustration": "plates/boats-sailboat-001/illustration.png",
+        "plate": "plates/boats-sailboat-001/plate.png",
+        "plate_svg": "plates/boats-sailboat-001/plate.svg",
+        "outline": "plates/boats-sailboat-001/outline.png",
+        "outline_svg": "plates/boats-sailboat-001/outline.svg",
+        "page": "plates/boats-sailboat-001/page.png"
       }
     }
   ]
