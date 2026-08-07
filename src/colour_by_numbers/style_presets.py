@@ -3,8 +3,9 @@
 ``standard`` is the current Phase B kids/hand-colourable gate.
 ``vibrant`` is the long-term adult paint-by-numbers end goal: denser
 interlocking fills, larger crayon budgets, and cooler shadow accents —
-inspired by rights-safe study of commercial “vibrant portrait” kits, not
-copied from any one product.
+a house style meant to work across subjects (animals, vehicles, flowers,
+birds, people), inspired by rights-safe study of commercial vibrant kits,
+not copied from any one product.
 """
 
 from __future__ import annotations
@@ -66,17 +67,18 @@ STYLE_VIBRANT = StylePreset(
     palette_mode="adaptive",
     cool_shadows=True,
     prompt_style=(
-        "adult vibrant paint-by-numbers portrait style: dense interlocking "
-        "flat colour wedges and mosaic fur shapes (not a few large blobs), "
-        "about 24 to 32 distinct solid colours, strong value mosaic across "
-        "the subject, cool teal and blue accents in shadows and highlights "
-        "mixed with warm golds and oranges, bold black outlines of varying "
-        "weight, optional abstract colour-block background (not empty white), "
-        "high energy pop-art colouring-kit look, no gradients, no photorealism"
+        "adult vibrant paint-by-numbers style that works for any subject: "
+        "dense interlocking flat colour wedges building a value mosaic across "
+        "the whole form (fur, petals, metal panels, plumage, or skin — not a "
+        "few large blobs), about 24 to 32 distinct solid colours, cool teal "
+        "and blue accents in shadows and speculars mixed with warm mid-tones, "
+        "bold black outlines of varying weight, optional abstract colour-block "
+        "background (not empty white), high-energy colouring-kit look, "
+        "no gradients, no photorealism"
     ),
     description=(
-        "End-goal adult vibrant band — denser regions, fuller palette, "
-        "cool shadow accents."
+        "End-goal adult vibrant band for all categories — denser regions, "
+        "fuller palette, cool shadow accents, mosaic form language."
     ),
 )
 

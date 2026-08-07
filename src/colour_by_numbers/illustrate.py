@@ -136,15 +136,37 @@ def illustration_prompt(
             "no photorealism, no text, white background, "
             "full subject in frame with a small margin, not over-cropped"
         )
-    if preset.cool_shadows:
+    if preset.name == "vibrant":
         animal_detail = (
             "large expressive matching eyes, each eye with a separate dark pupil and "
             "lighter iris or sclera fill distinct from surrounding fur "
             "(at least two distinct colour regions per eye), "
             "clearly defined nose and muzzle with visible nostrils and wrinkles "
             "where applicable, sharp facial feature definition, "
-            "dense interlocking fur wedges with cool teal and blue shadow accents "
-            "plus warm gold and orange mid-tones for depth"
+            "dense interlocking fur and form wedges with cool teal and blue "
+            "shadow accents plus warm gold and orange mid-tones"
+        )
+        bird_detail = (
+            "species-accurate plumage as interlocking colour wedges and markings, "
+            "large expressive matching eyes with separate dark pupil and lighter "
+            "iris fill distinct from feathers, clearly defined beak "
+            "(not a mammal nose), cool shadow accents in wing and breast folds"
+        )
+        people_detail = (
+            "clear facial features built from interlocking flat colour wedges, "
+            "large expressive eyes with separate dark pupils and lighter iris "
+            "fills, defined nose and mouth, cool shadow accents on cheeks and "
+            "jaw mixed with warm skin mid-tones"
+        )
+        vehicle_detail = (
+            "complete vehicle silhouette in frame, metal and paint read as a "
+            "dense value mosaic of interlocking panels, rivets, windows, and "
+            "structural parts with cool specular/shadow accents"
+        )
+        flower_detail = (
+            "whole flower centred, petals and centre disk as interlocking "
+            "colour wedges with species-typical hues plus cool shadow accents "
+            "between petals, stem or leaves visible if needed for identity"
         )
     else:
         animal_detail = (
@@ -156,21 +178,25 @@ def illustration_prompt(
             "clear value steps between head, neck and body for depth, "
             "warm natural colours"
         )
-    bird_detail = (
-        "species-accurate plumage colours and markings, "
-        "large expressive matching eyes with separate dark pupil and lighter "
-        "iris fill distinct from feathers, clearly defined beak "
-        "(not a mammal nose), sharp feature definition"
-    )
-    people_detail = (
-        "clear facial features, large expressive eyes with separate dark pupils "
-        "and lighter iris or sclera fills (at least two colour regions per eye), "
-        "defined nose and mouth, natural skin tones"
-    )
-    vehicle_detail = (
-        "complete vehicle silhouette in frame, separate colour regions for "
-        "body panels, windows, and structural parts"
-    )
+        bird_detail = (
+            "species-accurate plumage colours and markings, "
+            "large expressive matching eyes with separate dark pupil and lighter "
+            "iris fill distinct from feathers, clearly defined beak "
+            "(not a mammal nose), sharp feature definition"
+        )
+        people_detail = (
+            "clear facial features, large expressive eyes with separate dark pupils "
+            "and lighter iris or sclera fills (at least two colour regions per eye), "
+            "defined nose and mouth, natural skin tones"
+        )
+        vehicle_detail = (
+            "complete vehicle silhouette in frame, separate colour regions for "
+            "body panels, windows, and structural parts"
+        )
+        flower_detail = (
+            "whole flower centred, petals and centre disk clearly recognisable, "
+            "species-typical colours, stem or leaves visible if needed for identity"
+        )
     negative = CATEGORY_NEGATIVE_CUES.get(category or "", "")
     negative_suffix = f", {negative}" if negative else ""
     kind = subject_kind_frame(category)
@@ -182,9 +208,7 @@ def illustration_prompt(
         )
     if category == "flowers":
         return (
-            f"{kind_prefix}{subject} whole flower centred, petals and centre "
-            f"disk clearly recognisable, species-typical colours, stem or leaves "
-            f"visible if needed for identity{negative_suffix}, {style}"
+            f"{kind_prefix}{subject} {flower_detail}{negative_suffix}, {style}"
         )
     if category == "birds":
         return (

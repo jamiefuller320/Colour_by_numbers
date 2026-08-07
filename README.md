@@ -81,6 +81,12 @@ export FAL_KEY=...
 colour-by-numbers --query dogs --type "pug" --illustrate --output output
 # Writes PNG plus vector SVG: *_plate.svg (flat fills) and *_outline.svg (numbered outline)
 
+# End-goal adult vibrant band (house style across subjects; denser mosaic, up to 32 colours)
+colour-by-numbers --query dogs --type "golden retriever" --illustrate \
+  --style vibrant --output output/vibrant-retriever
+colour-by-numbers --query aircraft --type biplane --illustrate \
+  --style vibrant --output output/vibrant-biplane
+
 # Subject-recognition feedback loop (critique → revise → retry → learn)
 colour-by-numbers --query aircraft --type spitfire --illustrate \
   --subject-feedback --critique-mode rules --output output

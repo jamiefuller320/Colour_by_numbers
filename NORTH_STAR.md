@@ -16,16 +16,16 @@ Given a **keyword or key phrase** (e.g. `pug`, `golden retriever in the park`, `
 
 ## Visual end goal (interior plate quality)
 
-The long-term look we are aiming for is an **adult “vibrant paint-by-numbers” portrait kit**: dense interlocking flat colour wedges (mosaic fur / form), a **full crayon budget (~24–32 solids)**, cool teal/blue accents in shadows mixed with warm mid-tones, bold black outlines, and optional abstract colour-block backgrounds — *not* a handful of large cel blobs on empty white.
+The long-term look we are aiming for is an **adult “vibrant paint-by-numbers” house style** that works across a **broad range of subjects** (dogs, aircraft, flowers, birds, cars, people, …): dense interlocking flat colour wedges (mosaic form — fur, petals, metal, plumage), a **full crayon budget (~24–32 solids)**, cool teal/blue accents in shadows mixed with warm mid-tones, bold black outlines, and optional abstract colour-block backgrounds — *not* a handful of large cel blobs on empty white.
 
-Study commercial vibrant kits as **format teachers** (composition, value mosaic, region density). **Do not** scrape or clone any one product’s art.
+Commercial vibrant kits (e.g. Labrador portrait products) are **quality/style cues and format teachers**, not artwork to copy. Extract the shared language (value mosaic, palette richness, region density); keep generation rights-safe and subject-agnostic.
 
 | Band | Role today |
 |------|------------|
 | `simple` / `standard` | Current shippable Phase B path (kids / hand-colourable, 8–16 colours, ≥8mm) |
-| `vibrant` | End-goal band — denser regions (≥4mm), up to 32 colours, cool shadows, mosaic prompts |
+| `vibrant` | End-goal band for **all categories** — denser regions (≥4mm), up to 32 colours, cool shadows, mosaic form language |
 
-`--style vibrant` selects the end-goal knobs. Closing the gap to reference-quality plates is an ongoing Phase B+/C refinement, not a one-shot switch.
+`--style vibrant` selects the end-goal knobs. Closing the gap to reference-quality plates across categories is an ongoing Phase B+/C refinement, not a one-shot switch.
 
 ## Success criteria (definition of done for the product)
 

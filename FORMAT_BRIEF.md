@@ -51,15 +51,16 @@ visual family rules.
 |------|--------|-------------------|-------|
 | Simple | Fewer, larger fills | ~10 colours, ≥10mm | Younger colourists |
 | Standard (default) | Hand-colourable A4 | 8–16 colours (target 16), ≥8mm, book palette | Current Phase B gate |
-| Vibrant (end goal) | Adult paint-by-numbers mosaic | ~24–32 colours, ≥4mm, adaptive palette, cool shadow accents | Dense interlocking wedges; optional abstract colour-block background; study vibrant portrait kits as format teachers — do not copy commercial art |
+| Vibrant (end goal) | Adult paint-by-numbers mosaic for **any subject** | ~24–32 colours, ≥4mm, adaptive palette, cool shadow accents | Same house style on animals, vehicles, flowers, birds, people: interlocking form wedges (fur / petals / panels / plumage); optional abstract colour-block background; study vibrant kits as style cues — do not copy commercial art |
 
-**Vibrant checklist language** (aspirational):
+**Vibrant checklist language** (aspirational, all categories):
 
 1. The subject reads instantly from the outline alone.
-2. Fur / form is a **value mosaic** of many interlocking fills, not 3–6 large blobs.
+2. The form is a **value mosaic** of many interlocking fills, not 3–6 large blobs (whether fur, petal, panel, or feather).
 3. Warm mid-tones and **cool shadow accents** both appear.
 4. Background may be abstract colour blocks; it must not flatten into empty white that starves the palette.
 5. Colouring the numbers still rebuilds the flat plate.
+6. The style stays recognisable when the subject changes category — same visual language, different entity.
 
 ## Set variety (Phase D)
 

@@ -29,7 +29,24 @@ def test_vibrant_prompt_asks_for_mosaic_and_cool_shadows() -> None:
     assert "interlocking" in prompt.lower() or "mosaic" in prompt.lower()
     assert "teal" in prompt.lower() or "blue" in prompt.lower()
     assert "24" in prompt or "32" in prompt
+    assert "any subject" in prompt.lower() or "works for any" in prompt.lower()
     assert STYLE_VIBRANT.min_region_mm == 4.0
+
+
+def test_vibrant_style_applies_across_categories() -> None:
+    """House style should read as mosaic/cool-shadow for non-dog subjects too."""
+    for category, subject in (
+        ("aircraft", "biplane"),
+        ("flowers", "sunflower"),
+        ("birds", "robin"),
+        ("cars", "vintage car"),
+    ):
+        prompt = illustration_prompt(
+            subject, category=category, style_preset="vibrant"
+        ).lower()
+        assert "interlocking" in prompt or "mosaic" in prompt
+        assert "teal" in prompt or "blue" in prompt or "cool" in prompt
+        assert "nostril" not in prompt or category in {"dogs", "cats", "horses"}
 
 
 def test_standard_prompt_stays_kids_cel() -> None:
