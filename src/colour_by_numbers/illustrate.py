@@ -114,12 +114,13 @@ def illustration_prompt(
     animal_detail = (
         "large expressive eyes, each eye with a separate dark pupil and lighter "
         "iris or sclera fill (at least two distinct colour regions per eye), "
-        "sharp eye definition, warm natural colours"
+        "clearly defined nose and muzzle with visible nostrils and wrinkles "
+        "where applicable, sharp facial feature definition, warm natural colours"
     )
     people_detail = (
         "clear facial features, large expressive eyes with separate dark pupils "
         "and lighter iris or sclera fills (at least two colour regions per eye), "
-        "natural skin tones"
+        "defined nose and mouth, natural skin tones"
     )
     negative = CATEGORY_NEGATIVE_CUES.get(category or "", "")
     negative_suffix = f", {negative}" if negative else ""
@@ -617,6 +618,10 @@ def generate_illustration(
         if subject_type_label or backend != "local_stylize"
         else None
     )
+    if prompt:
+        from .plate_critique import seed_prompt_with_plate_lessons
+
+        prompt, _ = seed_prompt_with_plate_lessons(prompt, category=category)
 
     side = max(512, min(int(output_size), 1280))
     if backend == "fal":

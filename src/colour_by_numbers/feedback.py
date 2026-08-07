@@ -60,8 +60,9 @@ SUBJECT_FEATURE_CUES: dict[str, dict[str, str]] = {
     },
     "dogs": {
         "pug": (
-            "pug dog, wrinkled face, black face mask, curled tail, compact "
-            "square body, large round eyes, short muzzle"
+            "pug dog, wrinkled face, defined nose with visible nostrils and muzzle "
+            "wrinkles, black face mask, curled tail, compact square body, large "
+            "round eyes, short muzzle"
         ),
         "dachshund": (
             "dachshund dog, very long body, short legs, long snout, "
@@ -501,8 +502,11 @@ def seed_prompt_with_lessons(
     subject_label: str,
     category: str | None,
     path: Path | str | None = None,
+    plate_lessons_path: Path | str | None = None,
 ) -> tuple[str, list[str]]:
     """Apply stored lessons and known feature cues before the first attempt."""
+    from .plate_critique import seed_prompt_with_plate_lessons
+
     extras: list[str] = []
     cue = _feature_cue(subject_label, category)
     if cue and cue.lower() not in prompt.lower():
@@ -514,6 +518,11 @@ def seed_prompt_with_lessons(
         if lesson.lower() not in prompt.lower():
             prompt = f"{prompt}, {lesson}"
             extras.append(lesson)
+
+    prompt, plate_extras = seed_prompt_with_plate_lessons(
+        prompt, category=category, path=plate_lessons_path
+    )
+    extras.extend(plate_extras)
     return prompt, extras
 
 

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Colour by Numbers — Plate Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page review-page">
+    <header class="hero">
+      <p class="brand">Colour by Numbers</p>
+      <h1>Plate review &amp; learning</h1>
+      <p class="lede">
+        Review generated sample plates, record what is wrong or missing, and export
+        critiques for collation into prompt refinements. Critiques are saved in
+        this browser until you export them.
+      </p>
+      <nav class="review-nav">
+        <a href="index.html">← Plate viewer</a>
+      </nav>
+    </header>
+
+    <section class="panel review-toolbar">
+      <div class="review-toolbar-row">
+        <label>
+          Filter category
+          <select id="filter-category">
+            <option value="">All categories</option>
+          </select>
+        </label>
+        <label>
+          Filter rating
+          <select id="filter-rating">
+            <option value="">All</option>
+            <option value="unreviewed">Not reviewed</option>
+            <option value="pass">Pass</option>
+            <option value="needs_work">Needs work</option>
+            <option value="fail">Fail</option>
+          </select>
+        </label>
+        <label>
+          Your name (optional)
+          <input id="reviewer-name" type="text" placeholder="Reviewer" />
+        </label>
+      </div>
+      <div class="actions">
+        <button id="export-critiques" type="button">Export critiques JSON</button>
+        <label class="ghost import-label">
+          Import critiques
+          <input id="import-critiques" type="file" accept="application/json" hidden />
+        </label>
+        <button id="clear-local" type="button" class="ghost">Clear local reviews</button>
+      </div>
+      <p id="review-status" class="status" aria-live="polite"></p>
+      <p id="review-summary" class="fineprint"></p>
+    </section>
+
+    <section id="review-gallery" class="set-gallery review-gallery" aria-live="polite"></section>
+
+    <section class="panel review-collate">
+      <h2>Collated issues (this browser)</h2>
+      <p class="fineprint">
+        Summary of failed / needs-work plates in your local reviews. Export and run
+        <code>python scripts/collate_plate_critiques.py --import export.json</code>
+        to merge into the project lesson store.
+      </p>
+      <pre id="collate-preview" class="collate-preview">No critiques yet.</pre>
+    </section>
+
+    <footer>
+      <p>
+        <a href="https://github.com/jamiefuller320/Colour_by_numbers">Colour_by_numbers</a>
+        — human critique loop for fal.ai prompt refinement.
+      </p>
+    </footer>
+  </div>
+  <script src="review.js" type="module"></script>
+</body>
+</html>

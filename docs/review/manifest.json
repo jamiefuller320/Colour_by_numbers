@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "generated_at": "2026-08-07T10:00:00+00:00",
+  "issue_tags": {
+    "nose_detail": "Nose / muzzle lacks nostrils, wrinkles, or definition",
+    "eyes": "Eyes lack definition or need more colour separation",
+    "mouth_detail": "Mouth / lips / tongue detail missing or wrong",
+    "ears": "Ear shape or placement wrong",
+    "outline": "Outline too thin, thick, or broken",
+    "colours": "Palette too flat, muddy, or too few regions",
+    "proportions": "Head/body proportions or pose wrong",
+    "background": "Background too busy or poor contrast",
+    "missing_detail": "Important feature missing (generic)",
+    "too_simple": "Over-simplified — lost character",
+    "wrong_subject": "Wrong subject or unrecognisable",
+    "composition": "Framing / cropping / centre of page",
+    "other": "Other (describe in notes)"
+  },
+  "plates": [
+    {
+      "id": "dogs-pug-001",
+      "category": "dogs",
+      "subject": "pug",
+      "label": "Pug",
+      "backend": "fal",
+      "prompt": "subject kind: dog (depict only this kind of thing, not a person or unrelated character). pug dog portrait, centred subject, large expressive eyes with separate dark pupils and lighter iris or sclera fills (at least two colour regions per eye), sharp eye definition, warm natural colours, no people, no human face, real dog animal only, children's colouring book illustration…",
+      "images": {
+        "illustration": "plates/dogs-pug-001/illustration.png",
+        "plate": "plates/dogs-pug-001/plate.png",
+        "outline": "plates/dogs-pug-001/outline.png",
+        "page": "plates/dogs-pug-001/page.png",
+        "plate_svg": "plates/dogs-pug-001/plate.svg",
+        "outline_svg": "plates/dogs-pug-001/outline.svg"
+      }
+    }
+  ]
+}

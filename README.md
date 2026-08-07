@@ -46,7 +46,32 @@ colour-by-numbers --query dogs --output output
 
 In the Streamlit UI, searching `dogs` shows a breed shortlist first; choosing one searches photos for that breed only.
 
-### Illustration-first generation
+### Plate review learning loop
+
+Human critiques on generated samples feed back into fal.ai prompts (this does **not**
+retrain Flux weights).
+
+1. **Generate a review batch** for GitHub Pages:
+
+```bash
+# One subject per category (needs FAL_KEY)
+python scripts/generate_review_batch.py --per-category 1
+
+# Offline placeholders for UI development
+python scripts/generate_review_batch.py --offline --per-category 1
+```
+
+2. **Review on Pages** — open `review.html` on the deployed site (or `python3 -m http.server` in `docs/`). Rate each plate, tick issue tags, and add notes (e.g. missing nose detail).
+
+3. **Export critiques** from the browser, then collate into the lesson store:
+
+```bash
+python scripts/collate_plate_critiques.py --import plate-critiques-2026-08-07.json
+```
+
+This writes `data/plate_critiques.jsonl` and `data/plate_lessons.json`. Future generations automatically seed prompts from collated lessons.
+
+## Illustration-first generation
 
 ```bash
 # Production path: fal.ai Flux (export FAL_KEY from https://fal.ai/dashboard/keys)
