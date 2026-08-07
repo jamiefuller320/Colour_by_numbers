@@ -3,28 +3,45 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Vibrant sample — Colour by Numbers</title>
+  <title>Vibrant samples — Colour by Numbers</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
   <style>
-    .gallery {
-      display: grid;
-      gap: 1.5rem;
-    }
-    .shot {
+    .gallery { display: grid; gap: 2rem; }
+    .subject {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      padding: 1rem 1rem 1.25rem;
+      padding: 1.25rem;
     }
-    .shot h2 {
-      margin: 0 0 0.75rem;
+    .subject h2 {
+      margin: 0 0 0.35rem;
       font-family: var(--font-display);
-      font-size: 1.25rem;
-      font-weight: 500;
+      font-size: 1.45rem;
+      font-weight: 600;
+    }
+    .stats {
+      margin: 0 0 1rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.45;
+    }
+    .pair {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 720px) {
+      .pair { grid-template-columns: 1fr; }
+    }
+    .shot h3 {
+      margin: 0 0 0.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--muted);
     }
     .shot img {
       display: block;
@@ -32,12 +49,11 @@
       height: auto;
       border-radius: 12px;
       background: #fff;
+      border: 1px solid var(--line);
     }
-    .meta {
-      margin: 0.75rem 0 0;
-      color: var(--muted);
-      font-size: 0.95rem;
-      line-height: 1.45;
+    .shot p {
+      margin: 0.5rem 0 0;
+      font-size: 0.9rem;
     }
     .back {
       display: inline-block;
@@ -54,50 +70,67 @@
     <header class="hero">
       <a class="back" href="index.html">← Plate viewer</a>
       <p class="brand">Colour by Numbers</p>
-      <h1>Vibrant style sample</h1>
+      <h1>Vibrant style — cross-subject samples</h1>
       <p class="lede">
-        Golden retriever plate after the vibrant refinements: exact palette
-        preserve, denser region pass, cool-shadow prompts.
-        About <strong>21 colours</strong> kept through outlining (was ~11).
+        Same <code>--style vibrant</code> house look on dog, cat, and biplane:
+        dense interlocking fills, cool shadow accents, exact plate-colour preserve.
       </p>
     </header>
 
     <main class="gallery">
-      <figure class="shot">
-        <h2>Colour plate</h2>
-        <img
-          src="samples/dogs/golden-retriever-vibrant/plate.png"
-          alt="Vibrant golden retriever colour plate"
-        />
-        <p class="meta">
-          Flat fal illustration after prepare (~29 solids on the source plate).
-          <a href="samples/dogs/golden-retriever-vibrant/plate.png">Open image</a>
-        </p>
-      </figure>
+      <section class="subject" id="dog">
+        <h2>Golden retriever</h2>
+        <p class="stats">Outline kept ~21 colours · dense facial mosaic · warm golds with cooler muzzle greys.</p>
+        <div class="pair">
+          <figure class="shot">
+            <h3>Colour plate</h3>
+            <img src="samples/dogs/golden-retriever-vibrant/plate.png" alt="Vibrant golden retriever colour plate" />
+            <p><a href="samples/dogs/golden-retriever-vibrant/plate.png">Open image</a></p>
+          </figure>
+          <figure class="shot">
+            <h3>Numbered page</h3>
+            <img src="samples/dogs/golden-retriever-vibrant/page.png" alt="Vibrant golden retriever numbered page" />
+            <p><a href="samples/dogs/golden-retriever-vibrant/page.png">Open image</a></p>
+          </figure>
+        </div>
+      </section>
 
-      <figure class="shot">
-        <h2>Quantized fill preview</h2>
-        <img
-          src="samples/dogs/golden-retriever-vibrant/quantized.png"
-          alt="Vibrant golden retriever quantized colour fills"
-        />
-        <p class="meta">
-          Pipeline preview after exact preserve + vibrant complexity.
-          <a href="samples/dogs/golden-retriever-vibrant/quantized.png">Open image</a>
-        </p>
-      </figure>
+      <section class="subject" id="cat">
+        <h2>Tabby cat</h2>
+        <p class="stats">Outline kept 20 colours / 131 regions · strong cool teal shadows on muzzle and background rings.</p>
+        <div class="pair">
+          <figure class="shot">
+            <h3>Colour plate</h3>
+            <img src="samples/cats/tabby-vibrant/plate.png" alt="Vibrant tabby cat colour plate" />
+            <p><a href="samples/cats/tabby-vibrant/plate.png">Open image</a></p>
+          </figure>
+          <figure class="shot">
+            <h3>Numbered page</h3>
+            <img src="samples/cats/tabby-vibrant/page.png" alt="Vibrant tabby cat numbered page" />
+            <p><a href="samples/cats/tabby-vibrant/page.png">Open image</a></p>
+          </figure>
+        </div>
+      </section>
 
-      <figure class="shot">
-        <h2>Numbered page + key</h2>
-        <img
-          src="samples/dogs/golden-retriever-vibrant/page.png"
-          alt="Vibrant golden retriever numbered colour-by-numbers page"
-        />
-        <p class="meta">
-          Outline with colour key — 21 paints, denser facial regions.
-          <a href="samples/dogs/golden-retriever-vibrant/page.png">Open image</a>
+      <section class="subject" id="plane">
+        <h2>Biplane</h2>
+        <p class="stats">
+          Plate ~29 solids with cool teal wing shadows; outline compacted to 16 colours / 78 regions
+          (thin vehicle parts absorb more aggressively than animal portraits).
         </p>
-      </figure>
+        <div class="pair">
+          <figure class="shot">
+            <h3>Colour plate</h3>
+            <img src="samples/aircraft/biplane-vibrant/plate.png" alt="Vibrant biplane colour plate" />
+            <p><a href="samples/aircraft/biplane-vibrant/plate.png">Open image</a></p>
+          </figure>
+          <figure class="shot">
+            <h3>Numbered page</h3>
+            <img src="samples/aircraft/biplane-vibrant/page.png" alt="Vibrant biplane numbered page" />
+            <p><a href="samples/aircraft/biplane-vibrant/page.png">Open image</a></p>
+          </figure>
+        </div>
+      </section>
     </main>
 
     <footer>
