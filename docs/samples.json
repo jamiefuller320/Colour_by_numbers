@@ -1,0 +1,18 @@
+{
+  "samples": [
+    {
+      "id": "dogs-pug",
+      "category": "dogs",
+      "subject": "pug",
+      "label": "Pug",
+      "backend": "fal",
+      "note": "Live fal.ai Flux — Phase B quality PASS",
+      "images": {
+        "plate": "samples/dogs/pug/plate.png",
+        "outline": "samples/dogs/pug/outline.png",
+        "page": "samples/dogs/pug/page.png",
+        "illustration": "samples/dogs/pug/illustration.png"
+      }
+    }
+  ]
+}

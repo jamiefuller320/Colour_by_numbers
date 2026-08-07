@@ -269,6 +269,16 @@ label.check input {
   font-size: 0.95rem;
 }
 
+.control-divider {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.sample-note {
+  margin-top: -0.35rem;
+}
+
 .set-gallery {
   display: grid;
   gap: 1.1rem;
