@@ -1,6 +1,22 @@
 {
   "samples": [
     {
+      "id": "dogs-golden-retriever-vibrant",
+      "category": "dogs",
+      "subject": "golden retriever",
+      "label": "Golden retriever (vibrant)",
+      "backend": "fal",
+      "note": "Vibrant house-style sample — exact palette preserve, denser regions, ~21 colours through outline",
+      "images": {
+        "plate": "samples/dogs/golden-retriever-vibrant/plate.png",
+        "outline": "samples/dogs/golden-retriever-vibrant/outline.png",
+        "page": "samples/dogs/golden-retriever-vibrant/page.png",
+        "illustration": "samples/dogs/golden-retriever-vibrant/illustration.png",
+        "plate_svg": "samples/dogs/golden-retriever-vibrant/plate.svg",
+        "outline_svg": "samples/dogs/golden-retriever-vibrant/outline.svg"
+      }
+    },
+    {
       "id": "dogs-pug",
       "category": "dogs",
       "subject": "pug",

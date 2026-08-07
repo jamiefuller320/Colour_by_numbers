@@ -53,7 +53,7 @@ visual family rules.
 |------|--------|-------------------|-------|
 | Simple | Fewer, larger fills | ~10 colours, ≥10mm | Younger colourists; keep, don’t expand yet |
 | Standard (default) | Hand-colourable A4 | 8–16 colours (target 16), ≥8mm, book palette | Current Phase B gate |
-| Vibrant (focus) | Adult paint-by-numbers mosaic for **any subject** | ~24–32 colours, ≥4mm, adaptive palette, cool shadow accents | Primary refinement target; house style on animals, vehicles, flowers, birds, people |
+| Vibrant (focus) | Adult paint-by-numbers mosaic for **any subject** | ~24–32 colours, ≥3mm, adaptive prepare + exact pipeline preserve, cool shadow accents, `vibrant` complexity | Primary refinement target; house style on animals, vehicles, flowers, birds, people |
 
 **Vibrant checklist language** (aspirational, all categories):
 

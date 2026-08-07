@@ -74,6 +74,58 @@ def _sort_palette_dark_to_light(
     return remap[labels], palette[order]
 
 
+def _resize_nearest(image: Image.Image, *, max_size: int) -> Image.Image:
+    """Downscale with nearest-neighbour so flat solids stay exact RGB values."""
+    width, height = image.size
+    longest = max(width, height)
+    if longest <= max_size:
+        return image.copy()
+    scale = max_size / longest
+    new_size = (max(1, int(width * scale)), max(1, int(height * scale)))
+    return image.resize(new_size, Image.Resampling.NEAREST)
+
+
+def _index_exact_palette(
+    working: Image.Image, *, n_colours: int, max_unique: int = 32
+) -> QuantizedImage:
+    """Index unique solid RGB values; fall back to median-cut if too many.
+
+    Already-flat plates may use slightly more solids than the style's target
+    ``n_colours`` (e.g. 29 vs 28). Keep every solid up to ``max_unique`` so
+    the outline path does not re-crush the plate.
+    """
+    pixels = np.asarray(working.convert("RGB"), dtype=np.uint8)
+    height, width, _ = pixels.shape
+    flat = pixels.reshape(-1, 3)
+    unique, inverse = np.unique(flat, axis=0, return_inverse=True)
+    keep_ceiling = max(int(n_colours), int(max_unique))
+    if unique.shape[0] > keep_ceiling:
+        target = min(int(n_colours), int(max_unique))
+        paletted = working.quantize(
+            colors=target,
+            method=Image.Quantize.MEDIANCUT,
+            dither=Image.Dither.NONE,
+        )
+        raw_palette = paletted.getpalette() or []
+        labels = np.asarray(paletted, dtype=np.int32)
+        used = np.unique(labels)
+        full = np.array(raw_palette, dtype=np.uint8).reshape(-1, 3)
+        palette_unsorted = full[used]
+        compact = np.zeros_like(labels)
+        for new_idx, old_idx in enumerate(used):
+            compact[labels == old_idx] = new_idx
+        labels_sorted, palette = _sort_palette_dark_to_light(
+            compact, palette_unsorted
+        )
+    else:
+        labels = inverse.reshape(height, width).astype(np.int32)
+        labels_sorted, palette = _sort_palette_dark_to_light(
+            labels, unique.astype(np.uint8)
+        )
+    preview = Image.fromarray(palette[labels_sorted], mode="RGB")
+    return QuantizedImage(labels=labels_sorted, palette=palette, preview=preview)
+
+
 def quantize_colours(
     image: Image.Image,
     *,
@@ -92,6 +144,9 @@ def quantize_colours(
       - ``standard`` (default): map onto the fixed 32-colour colouring set
         (or a subset of size ``n_colours``)
       - ``free``: classic median-cut adaptive palette
+      - ``exact`` / ``preserve``: keep unique solid RGBs from an already-flat
+        plate (nearest resize, no blur). Falls back to median-cut when the
+        unique count exceeds ``n_colours``.
 
     ``palette_category`` biases standard mapping for subjects like dogs so
     low-light areas stay on warm neutrals / browns.
@@ -100,11 +155,18 @@ def quantize_colours(
     if n_colours < 2 or n_colours > 64:
         raise ValueError("n_colours must be between 2 and 64.")
 
-    output = resize_for_processing(image.convert("RGB"), max_size=max_size)
+    mode = palette_mode.lower().strip()
     struct_limit = structure_size if structure_size is not None else max_size
+    struct_limit = min(int(struct_limit), int(max_size))
+
+    if mode in {"exact", "preserve"}:
+        # Nearest downscale + no blur so prepared plates keep their solids.
+        working = _resize_nearest(image.convert("RGB"), max_size=struct_limit)
+        return _index_exact_palette(working, n_colours=n_colours)
+
+    output = resize_for_processing(image.convert("RGB"), max_size=max_size)
     working = resize_for_processing(output, max_size=struct_limit)
     working = prefilter_for_regions(working, blur_radius=blur_radius)
-    mode = palette_mode.lower().strip()
 
     if mode in {"standard", "fixed", "book"}:
         base = (

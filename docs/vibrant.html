@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vibrant sample — Colour by Numbers</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .gallery {
+      display: grid;
+      gap: 1.5rem;
+    }
+    .shot {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 1rem 1rem 1.25rem;
+    }
+    .shot h2 {
+      margin: 0 0 0.75rem;
+      font-family: var(--font-display);
+      font-size: 1.25rem;
+      font-weight: 500;
+    }
+    .shot img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 12px;
+      background: #fff;
+    }
+    .meta {
+      margin: 0.75rem 0 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.45;
+    }
+    .back {
+      display: inline-block;
+      margin-bottom: 1rem;
+      color: var(--accent);
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .back:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <a class="back" href="index.html">← Plate viewer</a>
+      <p class="brand">Colour by Numbers</p>
+      <h1>Vibrant style sample</h1>
+      <p class="lede">
+        Golden retriever plate after the vibrant refinements: exact palette
+        preserve, denser region pass, cool-shadow prompts.
+        About <strong>21 colours</strong> kept through outlining (was ~11).
+      </p>
+    </header>
+
+    <main class="gallery">
+      <figure class="shot">
+        <h2>Colour plate</h2>
+        <img
+          src="samples/dogs/golden-retriever-vibrant/plate.png"
+          alt="Vibrant golden retriever colour plate"
+        />
+        <p class="meta">
+          Flat fal illustration after prepare (~29 solids on the source plate).
+          <a href="samples/dogs/golden-retriever-vibrant/plate.png">Open image</a>
+        </p>
+      </figure>
+
+      <figure class="shot">
+        <h2>Quantized fill preview</h2>
+        <img
+          src="samples/dogs/golden-retriever-vibrant/quantized.png"
+          alt="Vibrant golden retriever quantized colour fills"
+        />
+        <p class="meta">
+          Pipeline preview after exact preserve + vibrant complexity.
+          <a href="samples/dogs/golden-retriever-vibrant/quantized.png">Open image</a>
+        </p>
+      </figure>
+
+      <figure class="shot">
+        <h2>Numbered page + key</h2>
+        <img
+          src="samples/dogs/golden-retriever-vibrant/page.png"
+          alt="Vibrant golden retriever numbered colour-by-numbers page"
+        />
+        <p class="meta">
+          Outline with colour key — 21 paints, denser facial regions.
+          <a href="samples/dogs/golden-retriever-vibrant/page.png">Open image</a>
+        </p>
+      </figure>
+    </main>
+
+    <footer>
+      <p>
+        <a href="index.html">Plate viewer</a> ·
+        <a href="review.html">Review gallery</a> ·
+        <a href="https://github.com/jamiefuller320/Colour_by_numbers/pull/38">PR #38</a>
+      </p>
+    </footer>
+  </div>
+</body>
+</html>

@@ -44,15 +44,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--palette-mode",
-        choices=["standard", "free"],
-        default="standard",
-        help="standard = fixed 32-colour set; free = adaptive median-cut",
+        choices=["standard", "free", "exact"],
+        default=None,
+        help=(
+            "Palette mapping for photo path / override. "
+            "Illustration mode defaults from --style "
+            "(vibrant→exact preserve; standard→standard). "
+            "standard = fixed 32-colour set; free = adaptive median-cut; "
+            "exact = keep already-flat plate solids"
+        ),
     )
     parser.add_argument(
         "--min-adjacent-delta-e",
         type=float,
-        default=18.0,
-        help="Merge touching sections closer than this Lab ΔE (default: 18)",
+        default=None,
+        help=(
+            "Merge touching sections closer than this Lab ΔE "
+            "(default: 18, or from --style; vibrant uses 8)"
+        ),
     )
     parser.add_argument(
         "--colour-refine",
@@ -73,9 +82,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--complexity",
-        choices=["raw", "fine", "light", "medium", "simple", "detailed", "balanced"],
-        default="fine",
-        help="Region complexity for off/isolate modes (default: fine).",
+        choices=[
+            "raw",
+            "fine",
+            "vibrant",
+            "light",
+            "medium",
+            "simple",
+            "detailed",
+            "balanced",
+        ],
+        default=None,
+        help=(
+            "Region complexity for off/isolate modes "
+            "(default: fine, or from --style; vibrant→vibrant)."
+        ),
     )
     parser.add_argument(
         "--subject",
@@ -271,8 +292,9 @@ def build_parser() -> argparse.ArgumentParser:
         default="standard",
         help=(
             "Difficulty / visual band: simple (kids large fills), standard "
-            "(Phase B default), vibrant (adult end-goal mosaic; denser, "
-            "up to 32 colours). Default: standard"
+            "(Phase B default), vibrant (adult end-goal mosaic; denser "
+            "regions, exact palette preserve, up to 32 colours). "
+            "Default: standard"
         ),
     )
     parser.add_argument(
@@ -380,14 +402,20 @@ def main(argv: list[str] | None = None) -> int:
             )
         return 0
 
+    # Photo path defaults; illustration mode resolves these from --style.
+    photo_palette = args.palette_mode or "standard"
+    photo_complexity = args.complexity or "fine"
+    photo_delta_e = (
+        18.0 if args.min_adjacent_delta_e is None else float(args.min_adjacent_delta_e)
+    )
     common = dict(
         n_colours=args.colours,
-        palette_mode=args.palette_mode,
-        min_adjacent_delta_e=args.min_adjacent_delta_e,
+        palette_mode=photo_palette,
+        min_adjacent_delta_e=photo_delta_e,
         colour_refine=args.colour_refine,
         min_subject_bg_contrast=args.min_subject_bg_contrast,
         max_size=args.max_size,
-        complexity=args.complexity,
+        complexity=photo_complexity,
         subject_mode=args.subject,
         subject_model=args.subject_model,
         subject_autocrop=not args.no_subject_crop,
@@ -493,7 +521,6 @@ def main(argv: list[str] | None = None) -> int:
             n_colours=args.colours,
             complexity=args.complexity,
             subject_mode="off",
-            palette_mode=args.palette_mode,
             min_adjacent_delta_e=args.min_adjacent_delta_e,
             firm_border=args.firm_border,
             max_size=args.max_size,

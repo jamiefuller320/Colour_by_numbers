@@ -65,6 +65,18 @@ COMPLEXITY_PRESETS: dict[str, dict[str, float | int]] = {
         "line_width": 1,
         "simplify": 1,
     },
+    # Adult vibrant band: keep plate solids, allow dense interlocking regions.
+    "vibrant": {
+        "blur_radius": 0.0,
+        "structure_size": 768,
+        "min_area_fraction": 0.00035,
+        "max_regions": 420,
+        "smooth_radius": 0,
+        "morph_radius": 0,
+        "boundary_sigma": 0.15,
+        "line_width": 1,
+        "simplify": 1,
+    },
     "light": {
         "blur_radius": 1.0,
         "structure_size": 520,
