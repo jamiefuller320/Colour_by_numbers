@@ -1,26 +1,196 @@
 {
-  "generated_at": "2026-08-07T10:00:00+00:00",
-  "total_critiques": 1,
+  "generated_at": "2026-08-07T15:58:56+00:00",
+  "total_critiques": 8,
   "by_category": {
-    "dogs": 1
+    "boats": 1,
+    "dogs": 1,
+    "cats": 1,
+    "aircraft": 1,
+    "birds": 1,
+    "horses": 1,
+    "flowers": 1,
+    "cars": 1
   },
   "by_tag": {
+    "too_simple": 4,
     "nose_detail": 1,
-    "missing_detail": 1
+    "eyes": 2,
+    "colours": 2,
+    "other": 3,
+    "mouth_detail": 1,
+    "composition": 2,
+    "wrong_subject": 3
   },
   "global_hints": [
-    "clearly defined nose with visible nostrils and muzzle wrinkles, nose as separate colour regions",
-    "include all diagnostic breed or subject features as colour blocks"
+    "enough distinct colour regions to show form and depth; preserve characteristic markings and structural parts",
+    "smooth colour-region boundaries; clear value separation for depth",
+    "unmistakable subject with breed- or species-accurate colours and silhouette, no person or wrong entity",
+    "distinct flat colour blocks with clear value steps between neighbouring parts, prefer 12\u201316 colours",
+    "full subject in frame with a small margin, centred, not over-cropped or over-enlarged"
   ],
   "lessons": [
+    {
+      "category": "aircraft",
+      "tag": "composition",
+      "count": 1,
+      "examples": [
+        "Over enlarged. Smoother area boundaries would be better"
+      ],
+      "prompt_hint": "full subject in frame with a small margin, centred, not over-cropped or over-enlarged"
+    },
+    {
+      "category": "aircraft",
+      "tag": "too_simple",
+      "count": 1,
+      "examples": [
+        "Over enlarged. Smoother area boundaries would be better"
+      ],
+      "prompt_hint": "separate colour regions for body panels, windows, wheels or wings, and other structural parts \u2014 not a single flat fill"
+    },
+    {
+      "category": "birds",
+      "tag": "other",
+      "count": 1,
+      "examples": [
+        "Colour palette incorrect for Robin (specific breed colours). Smoother area boundaries would be better"
+      ],
+      "prompt_hint": "smooth colour-region boundaries; clear value separation for depth"
+    },
+    {
+      "category": "birds",
+      "tag": "wrong_subject",
+      "count": 1,
+      "examples": [
+        "Colour palette incorrect for Robin (specific breed colours). Smoother area boundaries would be better"
+      ],
+      "prompt_hint": "species-accurate bird colours and markings, clear beak (not a mammal nose), unmistakable silhouette"
+    },
+    {
+      "category": "boats",
+      "tag": "too_simple",
+      "count": 1,
+      "examples": [],
+      "prompt_hint": "separate colour regions for body panels, windows, wheels or wings, and other structural parts \u2014 not a single flat fill"
+    },
+    {
+      "category": "cars",
+      "tag": "colours",
+      "count": 1,
+      "examples": [
+        "Right side cropped.  Might be ok if intentional.  Too few colour regions"
+      ],
+      "prompt_hint": "enough distinct colour regions for body, windows, trim and other parts \u2014 avoid a single flat fill"
+    },
+    {
+      "category": "cars",
+      "tag": "composition",
+      "count": 1,
+      "examples": [
+        "Right side cropped.  Might be ok if intentional.  Too few colour regions"
+      ],
+      "prompt_hint": "full subject in frame with a small margin, centred, not over-cropped or over-enlarged"
+    },
+    {
+      "category": "cars",
+      "tag": "too_simple",
+      "count": 1,
+      "examples": [
+        "Right side cropped.  Might be ok if intentional.  Too few colour regions"
+      ],
+      "prompt_hint": "separate colour regions for body panels, windows, wheels or wings, and other structural parts \u2014 not a single flat fill"
+    },
+    {
+      "category": "cats",
+      "tag": "eyes",
+      "count": 1,
+      "examples": [
+        "No colour distinction for depth between head and body.  Eye detail different on each eye"
+      ],
+      "prompt_hint": "both eyes matching, each with separate dark pupil and lighter iris or sclera fills distinct from surrounding fur or feathers"
+    },
+    {
+      "category": "cats",
+      "tag": "mouth_detail",
+      "count": 1,
+      "examples": [
+        "No colour distinction for depth between head and body.  Eye detail different on each eye"
+      ],
+      "prompt_hint": "defined mouth and muzzle line with separate colour fills"
+    },
+    {
+      "category": "cats",
+      "tag": "other",
+      "count": 1,
+      "examples": [
+        "No colour distinction for depth between head and body.  Eye detail different on each eye"
+      ],
+      "prompt_hint": "smooth colour-region boundaries; clear value separation for depth"
+    },
+    {
+      "category": "dogs",
+      "tag": "colours",
+      "count": 1,
+      "examples": [
+        "No colour distinction for depth eg between head and body/neck",
+        "Clearly defined eyes in separate colours from surrounding area"
+      ],
+      "prompt_hint": "distinct value steps for depth between head, neck and body; eyes and nose as separate colours from surrounding fur"
+    },
+    {
+      "category": "dogs",
+      "tag": "eyes",
+      "count": 1,
+      "examples": [
+        "No colour distinction for depth eg between head and body/neck",
+        "Clearly defined eyes in separate colours from surrounding area"
+      ],
+      "prompt_hint": "both eyes matching, each with separate dark pupil and lighter iris or sclera fills distinct from surrounding fur or feathers"
+    },
     {
       "category": "dogs",
       "tag": "nose_detail",
       "count": 1,
       "examples": [
-        "No nose wrinkles or nostril definition on the pug muzzle"
+        "No colour distinction for depth eg between head and body/neck",
+        "Clearly defined eyes in separate colours from surrounding area"
       ],
       "prompt_hint": "clearly defined nose with visible nostrils and muzzle wrinkles, nose as separate colour regions"
+    },
+    {
+      "category": "dogs",
+      "tag": "other",
+      "count": 1,
+      "examples": [
+        "No colour distinction for depth eg between head and body/neck",
+        "Clearly defined eyes in separate colours from surrounding area"
+      ],
+      "prompt_hint": "smooth colour-region boundaries; clear value separation for depth"
+    },
+    {
+      "category": "dogs",
+      "tag": "too_simple",
+      "count": 1,
+      "examples": [
+        "No colour distinction for depth eg between head and body/neck",
+        "Clearly defined eyes in separate colours from surrounding area"
+      ],
+      "prompt_hint": "preserve characteristic markings and facial features; separate value steps between head, neck and body"
+    },
+    {
+      "category": "flowers",
+      "tag": "wrong_subject",
+      "count": 1,
+      "examples": [
+        "Unrecognisable.  Over enlarged/cropped image"
+      ],
+      "prompt_hint": "recognisable whole flower with petals and centre visible, species-typical colours, not an abstract crop"
+    },
+    {
+      "category": "horses",
+      "tag": "wrong_subject",
+      "count": 1,
+      "examples": [],
+      "prompt_hint": "unmistakable animal of the correct species/breed with accurate colours and silhouette"
     }
   ]
 }

@@ -42,7 +42,15 @@ def test_illustration_prompt_animals_share_earthy_cues() -> None:
     cat = illustration_prompt("maine coon", category="cats")
     bird = illustration_prompt("owl", category="birds")
     assert "eyes" in cat and "warm natural" in cat
+    assert "head, neck and body" in cat
     assert "eyes" in bird and "centred portrait" in bird
+    assert "beak" in bird
+    assert "muzzle" not in bird
+    assert "nostril" not in bird
+    boat = illustration_prompt("sailboat", category="boats")
+    assert "structural" in boat or "panels" in boat
+    assert "nostril" not in boat
+    assert "full subject in frame" in boat
 
 
 def test_illustration_prompt_spitfire_is_aircraft_not_person() -> None:

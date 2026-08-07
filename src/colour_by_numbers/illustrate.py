@@ -104,23 +104,38 @@ def illustration_prompt(
     hi = clamp_n_colours(max_colours, minimum=min_colours, maximum=max_colours)
     style = (
         "children's colouring book illustration, thick clean black outlines, "
+        "smooth colour-region boundaries, "
         f"flat cel fills using between {lo} and {hi} solid colours only, "
         f"large simple colour regions (each colourable block at least "
         f"{DEFAULT_MIN_REGION_MM:g}mm wide and {DEFAULT_MIN_REGION_MM:g}mm high "
         f"when printed on A4, with finer detail as black line drawing), "
         "high subject-background contrast, no gradients, "
-        "no photorealism, no text, white background"
+        "no photorealism, no text, white background, "
+        "full subject in frame with a small margin, not over-cropped"
     )
     animal_detail = (
-        "large expressive eyes, each eye with a separate dark pupil and lighter "
-        "iris or sclera fill (at least two distinct colour regions per eye), "
+        "large expressive matching eyes, each eye with a separate dark pupil and "
+        "lighter iris or sclera fill distinct from surrounding fur "
+        "(at least two distinct colour regions per eye), "
         "clearly defined nose and muzzle with visible nostrils and wrinkles "
-        "where applicable, sharp facial feature definition, warm natural colours"
+        "where applicable, sharp facial feature definition, "
+        "clear value steps between head, neck and body for depth, "
+        "warm natural colours"
+    )
+    bird_detail = (
+        "species-accurate plumage colours and markings, "
+        "large expressive matching eyes with separate dark pupil and lighter "
+        "iris fill distinct from feathers, clearly defined beak "
+        "(not a mammal nose), sharp feature definition"
     )
     people_detail = (
         "clear facial features, large expressive eyes with separate dark pupils "
         "and lighter iris or sclera fills (at least two colour regions per eye), "
         "defined nose and mouth, natural skin tones"
+    )
+    vehicle_detail = (
+        "complete vehicle silhouette in frame, separate colour regions for "
+        "body panels, windows, and structural parts"
     )
     negative = CATEGORY_NEGATIVE_CUES.get(category or "", "")
     negative_suffix = f", {negative}" if negative else ""
@@ -128,14 +143,18 @@ def illustration_prompt(
     kind_prefix = f"{kind}. " if kind else ""
     if category == "aircraft":
         return (
-            f"{kind_prefix}{subject} side view, clear silhouette, vehicle only"
+            f"{kind_prefix}{subject} side view, clear silhouette, {vehicle_detail}"
             f"{negative_suffix}, {style}"
         )
     if category == "flowers":
-        return f"{kind_prefix}{subject} centred portrait{negative_suffix}, {style}"
+        return (
+            f"{kind_prefix}{subject} whole flower centred, petals and centre "
+            f"disk clearly recognisable, species-typical colours, stem or leaves "
+            f"visible if needed for identity{negative_suffix}, {style}"
+        )
     if category == "birds":
         return (
-            f"{kind_prefix}{subject} centred portrait, {animal_detail}"
+            f"{kind_prefix}{subject} centred portrait, {bird_detail}"
             f"{negative_suffix}, {style}"
         )
     if category in {"people", "portraits"}:
@@ -150,7 +169,7 @@ def illustration_prompt(
         )
     if category in {"cars", "boats"}:
         return (
-            f"{kind_prefix}{subject} side view, clear silhouette, vehicle only"
+            f"{kind_prefix}{subject} side view, clear silhouette, {vehicle_detail}"
             f"{negative_suffix}, {style}"
         )
     return f"{kind_prefix}{subject} portrait, centred subject{negative_suffix}, {style}"
