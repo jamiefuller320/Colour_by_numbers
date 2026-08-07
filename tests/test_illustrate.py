@@ -31,11 +31,48 @@ def test_illustration_prompt_mentions_colouring_style() -> None:
     prompt = illustration_prompt("golden retriever", category="dogs")
     assert "golden retriever" in prompt
     assert "colouring book" in prompt
-    assert "between 8 and 16" in prompt
+    assert "8 to 16" in prompt or "16 colours" in prompt
     assert "8mm wide" in prompt
     assert "black line drawing" in prompt
     assert "eyes" in prompt
     assert "warm natural" in prompt
+
+
+def test_prepare_book_palette_keeps_more_colours_than_standard() -> None:
+    """Fixed-subset snapping under-fills; book/adaptive mode should keep more."""
+    from colour_by_numbers.illustrate import prepare_illustration_for_colouring
+
+    image = Image.new("RGB", (240, 240), (248, 248, 252))
+    draw = ImageDraw.Draw(image)
+    colours = [
+        (220, 40, 40),
+        (50, 110, 210),
+        (50, 150, 60),
+        (245, 180, 40),
+        (130, 85, 45),
+        (240, 120, 160),
+        (30, 60, 150),
+        (175, 130, 75),
+        (40, 180, 190),
+        (200, 70, 20),
+        (110, 70, 160),
+        (90, 50, 30),
+    ]
+    for i, colour in enumerate(colours):
+        x0 = 10 + (i % 4) * 55
+        y0 = 10 + (i // 4) * 70
+        draw.rectangle((x0, y0, x0 + 50, y0 + 60), fill=colour)
+
+    book, book_n = prepare_illustration_for_colouring(
+        image, n_colours=16, min_region_mm=4.0, palette_mode="book"
+    )
+    standard, standard_n = prepare_illustration_for_colouring(
+        image, n_colours=16, min_region_mm=4.0, palette_mode="standard"
+    )
+    assert book_n >= 8
+    assert book_n >= standard_n
+    assert book.size == image.size
+    del standard
 
 
 def test_illustration_prompt_animals_share_earthy_cues() -> None:

@@ -61,7 +61,8 @@ assert STANDARD_PALETTE_32.shape == (32, 3)
 MIN_N_COLOURS = 8
 MAX_N_COLOURS = 16
 DEFAULT_N_COLOURS = 32
-DEFAULT_ILLUSTRATION_COLOURS = 12
+# Target the top of the 8–16 band; fixed-subset snapping often under-fills.
+DEFAULT_ILLUSTRATION_COLOURS = 16
 DEFAULT_MIN_ADJACENT_DELTA_E = 18.0
 DEFAULT_MIN_SUBJECT_BG_CONTRAST = 22.0
 
@@ -249,6 +250,52 @@ def _reserved_palette_indices(
     tan = np.where(safe & (lightness >= 60) & (lightness <= 85))[0]
     _take(tan[np.argsort(lightness[tan])], limit=1)
     return reserved[: max(3, min(6, n_colours // 2))]
+
+
+def snap_palette_to_standard(
+    palette: np.ndarray,
+    *,
+    standards: np.ndarray | None = None,
+    category: str | None = None,
+) -> np.ndarray:
+    """Map adaptive colours onto distinct entries of the standard crayon set.
+
+    Each source colour takes the nearest unused standard colour (Lab ΔE). For
+    earthy animal categories, dark source colours prefer warm neutrals / browns
+    so shadows do not land on purple or teal crayons.
+    """
+    source = np.asarray(palette, dtype=np.uint8).reshape(-1, 3)
+    base = (
+        STANDARD_PALETTE_32
+        if standards is None
+        else np.asarray(standards, dtype=np.uint8).reshape(-1, 3)
+    )
+    if source.size == 0:
+        return source.copy()
+
+    lab_src = rgb_to_lab(source)
+    lab_base = rgb_to_lab(base)
+    safe = earthy_shadow_mask(base) if category in EARTHY_CATEGORIES else None
+    used: set[int] = set()
+    out = np.empty_like(source)
+
+    for i in range(source.shape[0]):
+        delta = np.sqrt(np.sum((lab_src[i] - lab_base) ** 2, axis=1))
+        if safe is not None and float(lab_src[i, 0]) < 42.0:
+            # Prefer earthy crayons for dark adaptive centres.
+            ranked = np.argsort(np.where(safe, delta, delta + 1.0e6))
+        else:
+            ranked = np.argsort(delta)
+        chosen = None
+        for idx in ranked.tolist():
+            if idx not in used:
+                chosen = int(idx)
+                break
+        if chosen is None:
+            chosen = int(ranked[0])
+        used.add(chosen)
+        out[i] = base[chosen]
+    return out
 
 
 def select_active_palette(

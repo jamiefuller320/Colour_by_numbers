@@ -32,12 +32,13 @@ from .palette import (
     clamp_n_colours,
     nearest_palette_indices,
     select_active_palette,
+    snap_palette_to_standard,
 )
 from .print_resolution import (
     DEFAULT_MIN_REGION_MM,
     min_region_size_for_a4_mm,
 )
-from .quantize import prefilter_for_regions, resize_for_processing
+from .quantize import adaptive_quantize, prefilter_for_regions, resize_for_processing
 from .simplify import (
     absorb_small_regions,
     absorb_thin_regions,
@@ -105,7 +106,9 @@ def illustration_prompt(
     style = (
         "children's colouring book illustration, thick clean black outlines, "
         "smooth colour-region boundaries, "
-        f"flat cel fills using between {lo} and {hi} solid colours only, "
+        f"flat cel fills with about {lo} to {hi} distinct solid colours "
+        f"and clear value steps between neighbouring parts "
+        f"(aim near {hi} colours, not a handful of fills), "
         f"large simple colour regions (each colourable block at least "
         f"{DEFAULT_MIN_REGION_MM:g}mm wide and {DEFAULT_MIN_REGION_MM:g}mm high "
         f"when printed on A4, with finer detail as black line drawing), "
@@ -181,24 +184,43 @@ def prepare_illustration_for_colouring(
     n_colours: int = DEFAULT_ILLUSTRATION_COLOURS,
     min_region_mm: float = DEFAULT_MIN_REGION_MM,
     category: str | None = None,
+    palette_mode: str = "book",
 ) -> tuple[Image.Image, int]:
     """Clamp a generated plate to 8–16 flat palette colours and A4-safe regions.
 
     Colourable blocks must be at least ``min_region_mm`` wide **and** high on
     A4 (enough for a circular tip of that diameter). Smaller features are kept
-    as black line detail instead of numbered fills. For animal categories, dark
-    pixels stay on warm neutrals / browns.
+    as black line detail instead of numbered fills.
+
+    ``palette_mode``:
+      - ``book`` (default): median-cut adaptive colours, then snap each to a
+        distinct standard crayon. Keeps ~N fills instead of collapsing onto a
+        thin pre-selected subset of the 32-colour set.
+      - ``adaptive`` / ``free``: median-cut colours kept as-is (richest hues).
+      - ``standard``: legacy map onto a pre-selected subset of the fixed set
+        (often under-fills to 3–5 colours on simple fal plates).
     """
     n = clamp_n_colours(n_colours)
-    rgb = np.asarray(image.convert("RGB"), dtype=np.uint8)
-    height, width = rgb.shape[:2]
-    active = select_active_palette(
-        STANDARD_PALETTE_32,
-        n_colours=n,
-        image_rgb=rgb,
-        category=category,
-    )
-    labels = nearest_palette_indices(rgb, active, category=category)
+    rgb_image = image.convert("RGB")
+    height, width = rgb_image.size[1], rgb_image.size[0]
+    mode = (palette_mode or "book").lower().strip()
+
+    if mode in {"standard", "fixed"}:
+        rgb = np.asarray(rgb_image, dtype=np.uint8)
+        active = select_active_palette(
+            STANDARD_PALETTE_32,
+            n_colours=n,
+            image_rgb=rgb,
+            category=category,
+        )
+        labels = nearest_palette_indices(rgb, active, category=category)
+    else:
+        quantized = adaptive_quantize(rgb_image, n_colours=n, blur_radius=0.8)
+        labels = quantized.labels
+        active = quantized.palette
+        if mode in {"book", "crayon", "standard_snap"}:
+            active = snap_palette_to_standard(active, category=category)
+
     region = min_region_size_for_a4_mm(width, height, min_mm=min_region_mm)
     tip = float(max(2, region.min_inscribed_diameter_px))
     # Merge split same-colour islands (e.g. both eye whites) before the
@@ -315,19 +337,10 @@ def stylize_reference_to_illustration(
         mask = align_mask(harden_mask(mask), prepared.size, firm=True)
 
     flat = _smooth_flat(prepared, radius=2.6)
-    pixels = np.asarray(flat, dtype=np.uint8)
-    active = select_active_palette(
-        STANDARD_PALETTE_32,
-        n_colours=n_colours,
-        image_rgb=pixels,
-        category=category,
-    )
-    labels = nearest_palette_indices(pixels, active, category=category)
-    poster = active[labels]
-
-    # Force a clean flat background outside the firm mask.
+    # Force a clean flat background outside the firm mask, then let prepare
+    # build an adaptive / book palette (do not pre-snap to a thin fixed subset).
     hard = harden_mask(mask).binary
-    poster = poster.copy()
+    poster = np.asarray(flat, dtype=np.uint8).copy()
     poster[~hard] = np.asarray(background, dtype=np.uint8)
 
     illustrated = Image.fromarray(poster, mode="RGB")
@@ -346,6 +359,7 @@ def stylize_reference_to_illustration(
         n_colours=n_colours,
         min_region_mm=min_region_mm,
         category=category,
+        palette_mode="book",
     )
 
     prompt = (
@@ -360,7 +374,8 @@ def stylize_reference_to_illustration(
         n_colours=used,
         prompt=prompt,
         notes=(
-            "Local stylize: isolate subject, map to 8–16 standard colours, "
+            "Local stylize: isolate subject, adaptive book palette "
+            f"(target {n_colours} colours), "
             f"A4 regions ≥{min_region_mm:g}mm, flat background, firm ink outline."
         ),
     )

@@ -19,7 +19,7 @@ reconstruction target.
 | Subject fill | Subject (non-background colours) covers **≥ ~50%** of the page | Avoids tiny floating subjects on empty fields |
 | Colourable fill | **≥ 90%** of pixels are fillable (numbered) regions | Ink/line detail stays a guide, not most of the page |
 | Dominant colour | No single palette colour exceeds **~50%** of the page | Blocks empty sky/background floods and one-blob plates |
-| Colour budget | **8–16** flat colours | Enough interest, still hand-colourable |
+| Colour budget | **8–16** flat colours (target **16**) | Enough interest, still hand-colourable. Extract adaptively from the generated plate, then snap to distinct crayons — do **not** pre-thin the fixed 32-set (that collapses many fal plates to 3–5 fills). |
 | Region size | Every colourable block **≥ 8mm × 8mm** on A4 | Fits a marker tip; finer marks become black line |
 | Composition | One clear subject, centred or slight bias; simple or no scene clutter | Readable at colouring-book distance |
 | Background | Flat light field (off-white / pale), not textured photo ground | High contrast; easy first fill |
