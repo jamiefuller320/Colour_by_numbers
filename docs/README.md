@@ -1,11 +1,14 @@
 # Static plate viewer (GitHub Pages)
 
-This folder is published to **GitHub Pages**. It is a **viewer only**: upload a
-generated colour plate, clamp it to the colouring palette, and preview the
-numbered outline. Works on **iPad / phone** with no localhost and **no API keys**.
+This folder is published to **GitHub Pages**. It is a **viewer only**: browse
+example plates from the live fal.ai pipeline, or upload your own generated
+colour plate, clamp it to the colouring palette, and preview the numbered
+outline. Works on **iPad / phone** with no localhost and **no API keys**.
 
 **Generation** (fal.ai Flux) runs in Streamlit or the CLI with `FAL_KEY` — not
 in the browser.
+
+Example assets live under `samples/` and are listed in `samples.json`.
 
 ## Local preview
 

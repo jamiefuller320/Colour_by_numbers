@@ -15,8 +15,9 @@
       <p class="brand">Colour by Numbers</p>
       <h1>Plate viewer</h1>
       <p class="lede">
-        Review a generated colour plate on any device (including iPad): upload an
-        image, clamp it to the colouring palette, and preview the numbered outline.
+        Review a generated colour plate on any device (including iPad): browse
+        live fal.ai examples, upload your own image, clamp it to the colouring
+        palette, and preview the numbered outline.
         <strong>Generation runs in Streamlit/CLI via fal.ai</strong> — this page
         does not call image APIs or need keys.
       </p>
@@ -24,6 +25,17 @@
 
     <main class="layout">
       <section class="panel controls">
+        <label>
+          Example plate
+          <select id="sample-select">
+            <option value="">— choose a sample —</option>
+          </select>
+        </label>
+        <div class="actions">
+          <button id="load-sample" type="button" disabled>Load example</button>
+        </div>
+        <p id="sample-note" class="fineprint sample-note" hidden></p>
+        <hr class="control-divider" />
         <label>
           Category (palette bias)
           <select id="category"></select>
@@ -67,6 +79,15 @@
         </div>
         <div class="preview-actions">
           <a id="download-outline" class="ghost link" href="#" download="outline.png" hidden>Download outline PNG</a>
+        </div>
+
+        <h2 class="outline-heading">Printable page</h2>
+        <div id="page-frame" class="result-frame empty">
+          <p class="placeholder page-placeholder">Full page with colour key appears here for examples or after upload.</p>
+          <img id="page-image" alt="Printable colour-by-numbers page with legend" hidden />
+        </div>
+        <div class="preview-actions">
+          <a id="download-page" class="ghost link" href="#" download="page.png" hidden>Download page PNG</a>
         </div>
       </section>
     </main>

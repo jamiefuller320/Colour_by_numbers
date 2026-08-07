@@ -1,4 +1,7 @@
 const categorySelect = document.getElementById("category");
+const sampleSelect = document.getElementById("sample-select");
+const loadSampleBtn = document.getElementById("load-sample");
+const sampleNoteEl = document.getElementById("sample-note");
 const coloursInput = document.getElementById("colours");
 const fileInput = document.getElementById("file-input");
 const processBtn = document.getElementById("process");
@@ -9,8 +12,12 @@ const outlineFrame = document.getElementById("outline-frame");
 const outlineImageEl = document.getElementById("outline-image");
 const downloadLink = document.getElementById("download");
 const downloadOutline = document.getElementById("download-outline");
+const pageFrame = document.getElementById("page-frame");
+const pageImageEl = document.getElementById("page-image");
+const downloadPage = document.getElementById("download-page");
 
 let categories = {};
+let samples = [];
 let pendingImage = null;
 
 const STANDARD_PALETTE = [
@@ -811,6 +818,103 @@ function showImage(el, frameEl, objectUrl) {
   frameEl.querySelector(".placeholder")?.remove();
 }
 
+function clearPagePreview() {
+  pageImageEl.hidden = true;
+  pageFrame.classList.add("empty");
+  if (!pageFrame.querySelector(".placeholder")) {
+    const p = document.createElement("p");
+    p.className = "placeholder page-placeholder";
+    p.textContent = "Full page with colour key appears here for examples or after upload.";
+    pageFrame.appendChild(p);
+  }
+  downloadPage.hidden = true;
+  revokePrev(pageImageEl);
+  pageImageEl.removeAttribute("src");
+}
+
+function showStaticImage(el, frameEl, url, downloadEl, filename) {
+  revokePrev(el);
+  el.onload = () => {
+    el.dataset.prevUrl = url;
+  };
+  el.src = url;
+  el.hidden = false;
+  frameEl.classList.remove("empty");
+  frameEl.querySelector(".placeholder")?.remove();
+  if (downloadEl) {
+    downloadEl.href = url;
+    downloadEl.download = filename;
+    downloadEl.hidden = false;
+  }
+}
+
+function clearSampleNote() {
+  sampleNoteEl.hidden = true;
+  sampleNoteEl.textContent = "";
+}
+
+function setSampleNote(text) {
+  if (!text) {
+    clearSampleNote();
+    return;
+  }
+  sampleNoteEl.textContent = text;
+  sampleNoteEl.hidden = false;
+}
+
+async function loadSamplePlate(sampleId) {
+  const sample = samples.find((item) => item.id === sampleId);
+  if (!sample) {
+    setStatus("Sample not found.", "error");
+    return;
+  }
+  pendingImage = null;
+  processBtn.disabled = true;
+  fileInput.value = "";
+  clearOutlinePreview();
+  clearPagePreview();
+  setStatus(`Loading “${sample.label}”…`);
+  try {
+    const plateUrl = new URL(sample.images.plate, window.location.href).href;
+    const outlineUrl = new URL(sample.images.outline, window.location.href).href;
+    const pageUrl = new URL(sample.images.page, window.location.href).href;
+    showStaticImage(
+      imageEl,
+      frame,
+      plateUrl,
+      downloadLink,
+      `${sample.subject}_plate.png`
+    );
+    showStaticImage(
+      outlineImageEl,
+      outlineFrame,
+      outlineUrl,
+      downloadOutline,
+      `${sample.subject}_outline.png`
+    );
+    showStaticImage(
+      pageImageEl,
+      pageFrame,
+      pageUrl,
+      downloadPage,
+      `${sample.subject}_page.png`
+    );
+    if (categories[sample.category]) {
+      categorySelect.value = sample.category;
+    }
+    const note = [sample.note, sample.backend ? `Backend: ${sample.backend}` : ""]
+      .filter(Boolean)
+      .join(" · ");
+    setSampleNote(note);
+    setStatus(
+      `Example: ${sample.label} (${sample.category}). Upload your own plate below to process locally.`,
+      "ok"
+    );
+  } catch (err) {
+    setStatus(err.message || String(err), "error");
+  }
+}
+
 function clearOutlinePreview() {
   outlineImageEl.hidden = true;
   outlineFrame.classList.add("empty");
@@ -850,6 +954,10 @@ async function processPending() {
   processBtn.disabled = true;
   setStatus("Clamping to 8–16 flat colours; colourable blocks ≥8×8mm…");
   clearOutlinePreview();
+  clearPagePreview();
+  clearSampleNote();
+  sampleSelect.value = "";
+  loadSampleBtn.disabled = !sampleSelect.value;
   try {
     const prepared = prepareIllustrationCanvas(
       pendingImage,
@@ -891,11 +999,14 @@ async function processPending() {
 }
 
 async function init() {
-  const response = await fetch("./categories.json");
-  if (!response.ok) {
-    throw new Error(`categories.json HTTP ${response.status}`);
+  const [categoriesResponse, samplesResponse] = await Promise.all([
+    fetch("./categories.json"),
+    fetch("./samples.json"),
+  ]);
+  if (!categoriesResponse.ok) {
+    throw new Error(`categories.json HTTP ${categoriesResponse.status}`);
   }
-  categories = await response.json();
+  categories = await categoriesResponse.json();
   const names = Object.keys(categories).sort();
   categorySelect.innerHTML = "";
   for (const name of names) {
@@ -905,7 +1016,35 @@ async function init() {
     if (name === "dogs") opt.selected = true;
     categorySelect.appendChild(opt);
   }
-  setStatus("Upload a generated plate to preview the colour-by-numbers outline.");
+
+  if (samplesResponse.ok) {
+    const payload = await samplesResponse.json();
+    samples = Array.isArray(payload.samples) ? payload.samples : [];
+    sampleSelect.innerHTML = '<option value="">— choose a sample —</option>';
+    for (const sample of samples) {
+      const opt = document.createElement("option");
+      opt.value = sample.id;
+      opt.textContent = `${sample.label} (${sample.category})`;
+      sampleSelect.appendChild(opt);
+    }
+    loadSampleBtn.disabled = !sampleSelect.value;
+    if (samples.length) {
+      sampleSelect.value = samples[0].id;
+      loadSampleBtn.disabled = false;
+      await loadSamplePlate(samples[0].id);
+    } else {
+      setStatus("Upload a generated plate to preview the colour-by-numbers outline.");
+    }
+  } else {
+    setStatus("Upload a generated plate to preview the colour-by-numbers outline.");
+  }
+
+  sampleSelect?.addEventListener("change", () => {
+    loadSampleBtn.disabled = !sampleSelect.value;
+  });
+  loadSampleBtn?.addEventListener("click", () => {
+    if (sampleSelect.value) loadSamplePlate(sampleSelect.value);
+  });
   fileInput?.addEventListener("change", async () => {
     const file = fileInput.files?.[0];
     if (!file) {
@@ -913,6 +1052,10 @@ async function init() {
       processBtn.disabled = true;
       return;
     }
+    clearSampleNote();
+    sampleSelect.value = "";
+    loadSampleBtn.disabled = true;
+    clearPagePreview();
     try {
       pendingImage = await loadImageFromFile(file);
       processBtn.disabled = false;
