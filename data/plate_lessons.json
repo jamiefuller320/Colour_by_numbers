@@ -1,0 +1,26 @@
+{
+  "generated_at": "2026-08-07T10:00:00+00:00",
+  "total_critiques": 1,
+  "by_category": {
+    "dogs": 1
+  },
+  "by_tag": {
+    "nose_detail": 1,
+    "missing_detail": 1
+  },
+  "global_hints": [
+    "clearly defined nose with visible nostrils and muzzle wrinkles, nose as separate colour regions",
+    "include all diagnostic breed or subject features as colour blocks"
+  ],
+  "lessons": [
+    {
+      "category": "dogs",
+      "tag": "nose_detail",
+      "count": 1,
+      "examples": [
+        "No nose wrinkles or nostril definition on the pug muzzle"
+      ],
+      "prompt_hint": "clearly defined nose with visible nostrils and muzzle wrinkles, nose as separate colour regions"
+    }
+  ]
+}
