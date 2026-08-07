@@ -17,6 +17,38 @@
       }
     },
     {
+      "id": "cats-tabby-vibrant",
+      "category": "cats",
+      "subject": "tabby cat",
+      "label": "Tabby cat (vibrant)",
+      "backend": "fal",
+      "note": "Vibrant cross-subject check — 20 colours / 131 regions, cool teal shadows",
+      "images": {
+        "plate": "samples/cats/tabby-vibrant/plate.png",
+        "outline": "samples/cats/tabby-vibrant/outline.png",
+        "page": "samples/cats/tabby-vibrant/page.png",
+        "illustration": "samples/cats/tabby-vibrant/illustration.png",
+        "plate_svg": "samples/cats/tabby-vibrant/plate.svg",
+        "outline_svg": "samples/cats/tabby-vibrant/outline.svg"
+      }
+    },
+    {
+      "id": "aircraft-biplane-vibrant",
+      "category": "aircraft",
+      "subject": "biplane",
+      "label": "Biplane (vibrant)",
+      "backend": "fal",
+      "note": "Vibrant cross-subject check — cool teal wing shadows; outline 16 colours / 78 regions",
+      "images": {
+        "plate": "samples/aircraft/biplane-vibrant/plate.png",
+        "outline": "samples/aircraft/biplane-vibrant/outline.png",
+        "page": "samples/aircraft/biplane-vibrant/page.png",
+        "illustration": "samples/aircraft/biplane-vibrant/illustration.png",
+        "plate_svg": "samples/aircraft/biplane-vibrant/plate.svg",
+        "outline_svg": "samples/aircraft/biplane-vibrant/outline.svg"
+      }
+    },
+    {
       "id": "dogs-pug",
       "category": "dogs",
       "subject": "pug",
