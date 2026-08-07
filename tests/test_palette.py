@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from colour_by_numbers.palette import (
+    DEFAULT_ILLUSTRATION_COLOURS,
     STANDARD_PALETTE_32,
     clamp_n_colours,
     colour_distance_matrix,
@@ -13,6 +14,7 @@ from colour_by_numbers.palette import (
     is_earthy_shadow_colour,
     nearest_palette_indices,
     select_active_palette,
+    snap_palette_to_standard,
 )
 from colour_by_numbers.pipeline import create_colour_by_numbers
 from colour_by_numbers.quantize import quantize_colours
@@ -25,6 +27,30 @@ def test_standard_palette_has_thirty_two_distinct_colours() -> None:
     # Off-diagonal minimum should be clearly visible (not near-duplicates).
     off = dist[np.triu_indices(32, k=1)]
     assert float(off.min()) > 8.0
+
+
+def test_default_illustration_budget_targets_sixteen() -> None:
+    assert DEFAULT_ILLUSTRATION_COLOURS == 16
+    assert clamp_n_colours(32) == 16
+
+
+def test_snap_palette_to_standard_keeps_distinct_crayons() -> None:
+    adaptive = np.array(
+        [
+            [210, 45, 40],
+            [48, 120, 200],
+            [40, 160, 55],
+            [240, 200, 60],
+            [20, 20, 20],
+        ],
+        dtype=np.uint8,
+    )
+    snapped = snap_palette_to_standard(adaptive, category="boats")
+    assert snapped.shape == adaptive.shape
+    # All distinct and members of the standard set.
+    assert len({tuple(row) for row in snapped}) == len(adaptive)
+    for colour in snapped:
+        assert any(np.array_equal(colour, row) for row in STANDARD_PALETTE_32)
 
 
 def test_quantize_standard_uses_fixed_palette() -> None:

@@ -156,6 +156,42 @@ def quantize_colours(
     return QuantizedImage(labels=labels_sorted, palette=palette, preview=preview)
 
 
+def adaptive_quantize(
+    image: Image.Image,
+    *,
+    n_colours: int,
+    blur_radius: float = 0.8,
+) -> QuantizedImage:
+    """Median-cut quantize at full resolution (no downscale).
+
+    Used by illustration prepare so fal/API plates keep ~N distinct fills
+    instead of collapsing onto a thin pre-selected subset of the 32-crayon set.
+    """
+    if n_colours < 2 or n_colours > 64:
+        raise ValueError("n_colours must be between 2 and 64.")
+    working = image.convert("RGB")
+    if blur_radius > 0:
+        working = prefilter_for_regions(working, blur_radius=blur_radius)
+    paletted = working.quantize(
+        colors=int(n_colours),
+        method=Image.Quantize.MEDIANCUT,
+        dither=Image.Dither.NONE,
+    )
+    raw_palette = paletted.getpalette() or []
+    labels = np.asarray(paletted, dtype=np.int32)
+    used = np.unique(labels)
+    full = np.array(raw_palette, dtype=np.uint8).reshape(-1, 3)
+    if full.shape[0] < int(used.max()) + 1:
+        raise RuntimeError("Palette shorter than labelled colour indices.")
+    palette_unsorted = full[used]
+    compact = np.zeros_like(labels)
+    for new_idx, old_idx in enumerate(used):
+        compact[labels == old_idx] = new_idx
+    labels_sorted, palette = _sort_palette_dark_to_light(compact, palette_unsorted)
+    preview = Image.fromarray(palette[labels_sorted], mode="RGB")
+    return QuantizedImage(labels=labels_sorted, palette=palette, preview=preview)
+
+
 def preview_from_labels(labels: np.ndarray, palette: np.ndarray) -> Image.Image:
     """Rebuild an RGB preview from a (possibly simplified) label map."""
     return Image.fromarray(palette[labels], mode="RGB")
