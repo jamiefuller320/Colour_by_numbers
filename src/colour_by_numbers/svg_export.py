@@ -77,8 +77,13 @@ def build_outline_svg(
     line_width: float = 2.0,
     simplify_tolerance: float = 0.85,
     number_font_scale: float = 1.0,
+    silhouette_mask: np.ndarray | None = None,
 ) -> str:
-    """Numbered outline with round vector strokes (print-friendly)."""
+    """Numbered outline with round vector strokes (print-friendly).
+
+    ``silhouette_mask`` adds an outer subject stroke even where adjacent fills
+    share a palette colour (subject/background colour collisions).
+    """
     height, width = labels.shape
     root = ET.Element(
         "svg",
@@ -104,6 +109,23 @@ def build_outline_svg(
     for _colour_idx, mask in iter_component_masks(labels):
         for path_d in _contour_paths(mask, simplify_tolerance=simplify_tolerance):
             ET.SubElement(stroke_group, "path", {"d": path_d})
+
+    if silhouette_mask is not None:
+        sil = silhouette_mask.astype(bool)
+        if sil.shape == (height, width) and sil.any():
+            sil_group = ET.SubElement(
+                root,
+                "g",
+                {
+                    "fill": "none",
+                    "stroke": "#000000",
+                    "stroke-width": f"{max(line_width, line_width + 0.5):.2f}",
+                    "stroke-linejoin": "round",
+                    "stroke-linecap": "round",
+                },
+            )
+            for path_d in _contour_paths(sil, simplify_tolerance=simplify_tolerance):
+                ET.SubElement(sil_group, "path", {"d": path_d})
 
     text_group = ET.SubElement(root, "g")
     base_font = max(12.0, min(width, height) * 0.035 * number_font_scale)

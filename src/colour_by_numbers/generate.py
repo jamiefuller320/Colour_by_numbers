@@ -323,6 +323,9 @@ def generate_colouring_page(
     ):
         pipeline_kwargs.pop(key, None)
     pipeline_kwargs.setdefault("min_region_mm", min_region_mm)
+    # Illustrations often reuse fill colours in the abstract background; keep the
+    # subject silhouette inked so colourists can still see the form.
+    pipeline_kwargs.setdefault("silhouette_outline", True)
     resolved_complexity = complexity or preset.complexity
     resolved_delta_e = (
         float(min_adjacent_delta_e)

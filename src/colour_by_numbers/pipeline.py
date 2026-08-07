@@ -37,8 +37,10 @@ from .subject import (
     SubjectMask,
     align_mask,
     blend_subject_background,
+    estimate_silhouette_mask,
     harden_mask,
     prepare_subject_image,
+    silhouette_binary_from_mask,
 )
 
 
@@ -296,6 +298,7 @@ def create_colour_by_numbers(
     min_adjacent_delta_e: float = DEFAULT_MIN_ADJACENT_DELTA_E,
     colour_refine: bool = True,
     min_subject_bg_contrast: float | None = None,
+    silhouette_outline: bool = False,
     seed: int = 42,
     source_hit: ImageHit | None = None,
 ) -> ColourByNumbersResult:
@@ -307,6 +310,9 @@ def create_colour_by_numbers(
       3. reject plates below ``min_a4_dpi`` when printed to A4
       4. shared standardised palette of at most ``n_colours`` (default 32)
       5. ``subject_complexity`` on the subject, ``background_complexity`` on bg
+
+    When ``silhouette_outline`` is True, ink the subject outer silhouette on the
+    numbered page even where subject and background share a fill colour.
     """
     if complexity not in COMPLEXITY_PRESETS:
         raise ValueError(
@@ -440,6 +446,15 @@ def create_colour_by_numbers(
     if subject_mask is not None:
         aligned = align_mask(subject_mask, (width, height), firm=firm_border)
         subject_mask_for_eyes = aligned.alpha >= 128
+    silhouette_bool: np.ndarray | None = None
+    if silhouette_outline:
+        if subject_mask is not None:
+            aligned_sil = align_mask(subject_mask, prepared.size, firm=True)
+            silhouette_bool = silhouette_binary_from_mask(aligned_sil)
+        else:
+            silhouette_bool = estimate_silhouette_mask(
+                prepared_native, model_name=subject_model
+            )
     used_subject_complexity: str | None = None
     used_background_complexity: str | None = None
 
@@ -518,6 +533,8 @@ def create_colour_by_numbers(
             min_region_mm=min_region_mm,
             palette_category=palette_category,
             subject_mask=mask_bool,
+            silhouette_mask=silhouette_bool,
+            force_silhouette_outline=bool(silhouette_outline and silhouette_bool is not None),
         )
         from .simplify import SimplificationStats
 
@@ -579,6 +596,10 @@ def create_colour_by_numbers(
             min_region_mm=min_region_mm,
             palette_category=palette_category,
             subject_mask=subject_mask_for_eyes,
+            silhouette_mask=silhouette_bool,
+            force_silhouette_outline=bool(
+                silhouette_outline and silhouette_bool is not None
+            ),
         )
         complexity_label = complexity
 

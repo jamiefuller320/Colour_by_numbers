@@ -59,6 +59,29 @@ def _edges_from_labels(labels: np.ndarray) -> np.ndarray:
     return edges
 
 
+def _align_bool_mask(mask: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+    """Nearest-neighbour resize a boolean mask to ``(height, width)``."""
+    height, width = shape
+    if mask.shape == (height, width):
+        return mask.astype(bool, copy=False)
+    img = Image.fromarray(mask.astype(np.uint8) * 255, mode="L")
+    img = img.resize((width, height), Image.Resampling.NEAREST)
+    return np.asarray(img) > 0
+
+
+def silhouette_edge_mask(mask: np.ndarray, *, width: int = 1) -> np.ndarray:
+    """Ring of edge pixels around a subject silhouette (independent of fills)."""
+    hard = mask.astype(bool)
+    if not hard.any():
+        return np.zeros(hard.shape, dtype=bool)
+    iterations = max(1, int(width))
+    eroded = ndimage.binary_erosion(hard, iterations=iterations)
+    edge = hard & ~eroded
+    if width > 1:
+        edge = ndimage.binary_dilation(edge, iterations=width - 1)
+    return edge
+
+
 def _load_font(size: int) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
     for name in (
         "DejaVuSans.ttf",
@@ -178,6 +201,8 @@ def build_outline_page(
     detail_ink: np.ndarray | None = None,
     palette_category: str | None = None,
     subject_mask: np.ndarray | None = None,
+    silhouette_mask: np.ndarray | None = None,
+    force_silhouette_outline: bool = False,
     stroke_mm: float | None = None,
     export_svg: bool = True,
 ) -> OutlinePage:
@@ -187,6 +212,11 @@ def build_outline_page(
     printed on A4 (or the explicit ``min_width_px`` / ``min_height_px``). Each
     block must fit a circular colouring tip of that diameter. Undersized
     features become black line detail instead of numbered fills.
+
+    When ``force_silhouette_outline`` is True, ink the subject silhouette even
+    where subject and background share the same fill colour (so colourists can
+    still see the form and choose to differentiate). Uses ``silhouette_mask``
+    when provided, otherwise ``subject_mask``.
     """
     stats: SimplificationStats | None = None
     working_labels = labels
@@ -306,6 +336,13 @@ def build_outline_page(
     if detail.shape != working_labels.shape:
         detail = np.zeros(working_labels.shape, dtype=bool)
     edges = _edges_from_labels(working_labels) | detail
+    aligned_silhouette: np.ndarray | None = None
+    if force_silhouette_outline:
+        source_sil = silhouette_mask if silhouette_mask is not None else subject_mask
+        if source_sil is not None:
+            aligned_silhouette = _align_bool_mask(source_sil, (height, width))
+            if aligned_silhouette.any():
+                edges = edges | silhouette_edge_mask(aligned_silhouette, width=1)
     if stroke_mm is not None and stroke_mm > 0:
         from .print_resolution import outline_stroke_pixels
 
@@ -359,6 +396,7 @@ def build_outline_page(
             regions,
             line_width=float(stroke),
             number_font_scale=number_font_scale,
+            silhouette_mask=aligned_silhouette,
         )
     return OutlinePage(
         outline=outline,
