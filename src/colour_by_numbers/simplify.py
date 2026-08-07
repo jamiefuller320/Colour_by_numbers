@@ -299,13 +299,16 @@ def normalize_specular_highlights(
     min_inscribed_px: float | None = None,
     lightness_min: float = 82.0,
     max_highlight_fraction: float = 0.035,
+    protected: np.ndarray | None = None,
+    protected_relaxed: tuple[int, int, float] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Apply white eye highlights uniformly: all colourable ones, or none.
 
     Near-white islands larger than a background plate are ignored. Undersized
     highlights are always absorbed (preferring a darker neighbour) without
     becoming numbered fills. If exactly one colourable highlight remains
-    (one eye only), it is absorbed too so highlights are all-or-none.
+    (one eye only), it is absorbed too so highlights are all-or-none — unless
+    the component overlaps a protected eye mask (portrait animals / people).
     """
     from .palette import rgb_to_lab
 
@@ -315,6 +318,9 @@ def normalize_specular_highlights(
         float(min(min_w, min_h))
         if min_inscribed_px is None
         else float(min_inscribed_px)
+    )
+    relax_w, relax_h, relax_inscribed = (
+        protected_relaxed if protected_relaxed is not None else (min_w, min_h, min_inscribed)
     )
     lab = rgb_to_lab(palette)
     light_idxs = {
@@ -350,20 +356,31 @@ def normalize_specular_highlights(
                 min_inscribed_px=min_inscribed,
             ):
                 colourable.append(component)
+            elif protected is not None and protected.any() and is_colourable_block(
+                component,
+                min_width_px=relax_w,
+                min_height_px=relax_h,
+                min_inscribed_px=relax_inscribed,
+            ) and (protected & component).any():
+                colourable.append(component)
             else:
                 undersized.append(component)
 
     # Tiny white speckles: absorb into darker neighbour, no ink clutter.
     for component in undersized:
+        if protected is not None and (protected & component).any():
+            continue
         current = _absorb_component_into_neighbour(
             current, component, prefer_darker=True, palette=palette
         )
 
     # One lonely colourable highlight (single eye) → remove for uniformity.
     if len(colourable) == 1:
-        current = _absorb_component_into_neighbour(
-            current, colourable[0], prefer_darker=True, palette=palette
-        )
+        lone = colourable[0]
+        if protected is None or not (protected & lone).any():
+            current = _absorb_component_into_neighbour(
+                current, lone, prefer_darker=True, palette=palette
+            )
 
     return current.astype(np.int32), detail
 
@@ -375,6 +392,8 @@ def enforce_colourable_blocks(
     min_height_px: int,
     min_inscribed_px: float | None = None,
     max_passes: int = 16,
+    protected: np.ndarray | None = None,
+    protected_relaxed: tuple[int, int, float] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Keep only colour blocks that are colourable; harvest the rest as ink.
 
@@ -392,6 +411,9 @@ def enforce_colourable_blocks(
         float(min(min_w, min_h))
         if min_inscribed_px is None
         else float(min_inscribed_px)
+    )
+    relax_w, relax_h, relax_inscribed = (
+        protected_relaxed if protected_relaxed is not None else (min_w, min_h, min_inscribed)
     )
     structure = np.ones((3, 3), dtype=bool)
     current = labels.astype(np.int32, copy=True)
@@ -413,6 +435,20 @@ def enforce_colourable_blocks(
                     min_inscribed_px=min_inscribed,
                 ):
                     continue
+                if protected is not None and protected.any():
+                    from .eyes import component_protected
+
+                    if component_protected(
+                        component,
+                        protected,
+                        min_width_px=min_w,
+                        min_height_px=min_h,
+                        min_inscribed_px=min_inscribed,
+                        relaxed_width_px=relax_w,
+                        relaxed_height_px=relax_h,
+                        relaxed_inscribed_px=relax_inscribed,
+                    ):
+                        continue
                 # Compact undersized puddles (e.g. eye speckles) absorb quietly.
                 # Only stroke-like remnants become black line detail.
                 thickness = _inscribed_diameter_px(component)

@@ -9,6 +9,7 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 
 from .quantize import upsample_labels
+from .svg_export import build_colour_plate_svg, build_outline_svg
 from .simplify import (
     SimplificationStats,
     absorb_small_regions,
@@ -44,6 +45,8 @@ class OutlinePage:
     labels: np.ndarray
     simplification: SimplificationStats | None = None
     detail_ink: np.ndarray | None = None
+    outline_svg: str | None = None
+    plate_svg: str | None = None
 
 
 def _edges_from_labels(labels: np.ndarray) -> np.ndarray:
@@ -173,6 +176,10 @@ def build_outline_page(
     min_region_mm: float | None = None,
     number_all_regions: bool = True,
     detail_ink: np.ndarray | None = None,
+    palette_category: str | None = None,
+    subject_mask: np.ndarray | None = None,
+    stroke_mm: float | None = None,
+    export_svg: bool = True,
 ) -> OutlinePage:
     """Convert a palette-indexed image into a numbered outline page + legend.
 
@@ -257,6 +264,20 @@ def build_outline_page(
         height_req = width_req
     if width_req and height_req:
         tip = float(min(width_req, height_req))
+        from .eyes import compute_eye_protection_mask, portrait_subject, relaxed_eye_thresholds
+
+        eye_protected = compute_eye_protection_mask(
+            working_labels,
+            working_palette,
+            category=palette_category,
+            subject_mask=subject_mask,
+            min_region_mm=float(min_region_mm or 8.0),
+        )
+        eye_relaxed = (
+            relaxed_eye_thresholds(width, height)
+            if portrait_subject(palette_category)
+            else None
+        )
         working_labels = merge_adjacent_same_colour(
             working_labels, bridge_px=max(2.0, tip * 0.6)
         )
@@ -266,12 +287,16 @@ def build_outline_page(
             min_width_px=int(width_req),
             min_height_px=int(height_req),
             min_inscribed_px=tip,
+            protected=eye_protected if eye_protected.any() else None,
+            protected_relaxed=eye_relaxed,
         )
         working_labels, more_detail = enforce_colourable_blocks(
             working_labels,
             min_width_px=int(width_req),
             min_height_px=int(height_req),
             min_inscribed_px=tip,
+            protected=eye_protected if eye_protected.any() else None,
+            protected_relaxed=eye_relaxed,
         )
         if detail.shape != working_labels.shape:
             detail = np.zeros(working_labels.shape, dtype=bool)
@@ -281,7 +306,12 @@ def build_outline_page(
     if detail.shape != working_labels.shape:
         detail = np.zeros(working_labels.shape, dtype=bool)
     edges = _edges_from_labels(working_labels) | detail
-    stroke = max(1, int(line_width))
+    if stroke_mm is not None and stroke_mm > 0:
+        from .print_resolution import outline_stroke_pixels
+
+        stroke = outline_stroke_pixels(width, height, stroke_mm=stroke_mm)
+    else:
+        stroke = max(1, int(line_width))
     if stroke > 1:
         edges = ndimage.binary_dilation(edges, iterations=stroke - 1)
 
@@ -320,6 +350,16 @@ def build_outline_page(
         )
 
     legend = build_legend(working_palette, colour_numbers, swatch_size=36)
+    outline_svg = None
+    plate_svg = None
+    if export_svg:
+        plate_svg = build_colour_plate_svg(working_labels, working_palette)
+        outline_svg = build_outline_svg(
+            working_labels,
+            regions,
+            line_width=float(stroke),
+            number_font_scale=number_font_scale,
+        )
     return OutlinePage(
         outline=outline,
         legend=legend,
@@ -329,6 +369,8 @@ def build_outline_page(
         labels=working_labels,
         simplification=stats,
         detail_ink=detail,
+        outline_svg=outline_svg,
+        plate_svg=plate_svg,
     )
 
 

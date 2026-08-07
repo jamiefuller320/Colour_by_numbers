@@ -9,6 +9,8 @@ from dataclasses import dataclass
 A4_MM: tuple[float, float] = (210.0, 297.0)
 A4_INCHES: tuple[float, float] = (A4_MM[0] / 25.4, A4_MM[1] / 25.4)
 DEFAULT_MIN_REGION_MM = 8.0
+DEFAULT_OUTLINE_STROKE_MM = 0.6
+DEFAULT_EYE_REGION_MM = 4.0
 
 
 @dataclass(frozen=True)
@@ -103,6 +105,19 @@ def min_region_size_for_a4_mm(
         min_mm=float(min_mm),
         mm_per_px=mm_per_px,
     )
+
+
+def outline_stroke_pixels(
+    width: int,
+    height: int,
+    *,
+    stroke_mm: float = DEFAULT_OUTLINE_STROKE_MM,
+) -> int:
+    """Raster / SVG stroke width in pixels for a line printed at ``stroke_mm`` on A4."""
+    if stroke_mm <= 0:
+        return 1
+    mm_per_px = mm_per_pixel_on_a4(width, height)
+    return max(2, int(round(stroke_mm / mm_per_px)))
 
 
 def min_region_area_for_a4_mm(
