@@ -27,6 +27,8 @@ Commercial vibrant kits (e.g. Labrador portrait products) are **quality/style cu
 
 `--style vibrant` selects the end-goal knobs. Closing the gap to reference-quality plates across categories is an ongoing Phase B+/C refinement, not a one-shot switch.
 
+**Style templates later, one style now:** a small library of style templates (vibrant, kids/simple, maybe line-art or pastel, etc.) is a good product-variety path. For the time being, **do not proliferate styles** — refine **vibrant** until it is reliably good across subjects; keep `simple` / `standard` only as the current kids gate.
+
 ## Success criteria (definition of done for the product)
 
 | Criterion | What “good” looks like |
@@ -86,11 +88,10 @@ Do not grow an endless name list; add an override only when hypernym + negatives
 
 ### Next step (recommended now)
 
-Close the gap from Phase B `standard` plates toward the **vibrant** end-goal bar
-(`--style vibrant`: denser mosaic, fuller palette, cool shadows), using critique
-exports and rights-safe reference study. In parallel, Phase D sets remain available;
-Phase E (covers + book compile) follows once interiors hit the quality bar you want
-to publish.
+**Refine `--style vibrant`** across categories (critique loop + rights-safe
+reference study) until mosaic density, palette richness, and subject recognition
+hold. Defer extra style templates until that bar is solid. Phase D sets and
+Phase E (covers + book) stay available once interiors are worth publishing.
 
 ### Phase B — Plate quality bar (gate: colourable reconstructible single plate)
 

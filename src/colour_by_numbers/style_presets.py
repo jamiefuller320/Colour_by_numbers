@@ -1,11 +1,14 @@
 """Difficulty / visual-style presets for colouring plates.
 
-``standard`` is the current Phase B kids/hand-colourable gate.
-``vibrant`` is the long-term adult paint-by-numbers end goal: denser
-interlocking fills, larger crayon budgets, and cooler shadow accents —
-a house style meant to work across subjects (animals, vehicles, flowers,
-birds, people), inspired by rights-safe study of commercial vibrant kits,
-not copied from any one product.
+This module is the seed of a **style-template** library for product variety.
+Near term we refine **one** adult template — ``vibrant`` — until it is
+reliably good across subjects. ``simple`` / ``standard`` stay as the kids
+Phase B gate; do not add more styles until vibrant earns that focus.
+
+``vibrant``: denser interlocking fills, larger crayon budgets, cool shadow
+accents — a house style for animals, vehicles, flowers, birds, people,
+inspired by rights-safe study of commercial vibrant kits (style cue, not
+artwork to copy).
 """
 
 from __future__ import annotations

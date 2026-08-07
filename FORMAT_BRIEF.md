@@ -45,13 +45,15 @@ reconstruction target.
 Exact cover layout grids land with the book compiler; this brief only locks the
 visual family rules.
 
-## Difficulty banding
+## Difficulty banding / style templates
+
+`--style` is the seed of a **style-template** system for product variety. Near term: refine **one** adult template (`vibrant`) until it holds across subjects. Add further templates only after that bar is met — avoid a bake-off of half-finished looks.
 
 | Band | Intent | Knobs (`--style`) | Notes |
 |------|--------|-------------------|-------|
-| Simple | Fewer, larger fills | ~10 colours, ≥10mm | Younger colourists |
+| Simple | Fewer, larger fills | ~10 colours, ≥10mm | Younger colourists; keep, don’t expand yet |
 | Standard (default) | Hand-colourable A4 | 8–16 colours (target 16), ≥8mm, book palette | Current Phase B gate |
-| Vibrant (end goal) | Adult paint-by-numbers mosaic for **any subject** | ~24–32 colours, ≥4mm, adaptive palette, cool shadow accents | Same house style on animals, vehicles, flowers, birds, people: interlocking form wedges (fur / petals / panels / plumage); optional abstract colour-block background; study vibrant kits as style cues — do not copy commercial art |
+| Vibrant (focus) | Adult paint-by-numbers mosaic for **any subject** | ~24–32 colours, ≥4mm, adaptive palette, cool shadow accents | Primary refinement target; house style on animals, vehicles, flowers, birds, people |
 
 **Vibrant checklist language** (aspirational, all categories):
 
