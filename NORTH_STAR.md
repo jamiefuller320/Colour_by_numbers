@@ -23,7 +23,7 @@ Commercial vibrant kits (e.g. Labrador portrait products) are **quality/style cu
 | Band | Role today |
 |------|------------|
 | `simple` / `standard` | Current shippable Phase B path (kids / hand-colourable, 8–16 colours, ≥8mm) |
-| `vibrant` | End-goal band for **all categories** — denser regions (≥4mm), up to 32 colours, cool shadows, mosaic form language |
+| `vibrant` | End-goal band for **all categories** — denser regions (≥3mm), up to 32 colours, cool shadows, mosaic form language; pipeline preserves plate solids (`exact`) and uses a high-region `vibrant` complexity pass |
 
 `--style vibrant` selects the end-goal knobs. Closing the gap to reference-quality plates across categories is an ongoing Phase B+/C refinement, not a one-shot switch.
 

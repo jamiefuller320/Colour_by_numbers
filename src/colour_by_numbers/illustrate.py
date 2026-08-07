@@ -117,9 +117,10 @@ def illustration_prompt(
     if preset.name == "vibrant":
         style = (
             f"{preset.prompt_style}, "
-            f"each colourable wedge at least {region_mm:g}mm wide and "
+            f"each colourable mosaic wedge at least {region_mm:g}mm wide and "
             f"{region_mm:g}mm high when printed on A4 where possible "
             f"(finer accents as black line), "
+            "prefer many small interlocking wedges over large flat areas, "
             "no gradients, no photorealism, no text, "
             "full subject in frame with a small margin, not over-cropped"
         )
@@ -143,30 +144,34 @@ def illustration_prompt(
             "(at least two distinct colour regions per eye), "
             "clearly defined nose and muzzle with visible nostrils and wrinkles "
             "where applicable, sharp facial feature definition, "
-            "dense interlocking fur and form wedges with cool teal and blue "
-            "shadow accents plus warm gold and orange mid-tones"
+            "dense interlocking fur mosaic with many value steps, cool teal and "
+            "blue shadow wedges under the chin, ears, and muzzle folds plus warm "
+            "gold and orange mid-tones on the lit fur"
         )
         bird_detail = (
-            "species-accurate plumage as interlocking colour wedges and markings, "
-            "large expressive matching eyes with separate dark pupil and lighter "
-            "iris fill distinct from feathers, clearly defined beak "
-            "(not a mammal nose), cool shadow accents in wing and breast folds"
+            "species-accurate plumage as a dense mosaic of interlocking colour "
+            "wedges and markings, large expressive matching eyes with separate "
+            "dark pupil and lighter iris fill distinct from feathers, clearly "
+            "defined beak (not a mammal nose), cool teal/blue shadow wedges in "
+            "wing and breast folds mixed with warmer plumage mid-tones"
         )
         people_detail = (
-            "clear facial features built from interlocking flat colour wedges, "
-            "large expressive eyes with separate dark pupils and lighter iris "
-            "fills, defined nose and mouth, cool shadow accents on cheeks and "
-            "jaw mixed with warm skin mid-tones"
+            "clear facial features built from a dense mosaic of interlocking "
+            "flat colour wedges, large expressive eyes with separate dark pupils "
+            "and lighter iris fills, defined nose and mouth, cool teal/blue "
+            "shadow wedges on cheeks and jaw mixed with warm skin mid-tones"
         )
         vehicle_detail = (
             "complete vehicle silhouette in frame, metal and paint read as a "
-            "dense value mosaic of interlocking panels, rivets, windows, and "
-            "structural parts with cool specular/shadow accents"
+            "dense value mosaic of many interlocking panels, rivets, windows, "
+            "and structural parts with cool teal/blue specular and shadow wedges "
+            "among warmer body-paint mid-tones"
         )
         flower_detail = (
-            "whole flower centred, petals and centre disk as interlocking "
-            "colour wedges with species-typical hues plus cool shadow accents "
-            "between petals, stem or leaves visible if needed for identity"
+            "whole flower centred, petals and centre disk as a dense mosaic of "
+            "interlocking colour wedges with species-typical hues plus cool "
+            "teal/blue shadow wedges between petals, stem or leaves visible if "
+            "needed for identity"
         )
     else:
         animal_detail = (
@@ -253,7 +258,9 @@ def prepare_illustration_for_colouring(
       - ``book`` (default): median-cut adaptive colours, then snap each to a
         distinct standard crayon. Keeps ~N fills instead of collapsing onto a
         thin pre-selected subset of the 32-colour set.
-      - ``adaptive`` / ``free``: median-cut colours kept as-is (richest hues).
+      - ``adaptive`` / ``free`` / ``exact`` / ``preserve``: median-cut colours
+        kept as-is (richest hues). ``exact`` here still flattens API output;
+        the pipeline ``exact`` mode preserves those solids afterward.
       - ``standard``: legacy map onto a pre-selected subset of the fixed set
         (often under-fills to 3–5 colours on simple fal plates).
 
@@ -277,7 +284,9 @@ def prepare_illustration_for_colouring(
         )
         labels = nearest_palette_indices(rgb, active, category=map_category)
     else:
-        quantized = adaptive_quantize(rgb_image, n_colours=n, blur_radius=0.8)
+        # Lighter prefilter for vibrant so cool shadow wedges survive flatten.
+        prep_blur = 0.35 if cool_shadows else 0.8
+        quantized = adaptive_quantize(rgb_image, n_colours=n, blur_radius=prep_blur)
         labels = quantized.labels
         active = quantized.palette
         if mode in {"book", "crayon", "standard_snap"}:

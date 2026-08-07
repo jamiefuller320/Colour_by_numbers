@@ -29,6 +29,11 @@ class StylePreset:
     cool_shadows: bool
     prompt_style: str
     description: str
+    complexity: str = "fine"
+    min_adjacent_delta_e: float = 18.0
+    # Pipeline quantize mode after prepare. ``exact`` keeps the plate's RGB
+    # solids instead of re-median-cutting (critical for vibrant).
+    pipeline_palette_mode: str | None = None
 
 
 STYLE_SIMPLE = StylePreset(
@@ -44,6 +49,9 @@ STYLE_SIMPLE = StylePreset(
         "few value steps, easy for young colourists"
     ),
     description="Fewer, larger fills for younger colourists.",
+    complexity="simple",
+    min_adjacent_delta_e=18.0,
+    pipeline_palette_mode="standard",
 )
 
 STYLE_STANDARD = StylePreset(
@@ -59,6 +67,9 @@ STYLE_STANDARD = StylePreset(
         "and clear value steps between neighbouring parts"
     ),
     description="Current Phase B default — hand-colourable A4 with 8mm floor.",
+    complexity="fine",
+    min_adjacent_delta_e=18.0,
+    pipeline_palette_mode="standard",
 )
 
 STYLE_VIBRANT = StylePreset(
@@ -66,23 +77,28 @@ STYLE_VIBRANT = StylePreset(
     n_colours=28,
     min_colours=20,
     max_colours=32,
-    min_region_mm=4.0,
+    min_region_mm=3.0,
     palette_mode="adaptive",
     cool_shadows=True,
     prompt_style=(
-        "adult vibrant paint-by-numbers style that works for any subject: "
-        "dense interlocking flat colour wedges building a value mosaic across "
-        "the whole form (fur, petals, metal panels, plumage, or skin — not a "
-        "few large blobs), about 24 to 32 distinct solid colours, cool teal "
-        "and blue accents in shadows and speculars mixed with warm mid-tones, "
-        "bold black outlines of varying weight, optional abstract colour-block "
-        "background (not empty white), high-energy colouring-kit look, "
+        "adult vibrant paint-by-numbers kit style that works for any subject: "
+        "dense interlocking mosaic of many small flat colour wedges across the "
+        "whole form (fur, petals, metal panels, plumage, or skin — dozens of "
+        "tiles, not a few large cel blobs), about 24 to 32 distinct solid "
+        "colours with clear cool teal and blue shadow wedges plus cool specular "
+        "accents mixed among warm gold and orange mid-tones (shadows must not "
+        "be only brown or orange), bold black outlines of varying weight, "
+        "abstract colour-block background with two to four solid fills "
+        "(not empty white), high-energy colouring-kit look, "
         "no gradients, no photorealism"
     ),
     description=(
         "End-goal adult vibrant band for all categories — denser regions, "
         "fuller palette, cool shadow accents, mosaic form language."
     ),
+    complexity="vibrant",
+    min_adjacent_delta_e=8.0,
+    pipeline_palette_mode="exact",
 )
 
 STYLE_PRESETS: dict[str, StylePreset] = {

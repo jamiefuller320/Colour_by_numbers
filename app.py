@@ -25,7 +25,7 @@ st.write(
     "paused while the palette work is refined."
 )
 
-PRESET_NAMES = ["raw", "fine", "light", "medium", "simple"]
+PRESET_NAMES = ["raw", "fine", "vibrant", "light", "medium", "simple"]
 
 with st.sidebar:
     st.header("Settings")

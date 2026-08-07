@@ -132,10 +132,11 @@ def generate_colouring_page(
     illustration_colours: int | None = None,
     illustration_size: int = DEFAULT_ILLUSTRATION_SIZE,
     max_references: int = 6,
-    complexity: str = "fine",
+    complexity: str | None = None,
     subject_mode: str = "off",
     min_a4_dpi: float | None = None,
     min_region_mm: float | None = None,
+    min_adjacent_delta_e: float | None = None,
     style: str = DEFAULT_STYLE,
     openai_api_key: str | None = None,
     fal_api_key: str | None = None,
@@ -160,7 +161,8 @@ def generate_colouring_page(
 
     ``style`` selects a difficulty band (``simple`` / ``standard`` / ``vibrant``).
     ``standard`` is the Phase B kids gate; ``vibrant`` is the adult end-goal band
-    (denser fills, up to 32 colours, cooler shadows).
+    (denser fills, up to 32 colours, cooler shadows, exact plate-colour
+    preserve, and a high-region ``vibrant`` complexity pass).
 
     Phase B: default backend is ``fal`` (Flux via fal.ai; needs ``FAL_KEY``).
     When ``check_quality`` is True, attach a ``PlateQualityReport``. When
@@ -311,22 +313,41 @@ def generate_colouring_page(
 
     # Illustrations are already flat; keep A4 filter off unless requested.
     # Strip keys we set explicitly so CLI **kwargs cannot collide.
-    for key in ("palette_mode", "palette_category", "firm_border", "colour_refine"):
+    for key in (
+        "palette_mode",
+        "palette_category",
+        "firm_border",
+        "colour_refine",
+        "min_adjacent_delta_e",
+        "complexity",
+    ):
         pipeline_kwargs.pop(key, None)
     pipeline_kwargs.setdefault("min_region_mm", min_region_mm)
-    pipeline_palette = (
-        "free" if preset.palette_mode in {"adaptive", "free"} else "standard"
+    resolved_complexity = complexity or preset.complexity
+    resolved_delta_e = (
+        float(min_adjacent_delta_e)
+        if min_adjacent_delta_e is not None
+        else float(preset.min_adjacent_delta_e)
     )
+    if preset.pipeline_palette_mode:
+        pipeline_palette = preset.pipeline_palette_mode
+    elif preset.palette_mode in {"adaptive", "free", "exact", "preserve"}:
+        pipeline_palette = (
+            "exact" if preset.palette_mode in {"adaptive", "exact", "preserve"} else "free"
+        )
+    else:
+        pipeline_palette = "standard"
     result = create_colour_by_numbers(
         illustration.image,
         n_colours=n_colours,
-        complexity=complexity,
+        complexity=resolved_complexity,
         subject_mode=subject_mode,
         palette_mode=pipeline_palette,
         palette_category=None if preset.cool_shadows else chosen.category,
         firm_border=True,
         colour_refine=False,
         min_a4_dpi=min_a4_dpi,
+        min_adjacent_delta_e=resolved_delta_e,
         source_hit=reference_hit,
         **pipeline_kwargs,
     )
