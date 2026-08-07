@@ -35,6 +35,27 @@ PLATE_ISSUE_TAGS: dict[str, str] = {
     "other": "Other (describe in notes)",
 }
 
+# Tags that only make sense for animal / people faces. Never become global
+# hints applied to boats, aircraft, cars, flowers, etc.
+MAMMAL_FACE_TAGS = frozenset({"nose_detail", "mouth_detail", "ears"})
+ANIMAL_OR_PEOPLE_TAGS = frozenset({"eyes", "proportions", *MAMMAL_FACE_TAGS})
+VEHICLE_CATEGORIES = frozenset({"aircraft", "cars", "boats", "vehicles", "trains"})
+FLOWER_CATEGORIES = frozenset({"flowers", "plants"})
+PEOPLE_CATEGORIES = frozenset({"people", "portraits"})
+MAMMAL_CATEGORIES = frozenset(
+    {
+        "dogs",
+        "cats",
+        "horses",
+        "wildlife",
+        "animals",
+        "pets",
+        "farm animals",
+        "mammals",
+    }
+)
+BIRD_CATEGORIES = frozenset({"birds"})
+
 # Default prompt hints applied when a tag is frequent in collated critiques.
 TAG_PROMPT_HINTS: dict[str, str] = {
     "nose_detail": (
@@ -42,20 +63,114 @@ TAG_PROMPT_HINTS: dict[str, str] = {
         "nose as separate colour regions"
     ),
     "eyes": (
-        "large expressive eyes with separate dark pupils and lighter iris or "
-        "sclera fills (at least two colour regions per eye)"
+        "both eyes matching, each with separate dark pupil and lighter iris "
+        "or sclera fills distinct from surrounding fur or feathers"
     ),
     "mouth_detail": "defined mouth and muzzle line with separate colour fills",
     "ears": "clear ear shape and inner-ear colour separation",
-    "outline": "bold clean black outlines around every colour region",
-    "colours": "distinct flat colour blocks with clear value steps between neighbours",
-    "proportions": "accurate breed proportions and centred portrait composition",
+    "outline": (
+        "bold clean black outlines with smooth region boundaries around "
+        "every colour block"
+    ),
+    "colours": (
+        "distinct flat colour blocks with clear value steps between neighbouring "
+        "parts, prefer 12–16 colours"
+    ),
+    "proportions": "accurate breed proportions and recognisable pose",
     "background": "plain white or pale background, strong subject contrast",
     "missing_detail": "include all diagnostic breed or subject features as colour blocks",
-    "too_simple": "preserve characteristic wrinkles, markings, and facial features",
-    "wrong_subject": "unmistakable subject silhouette, no person or wrong entity",
-    "composition": "subject fills most of the page, centred portrait",
+    "too_simple": (
+        "enough distinct colour regions to show form and depth; preserve "
+        "characteristic markings and structural parts"
+    ),
+    "wrong_subject": (
+        "unmistakable subject with breed- or species-accurate colours and "
+        "silhouette, no person or wrong entity"
+    ),
+    "composition": (
+        "full subject in frame with a small margin, centred, not over-cropped "
+        "or over-enlarged"
+    ),
+    "other": "smooth colour-region boundaries; clear value separation for depth",
 }
+
+
+def tag_applies_to_category(tag: str, category: str | None) -> bool:
+    """Return False for animal-face tags on vehicles/flowers/etc."""
+    cat = (category or "").strip().lower()
+    if tag in MAMMAL_FACE_TAGS:
+        return cat in MAMMAL_CATEGORIES or cat in PEOPLE_CATEGORIES
+    if tag == "eyes":
+        return (
+            cat in MAMMAL_CATEGORIES
+            or cat in BIRD_CATEGORIES
+            or cat in PEOPLE_CATEGORIES
+            or not cat
+        )
+    if tag == "proportions":
+        return cat not in VEHICLE_CATEGORIES and cat not in FLOWER_CATEGORIES
+    return True
+
+
+def prompt_hint_for_tag(tag: str, category: str | None = None) -> str:
+    """Category-aware prompt hint for an issue tag."""
+    cat = (category or "").strip().lower()
+    if tag == "too_simple":
+        if cat in VEHICLE_CATEGORIES:
+            return (
+                "separate colour regions for body panels, windows, wheels or "
+                "wings, and other structural parts — not a single flat fill"
+            )
+        if cat in FLOWER_CATEGORIES:
+            return (
+                "show petals, centre disk, stem and leaves as separate colour "
+                "regions with species-typical colours"
+            )
+        if cat in BIRD_CATEGORIES:
+            return (
+                "species-accurate plumage colour blocks (e.g. robin red breast), "
+                "defined beak, matching eyes"
+            )
+        if cat in MAMMAL_CATEGORIES:
+            return (
+                "preserve characteristic markings and facial features; separate "
+                "value steps between head, neck and body"
+            )
+    if tag == "wrong_subject":
+        if cat in BIRD_CATEGORIES:
+            return (
+                "species-accurate bird colours and markings, clear beak "
+                "(not a mammal nose), unmistakable silhouette"
+            )
+        if cat in FLOWER_CATEGORIES:
+            return (
+                "recognisable whole flower with petals and centre visible, "
+                "species-typical colours, not an abstract crop"
+            )
+        if cat in MAMMAL_CATEGORIES:
+            return (
+                "unmistakable animal of the correct species/breed with "
+                "accurate colours and silhouette"
+            )
+    if tag == "colours":
+        if cat in MAMMAL_CATEGORIES:
+            return (
+                "distinct value steps for depth between head, neck and body; "
+                "eyes and nose as separate colours from surrounding fur"
+            )
+        if cat in VEHICLE_CATEGORIES:
+            return (
+                "enough distinct colour regions for body, windows, trim and "
+                "other parts — avoid a single flat fill"
+            )
+    if tag == "eyes" and cat in BIRD_CATEGORIES:
+        return (
+            "both eyes matching, each with dark pupil and lighter iris "
+            "distinct from surrounding feathers"
+        )
+    if not tag_applies_to_category(tag, category):
+        return ""
+    return TAG_PROMPT_HINTS.get(tag, "")
 
 
 @dataclass(frozen=True)
@@ -244,22 +359,27 @@ def collate_critiques(
     by_category: Counter[str] = Counter()
     by_tag: Counter[str] = Counter()
     tag_notes: dict[tuple[str, str], list[str]] = defaultdict(list)
+    pair_counts: Counter[tuple[str, str]] = Counter()
 
     for critique in failures:
-        by_category[critique.category or "unknown"] += 1
+        category = critique.category or "unknown"
+        by_category[category] += 1
         for tag in critique.issues:
             by_tag[tag] += 1
+            pair_counts[(category, tag)] += 1
             if critique.notes:
-                tag_notes[(critique.category, tag)].append(critique.notes)
+                tag_notes[(category, tag)].append(critique.notes)
             if critique.suggested_prompt:
-                tag_notes[(critique.category, tag)].append(critique.suggested_prompt)
+                tag_notes[(category, tag)].append(critique.suggested_prompt)
 
     lessons: list[CollatedLesson] = []
-    for (category, tag), notes in sorted(tag_notes.items()):
-        count = by_tag[tag]
+    for (category, tag), count in sorted(pair_counts.items()):
         if count < min_count:
             continue
-        hint = TAG_PROMPT_HINTS.get(tag, "")
+        hint = prompt_hint_for_tag(tag, category)
+        notes = tag_notes.get((category, tag), [])
+        if not hint and not notes:
+            continue
         lessons.append(
             CollatedLesson(
                 category=category,
@@ -270,11 +390,14 @@ def collate_critiques(
             )
         )
 
+    # Only universal tags become global — never mammal nose/muzzle cues.
     global_hints: list[str] = []
     for tag, count in by_tag.most_common():
         if count < min_count:
             continue
-        hint = TAG_PROMPT_HINTS.get(tag, "")
+        if tag in ANIMAL_OR_PEOPLE_TAGS:
+            continue
+        hint = prompt_hint_for_tag(tag, category=None)
         if hint and hint not in global_hints:
             global_hints.append(hint)
 
@@ -322,7 +445,12 @@ def load_plate_lessons(
     path: Path | str | None = None,
     limit: int = 8,
 ) -> list[str]:
-    """Return prompt hints from collated plate lessons for a category."""
+    """Return prompt hints from collated plate lessons for a category.
+
+    Category-specific lessons are preferred. Universal ``global_hints`` are
+    added only when they still apply to the category (animal-face cues never
+    leak onto vehicles or flowers).
+    """
     store = lessons_store_path(path)
     if not store.is_file():
         return []
@@ -335,21 +463,36 @@ def load_plate_lessons(
     cat = (category or "").strip().lower()
 
     for lesson in data.get("lessons", []):
-        if cat and str(lesson.get("category", "")).lower() not in {"", cat}:
+        lesson_cat = str(lesson.get("category", "")).lower()
+        if cat and lesson_cat not in {"", cat}:
+            continue
+        tag = str(lesson.get("tag", "")).strip().lower()
+        if tag and not tag_applies_to_category(tag, cat or lesson_cat):
             continue
         hint = str(lesson.get("prompt_hint", "")).strip()
+        if not hint:
+            # Fall back to a fresh category-aware hint for the tag.
+            hint = prompt_hint_for_tag(tag, cat or lesson_cat)
         if hint and hint not in hints:
             hints.append(hint)
         if len(hints) >= limit:
-            break
+            return hints
 
-    if not hints:
-        for hint in data.get("global_hints", []):
-            text = str(hint).strip()
-            if text and text not in hints:
-                hints.append(text)
-            if len(hints) >= limit:
-                break
+    for hint in data.get("global_hints", []):
+        text = str(hint).strip()
+        if not text:
+            continue
+        # Reject legacy animal-face globals that polluted vehicle prompts.
+        lower = text.lower()
+        if any(
+            cue in lower
+            for cue in ("nostril", "muzzle", "nose as separate", "inner-ear")
+        ) and cat and cat not in MAMMAL_CATEGORIES and cat not in PEOPLE_CATEGORIES:
+            continue
+        if text not in hints:
+            hints.append(text)
+        if len(hints) >= limit:
+            break
     return hints
 
 

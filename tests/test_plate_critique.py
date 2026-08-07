@@ -31,14 +31,66 @@ def test_collate_groups_failures_by_tag() -> None:
             category="cats",
             subject="tabby cat",
             rating="needs_work",
-            issues=("eyes",),
+            issues=("eyes", "colours"),
             notes="Flat eyes",
+        ),
+        PlateCritique(
+            plate_id="boats-sail-001",
+            category="boats",
+            subject="sailboat",
+            rating="needs_work",
+            issues=("too_simple",),
+            notes="Too flat",
         ),
     ]
     report = collate_critiques(critiques)
     assert report.by_tag["nose_detail"] == 1
     assert report.by_tag["eyes"] == 1
-    assert any("nostrils" in hint for hint in report.global_hints)
+    # Mammal face cues must not become global (they polluted vehicle prompts).
+    assert not any("nostril" in hint.lower() for hint in report.global_hints)
+    assert any("colour" in hint.lower() or "value" in hint.lower() for hint in report.global_hints)
+    dog_lesson = next(l for l in report.lessons if l.category == "dogs")
+    assert "nostril" in dog_lesson.prompt_hint.lower()
+    boat_lesson = next(l for l in report.lessons if l.category == "boats")
+    assert "panel" in boat_lesson.prompt_hint.lower() or "structural" in boat_lesson.prompt_hint.lower()
+
+
+def test_animal_lessons_do_not_seed_vehicle_prompts(tmp_path: Path) -> None:
+    lessons_path = tmp_path / "lessons.json"
+    lessons_path.write_text(
+        json.dumps(
+            {
+                "global_hints": [
+                    "clearly defined nose with visible nostrils and muzzle wrinkles, "
+                    "nose as separate colour regions",
+                    "full subject in frame with a small margin, centred, not over-cropped",
+                ],
+                "lessons": [
+                    {
+                        "category": "dogs",
+                        "tag": "nose_detail",
+                        "count": 1,
+                        "examples": [],
+                        "prompt_hint": (
+                            "clearly defined nose with visible nostrils and "
+                            "muzzle wrinkles, nose as separate colour regions"
+                        ),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    boat_prompt, boat_applied = seed_prompt_with_plate_lessons(
+        "sailboat side view", category="boats", path=lessons_path
+    )
+    assert "nostril" not in boat_prompt.lower()
+    assert "muzzle" not in boat_prompt.lower()
+    assert any("margin" in h.lower() or "crop" in h.lower() for h in boat_applied)
+    dog_prompt, _ = seed_prompt_with_plate_lessons(
+        "golden retriever portrait", category="dogs", path=lessons_path
+    )
+    assert "nostril" in dog_prompt.lower()
 
 
 def test_import_and_lessons_round_trip(tmp_path: Path) -> None:
