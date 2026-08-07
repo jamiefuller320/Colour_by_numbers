@@ -34,6 +34,7 @@ from .palette import (
     select_active_palette,
     snap_palette_to_standard,
 )
+from .style_presets import STYLE_STANDARD, resolve_style_preset
 from .print_resolution import (
     DEFAULT_MIN_REGION_MM,
     min_region_size_for_a4_mm,
@@ -96,35 +97,65 @@ def illustration_prompt(
     subject_type_label: str,
     *,
     category: str | None = None,
-    min_colours: int = MIN_N_COLOURS,
-    max_colours: int = MAX_N_COLOURS,
+    min_colours: int | None = None,
+    max_colours: int | None = None,
+    style_preset: str | None = None,
+    min_region_mm: float | None = None,
 ) -> str:
     """Text prompt used by API backends (and recorded for local runs)."""
+    preset = resolve_style_preset(style_preset) if style_preset else STYLE_STANDARD
+    lo = int(min_colours if min_colours is not None else preset.min_colours)
+    hi = int(max_colours if max_colours is not None else preset.max_colours)
+    lo = clamp_n_colours(lo, minimum=1, maximum=preset.max_colours)
+    hi = clamp_n_colours(hi, minimum=lo, maximum=preset.max_colours)
+    region_mm = (
+        float(min_region_mm)
+        if min_region_mm is not None
+        else float(preset.min_region_mm)
+    )
     subject = disambiguate_subject_label(subject_type_label, category=category)
-    lo = clamp_n_colours(min_colours, minimum=min_colours, maximum=max_colours)
-    hi = clamp_n_colours(max_colours, minimum=min_colours, maximum=max_colours)
-    style = (
-        "children's colouring book illustration, thick clean black outlines, "
-        "smooth colour-region boundaries, "
-        f"flat cel fills with about {lo} to {hi} distinct solid colours "
-        f"and clear value steps between neighbouring parts "
-        f"(aim near {hi} colours, not a handful of fills), "
-        f"large simple colour regions (each colourable block at least "
-        f"{DEFAULT_MIN_REGION_MM:g}mm wide and {DEFAULT_MIN_REGION_MM:g}mm high "
-        f"when printed on A4, with finer detail as black line drawing), "
-        "high subject-background contrast, no gradients, "
-        "no photorealism, no text, white background, "
-        "full subject in frame with a small margin, not over-cropped"
-    )
-    animal_detail = (
-        "large expressive matching eyes, each eye with a separate dark pupil and "
-        "lighter iris or sclera fill distinct from surrounding fur "
-        "(at least two distinct colour regions per eye), "
-        "clearly defined nose and muzzle with visible nostrils and wrinkles "
-        "where applicable, sharp facial feature definition, "
-        "clear value steps between head, neck and body for depth, "
-        "warm natural colours"
-    )
+    if preset.name == "vibrant":
+        style = (
+            f"{preset.prompt_style}, "
+            f"each colourable wedge at least {region_mm:g}mm wide and "
+            f"{region_mm:g}mm high when printed on A4 where possible "
+            f"(finer accents as black line), "
+            "no gradients, no photorealism, no text, "
+            "full subject in frame with a small margin, not over-cropped"
+        )
+    else:
+        style = (
+            "children's colouring book illustration, thick clean black outlines, "
+            "smooth colour-region boundaries, "
+            f"{preset.prompt_style} "
+            f"(aim near {hi} colours, not a handful of fills), "
+            f"large simple colour regions (each colourable block at least "
+            f"{region_mm:g}mm wide and {region_mm:g}mm high "
+            f"when printed on A4, with finer detail as black line drawing), "
+            "high subject-background contrast, no gradients, "
+            "no photorealism, no text, white background, "
+            "full subject in frame with a small margin, not over-cropped"
+        )
+    if preset.cool_shadows:
+        animal_detail = (
+            "large expressive matching eyes, each eye with a separate dark pupil and "
+            "lighter iris or sclera fill distinct from surrounding fur "
+            "(at least two distinct colour regions per eye), "
+            "clearly defined nose and muzzle with visible nostrils and wrinkles "
+            "where applicable, sharp facial feature definition, "
+            "dense interlocking fur wedges with cool teal and blue shadow accents "
+            "plus warm gold and orange mid-tones for depth"
+        )
+    else:
+        animal_detail = (
+            "large expressive matching eyes, each eye with a separate dark pupil and "
+            "lighter iris or sclera fill distinct from surrounding fur "
+            "(at least two distinct colour regions per eye), "
+            "clearly defined nose and muzzle with visible nostrils and wrinkles "
+            "where applicable, sharp facial feature definition, "
+            "clear value steps between head, neck and body for depth, "
+            "warm natural colours"
+        )
     bird_detail = (
         "species-accurate plumage colours and markings, "
         "large expressive matching eyes with separate dark pupil and lighter "
@@ -185,8 +216,10 @@ def prepare_illustration_for_colouring(
     min_region_mm: float = DEFAULT_MIN_REGION_MM,
     category: str | None = None,
     palette_mode: str = "book",
+    cool_shadows: bool = False,
+    max_colours: int | None = None,
 ) -> tuple[Image.Image, int]:
-    """Clamp a generated plate to 8–16 flat palette colours and A4-safe regions.
+    """Clamp a generated plate to a flat palette and A4-safe regions.
 
     Colourable blocks must be at least ``min_region_mm`` wide **and** high on
     A4 (enough for a circular tip of that diameter). Smaller features are kept
@@ -199,11 +232,16 @@ def prepare_illustration_for_colouring(
       - ``adaptive`` / ``free``: median-cut colours kept as-is (richest hues).
       - ``standard``: legacy map onto a pre-selected subset of the fixed set
         (often under-fills to 3–5 colours on simple fal plates).
+
+    When ``cool_shadows`` is True (vibrant style), dark pixels may use cool
+    crayons instead of being forced onto warm earth tones.
     """
-    n = clamp_n_colours(n_colours)
+    ceiling = int(max_colours) if max_colours is not None else MAX_N_COLOURS
+    n = clamp_n_colours(n_colours, maximum=ceiling)
     rgb_image = image.convert("RGB")
     height, width = rgb_image.size[1], rgb_image.size[0]
     mode = (palette_mode or "book").lower().strip()
+    map_category = None if cool_shadows else category
 
     if mode in {"standard", "fixed"}:
         rgb = np.asarray(rgb_image, dtype=np.uint8)
@@ -211,15 +249,15 @@ def prepare_illustration_for_colouring(
             STANDARD_PALETTE_32,
             n_colours=n,
             image_rgb=rgb,
-            category=category,
+            category=map_category,
         )
-        labels = nearest_palette_indices(rgb, active, category=category)
+        labels = nearest_palette_indices(rgb, active, category=map_category)
     else:
         quantized = adaptive_quantize(rgb_image, n_colours=n, blur_radius=0.8)
         labels = quantized.labels
         active = quantized.palette
         if mode in {"book", "crayon", "standard_snap"}:
-            active = snap_palette_to_standard(active, category=category)
+            active = snap_palette_to_standard(active, category=map_category)
 
     region = min_region_size_for_a4_mm(width, height, min_mm=min_region_mm)
     tip = float(max(2, region.min_inscribed_diameter_px))
@@ -637,6 +675,9 @@ def generate_illustration(
     seed: int | None = None,
     min_region_mm: float = DEFAULT_MIN_REGION_MM,
     prepare_for_colouring: bool = True,
+    style: str = "standard",
+    palette_mode: str | None = None,
+    cool_shadows: bool | None = None,
 ) -> IllustrationResult:
     """Generate a colouring-ready illustration via the selected backend."""
     backend = backend.lower().strip()
@@ -646,9 +687,17 @@ def generate_illustration(
             f"choose one of {AVAILABLE_ILLUSTRATION_BACKENDS}"
         )
 
-    n_colours = clamp_n_colours(n_colours)
+    preset = resolve_style_preset(style)
+    n_colours = clamp_n_colours(n_colours, maximum=preset.max_colours)
+    prepare_mode = palette_mode or preset.palette_mode
+    use_cool = preset.cool_shadows if cool_shadows is None else bool(cool_shadows)
     prompt = prompt_override or (
-        illustration_prompt(subject_type_label or "subject", category=category)
+        illustration_prompt(
+            subject_type_label or "subject",
+            category=category,
+            style_preset=preset.name,
+            min_region_mm=min_region_mm,
+        )
         if subject_type_label or backend != "local_stylize"
         else None
     )
@@ -704,10 +753,14 @@ def generate_illustration(
             n_colours=n_colours,
             min_region_mm=min_region_mm,
             category=category,
+            palette_mode=prepare_mode,
+            cool_shadows=use_cool,
+            max_colours=preset.max_colours,
         )
         notes = (
             f"{result.notes} Post-processed to {used} flat colours "
-            f"(8–16) with A4 regions ≥{min_region_mm:g}mm."
+            f"({preset.name} style, max {preset.max_colours}) "
+            f"with A4 regions ≥{min_region_mm:g}mm."
         )
         return IllustrationResult(
             image=cleaned,

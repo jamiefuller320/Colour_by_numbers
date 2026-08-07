@@ -266,18 +266,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Longest edge of the generated illustration (default: 1600)",
     )
     parser.add_argument(
+        "--style",
+        choices=["simple", "standard", "vibrant"],
+        default="standard",
+        help=(
+            "Difficulty / visual band: simple (kids large fills), standard "
+            "(Phase B default), vibrant (adult end-goal mosaic; denser, "
+            "up to 32 colours). Default: standard"
+        ),
+    )
+    parser.add_argument(
         "--illustration-colours",
         type=int,
-        default=12,
-        help="Flat fills while stylising (clamped to 8–16; default: 12)",
+        default=None,
+        help=(
+            "Flat fills while stylising (default: from --style; "
+            "standard=16, vibrant=28)"
+        ),
     )
     parser.add_argument(
         "--min-region-mm",
         type=float,
-        default=8.0,
+        default=None,
         help=(
             "Minimum colourable-block width and height in mm on A4 "
-            "(default: 8; finer detail becomes black line drawing)"
+            "(default: from --style; standard=8, vibrant=4; "
+            "finer detail becomes black line drawing)"
         ),
     )
     parser.add_argument(
@@ -413,6 +427,7 @@ def main(argv: list[str] | None = None) -> int:
                 n_plates=args.set_size,
                 base_seed=args.seed if args.seed is not None else 0,
                 discover_types=not args.no_discover,
+                style=args.style,
             )
             output_dir.mkdir(parents=True, exist_ok=True)
             if args.plan_only:
@@ -437,9 +452,10 @@ def main(argv: list[str] | None = None) -> int:
                 require_plate_quality=not args.no_quality_check,
                 output_dir=output_dir,
                 backend=args.illustration_backend,
+                style=args.style,
                 illustration_colours=args.illustration_colours,
                 illustration_size=args.illustration_size,
-                n_colours=min(args.colours, 16) if args.colours else 12,
+                n_colours=args.colours,
                 complexity=args.complexity,
                 subject_mode="off",
                 fal_model=args.fal_model,
@@ -471,9 +487,10 @@ def main(argv: list[str] | None = None) -> int:
             type_pick=args.type_pick,
             discover_types=not args.no_discover,
             backend=args.illustration_backend,
+            style=args.style,
             illustration_colours=args.illustration_colours,
             illustration_size=args.illustration_size,
-            n_colours=min(args.colours, 16) if args.colours else 12,
+            n_colours=args.colours,
             complexity=args.complexity,
             subject_mode="off",
             palette_mode=args.palette_mode,

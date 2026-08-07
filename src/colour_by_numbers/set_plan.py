@@ -167,9 +167,14 @@ def compose_slot_prompt(
     aspect: str,
     scene: str,
     composition: str,
+    style_preset: str | None = None,
 ) -> str:
     """Base illustration prompt plus unique aspect/scene cues."""
-    base = illustration_prompt(subject_type.label, category=subject_type.category)
+    base = illustration_prompt(
+        subject_type.label,
+        category=subject_type.category,
+        style_preset=style_preset,
+    )
     extras = (
         f"aspect: {aspect}, scene: {scene}, {composition}, "
         "same subject identity, distinct pose from other pages in the set, "
@@ -187,6 +192,7 @@ def plan_colouring_set(
     base_seed: int = 0,
     discover_types: bool = True,
     custom_slots: list[tuple[str, str, str]] | None = None,
+    style: str | None = None,
 ) -> SetPlan:
     """Turn a keyword/phrase into N unique aspect/scene plate slots.
 
@@ -213,7 +219,11 @@ def plan_colouring_set(
             scene = f"{scene} variant {(i // len(bank)) + 1}"
         seed = int(base_seed) + i
         prompt = compose_slot_prompt(
-            chosen, aspect=aspect, scene=scene, composition=composition
+            chosen,
+            aspect=aspect,
+            scene=scene,
+            composition=composition,
+            style_preset=style,
         )
         slots.append(
             PlateSlot(

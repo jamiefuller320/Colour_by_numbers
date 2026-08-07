@@ -14,6 +14,19 @@ Given a **keyword or key phrase** (e.g. `pug`, `golden retriever in the park`, `
 4. **Compile** interiors + covers into a **print-ready book format** (ordered pages, consistent size/margins, print resolution).
 5. Do all of the above in a way that **does not infringe copyright**—prefer original generated / properly licensed art; never ship scraped proprietary photos as book content.
 
+## Visual end goal (interior plate quality)
+
+The long-term look we are aiming for is an **adult “vibrant paint-by-numbers” portrait kit**: dense interlocking flat colour wedges (mosaic fur / form), a **full crayon budget (~24–32 solids)**, cool teal/blue accents in shadows mixed with warm mid-tones, bold black outlines, and optional abstract colour-block backgrounds — *not* a handful of large cel blobs on empty white.
+
+Study commercial vibrant kits as **format teachers** (composition, value mosaic, region density). **Do not** scrape or clone any one product’s art.
+
+| Band | Role today |
+|------|------------|
+| `simple` / `standard` | Current shippable Phase B path (kids / hand-colourable, 8–16 colours, ≥8mm) |
+| `vibrant` | End-goal band — denser regions (≥4mm), up to 32 colours, cool shadows, mosaic prompts |
+
+`--style vibrant` selects the end-goal knobs. Closing the gap to reference-quality plates is an ongoing Phase B+/C refinement, not a one-shot switch.
+
 ## Success criteria (definition of done for the product)
 
 | Criterion | What “good” looks like |
@@ -23,6 +36,7 @@ Given a **keyword or key phrase** (e.g. `pug`, `golden retriever in the park`, `
 | **Fidelity of colouring** | Numbered outline + key let a careful colourist recover the intended flat colours of the colour plate. |
 | **Label correctness** | Every colour block is numbered; numbers match the key; no orphan/mislabelled regions. |
 | **Print quality** | A4 (or chosen trim) at usable DPI; colouring regions large enough to fill by hand; outlines readable, not muddy. |
+| **Vibrant plate bar** | Adult-band plates read as dense value mosaics with rich palettes (not 3–8 flat blobs); subject remains unmistakable from the outline. |
 | **Covers** | Front and back are full-colour, on-brand with the set, and print-ready. |
 | **Book assembly** | Ordered PDF (or equivalent) with covers + interior plates + keys as designed. |
 | **Copyright safety** | Book assets are generated or openly licensed with attribution where required; web photo search is reference-only / optional tooling, not the default publish path. |
@@ -72,9 +86,11 @@ Do not grow an endless name list; add an override only when hypernym + negatives
 
 ### Next step (recommended now)
 
-Phase D set generation is available (`--set-size` / `plan_colouring_set`).
-After sets reliably pass the set gate on the primary backend, move to Phase E
-(covers + book compile).
+Close the gap from Phase B `standard` plates toward the **vibrant** end-goal bar
+(`--style vibrant`: denser mosaic, fuller palette, cool shadows), using critique
+exports and rights-safe reference study. In parallel, Phase D sets remain available;
+Phase E (covers + book compile) follows once interiors hit the quality bar you want
+to publish.
 
 ### Phase B — Plate quality bar (gate: colourable reconstructible single plate)
 

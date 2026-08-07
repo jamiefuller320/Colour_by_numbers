@@ -45,13 +45,21 @@ reconstruction target.
 Exact cover layout grids land with the book compiler; this brief only locks the
 visual family rules.
 
-## Difficulty banding (placeholder)
+## Difficulty banding
 
-| Band | Intent | Notes |
-|------|--------|-------|
-| Simple | Fewer, larger fills | Younger colourists; still ≥8mm blocks |
-| Standard (default) | 8–16 colours, mixed region sizes above the floor | Current Phase B path |
-| Busy | More regions / scene elements | Phase D set slots may add light scene cues; never below 8mm fills |
+| Band | Intent | Knobs (`--style`) | Notes |
+|------|--------|-------------------|-------|
+| Simple | Fewer, larger fills | ~10 colours, ≥10mm | Younger colourists |
+| Standard (default) | Hand-colourable A4 | 8–16 colours (target 16), ≥8mm, book palette | Current Phase B gate |
+| Vibrant (end goal) | Adult paint-by-numbers mosaic | ~24–32 colours, ≥4mm, adaptive palette, cool shadow accents | Dense interlocking wedges; optional abstract colour-block background; study vibrant portrait kits as format teachers — do not copy commercial art |
+
+**Vibrant checklist language** (aspirational):
+
+1. The subject reads instantly from the outline alone.
+2. Fur / form is a **value mosaic** of many interlocking fills, not 3–6 large blobs.
+3. Warm mid-tones and **cool shadow accents** both appear.
+4. Background may be abstract colour blocks; it must not flatten into empty white that starves the palette.
+5. Colouring the numbers still rebuilds the flat plate.
 
 ## Set variety (Phase D)
 

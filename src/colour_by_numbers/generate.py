@@ -24,6 +24,7 @@ from .illustrate import (
     prepare_illustration_for_colouring,
 )
 from .palette import DEFAULT_ILLUSTRATION_COLOURS, MAX_N_COLOURS, clamp_n_colours
+from .style_presets import DEFAULT_STYLE, resolve_style_preset
 from .pipeline import ColourByNumbersResult, create_colour_by_numbers
 from .print_resolution import evaluate_print_resolution
 from .quality import (
@@ -127,14 +128,15 @@ def generate_colouring_page(
     type_pick: int = 0,
     discover_types: bool = True,
     backend: str = DEFAULT_ILLUSTRATION_BACKEND,
-    n_colours: int = DEFAULT_ILLUSTRATION_COLOURS,
-    illustration_colours: int = DEFAULT_ILLUSTRATION_COLOURS,
+    n_colours: int | None = None,
+    illustration_colours: int | None = None,
     illustration_size: int = DEFAULT_ILLUSTRATION_SIZE,
     max_references: int = 6,
     complexity: str = "fine",
     subject_mode: str = "off",
     min_a4_dpi: float | None = None,
-    min_region_mm: float = PHASE_B_MIN_REGION_MM,
+    min_region_mm: float | None = None,
+    style: str = DEFAULT_STYLE,
     openai_api_key: str | None = None,
     fal_api_key: str | None = None,
     pollinations_api_key: str | None = None,
@@ -155,9 +157,10 @@ def generate_colouring_page(
 
     Default ``subject_mode='off'`` because the illustration is already isolated
     on a flat background with ink outlines; dual rembg is usually unnecessary.
-    Illustration colour counts are clamped to 8–16; colouring regions are
-    floored so each colourable block is at least ``min_region_mm`` wide and
-    high on A4; finer detail becomes black line drawing.
+
+    ``style`` selects a difficulty band (``simple`` / ``standard`` / ``vibrant``).
+    ``standard`` is the Phase B kids gate; ``vibrant`` is the adult end-goal band
+    (denser fills, up to 32 colours, cooler shadows).
 
     Phase B: default backend is ``fal`` (Flux via fal.ai; needs ``FAL_KEY``).
     When ``check_quality`` is True, attach a ``PlateQualityReport``. When
@@ -168,6 +171,7 @@ def generate_colouring_page(
     requested subject and how the prompt should improve. Lessons are stored
     for later runs of the same subject.
     """
+    preset = resolve_style_preset(style)
     discovery = discover_subject_types(
         query,
         probe_search=discover_types and subject_type is None,
@@ -178,8 +182,16 @@ def generate_colouring_page(
 
     reference_hit: ImageHit | None = None
     reference_image: Image.Image | None = None
-    illustration_colours = clamp_n_colours(illustration_colours)
-    n_colours = clamp_n_colours(n_colours, maximum=MAX_N_COLOURS)
+    if illustration_colours is None:
+        illustration_colours = preset.n_colours
+    if n_colours is None:
+        n_colours = preset.n_colours
+    if min_region_mm is None:
+        min_region_mm = preset.min_region_mm
+    illustration_colours = clamp_n_colours(
+        illustration_colours, maximum=preset.max_colours
+    )
+    n_colours = clamp_n_colours(n_colours, maximum=preset.max_colours)
 
     if backend == "local_stylize":
         hits = gather_reference_hits(
@@ -197,7 +209,10 @@ def generate_colouring_page(
 
     if use_feedback:
         base_prompt = prompt_override or illustration_prompt(
-            chosen.label, category=chosen.category
+            chosen.label,
+            category=chosen.category,
+            style_preset=preset.name,
+            min_region_mm=min_region_mm,
         )
 
         def _generate_once(prompt: str) -> Image.Image:
@@ -218,6 +233,7 @@ def generate_colouring_page(
                 seed=seed,
                 min_region_mm=min_region_mm,
                 prepare_for_colouring=False,
+                style=preset.name,
             )
             return one.image
 
@@ -239,6 +255,9 @@ def generate_colouring_page(
             n_colours=illustration_colours,
             min_region_mm=min_region_mm,
             category=chosen.category,
+            palette_mode=preset.palette_mode,
+            cool_shadows=preset.cool_shadows,
+            max_colours=preset.max_colours,
         )
         notes = feedback_result.notes
         illustration = IllustrationResult(
@@ -265,6 +284,7 @@ def generate_colouring_page(
             pollinations_model=pollinations_model,
             seed=seed,
             min_region_mm=min_region_mm,
+            style=preset.name,
         )
     if reference_hit is not None:
         illustration = IllustrationResult(
@@ -294,13 +314,16 @@ def generate_colouring_page(
     for key in ("palette_mode", "palette_category", "firm_border", "colour_refine"):
         pipeline_kwargs.pop(key, None)
     pipeline_kwargs.setdefault("min_region_mm", min_region_mm)
+    pipeline_palette = (
+        "free" if preset.palette_mode in {"adaptive", "free"} else "standard"
+    )
     result = create_colour_by_numbers(
         illustration.image,
         n_colours=n_colours,
         complexity=complexity,
         subject_mode=subject_mode,
-        palette_mode="standard",
-        palette_category=chosen.category,
+        palette_mode=pipeline_palette,
+        palette_category=None if preset.cool_shadows else chosen.category,
         firm_border=True,
         colour_refine=False,
         min_a4_dpi=min_a4_dpi,
@@ -330,18 +353,16 @@ def generate_colouring_page(
 
     quality: PlateQualityReport | None = None
     if check_quality or require_quality:
+        quality_kwargs = dict(
+            colour_plate=illustration.image,
+            min_region_mm=min_region_mm,
+            min_colours=preset.min_colours,
+            max_colours=preset.max_colours,
+        )
         if require_quality:
-            quality = assert_plate_quality(
-                result,
-                colour_plate=illustration.image,
-                min_region_mm=min_region_mm,
-            )
+            quality = assert_plate_quality(result, **quality_kwargs)
         else:
-            quality = evaluate_plate_quality(
-                result,
-                colour_plate=illustration.image,
-                min_region_mm=min_region_mm,
-            )
+            quality = evaluate_plate_quality(result, **quality_kwargs)
             if not quality.passed:
                 logger.warning("Plate quality gate:\n%s", quality.summary())
 
