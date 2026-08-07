@@ -6,6 +6,8 @@ Search the web for images by description (for example `aircraft` or `dogs`), map
 
 **Phase B–D:** primary generator is **fal.ai Flux** (`FAL_KEY`); single plates use the B/C quality checklist ([FORMAT_BRIEF.md](FORMAT_BRIEF.md)); sets use `--set-size`. GitHub Pages is a **viewer** (upload plate → outline), not a generator.
 
+**Visual end goal:** adult **vibrant** paint-by-numbers mosaics (dense interlocking fills, ~24–32 colours, cool shadow accents). Use `--style vibrant` to aim at that band; `--style standard` remains the current kids/hand-colourable default.
+
 ## What it produces
 
 For each source image the tool writes:
@@ -78,6 +80,12 @@ This writes `data/plate_critiques.jsonl` and `data/plate_lessons.json`. Future g
 export FAL_KEY=...
 colour-by-numbers --query dogs --type "pug" --illustrate --output output
 # Writes PNG plus vector SVG: *_plate.svg (flat fills) and *_outline.svg (numbered outline)
+
+# End-goal adult vibrant band (house style across subjects; denser mosaic, up to 32 colours)
+colour-by-numbers --query dogs --type "golden retriever" --illustrate \
+  --style vibrant --output output/vibrant-retriever
+colour-by-numbers --query aircraft --type biplane --illustrate \
+  --style vibrant --output output/vibrant-biplane
 
 # Subject-recognition feedback loop (critique → revise → retry → learn)
 colour-by-numbers --query aircraft --type spitfire --illustrate \

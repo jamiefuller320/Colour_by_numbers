@@ -335,10 +335,22 @@ def assert_plate_quality(
     *,
     colour_plate: Image.Image | None = None,
     min_region_mm: float = PHASE_B_MIN_REGION_MM,
+    min_colours: int = MIN_N_COLOURS,
+    max_colours: int = MAX_N_COLOURS,
+    min_colourable_fill: float = COLOURABLE_FILL_MIN,
+    max_single_colour_share: float = MAX_COLOUR_SHARE,
+    min_subject_fill: float = SUBJECT_FILL_MIN,
 ) -> PlateQualityReport:
     """Evaluate quality and raise ``PlateQualityError`` on failure."""
     report = evaluate_plate_quality(
-        result, colour_plate=colour_plate, min_region_mm=min_region_mm
+        result,
+        colour_plate=colour_plate,
+        min_region_mm=min_region_mm,
+        min_colours=min_colours,
+        max_colours=max_colours,
+        min_colourable_fill=min_colourable_fill,
+        max_single_colour_share=max_single_colour_share,
+        min_subject_fill=min_subject_fill,
     )
     if not report.passed:
         raise PlateQualityError(report)

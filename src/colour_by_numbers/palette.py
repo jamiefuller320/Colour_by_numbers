@@ -57,11 +57,13 @@ STANDARD_PALETTE_32: np.ndarray = np.array(
 
 assert STANDARD_PALETTE_32.shape == (32, 3)
 
-# Illustration / colouring-book plates use a tighter crayon budget.
+# Illustration / colouring-book plates use a crayon budget.
+# ``standard`` style stays in 8–16; ``vibrant`` (end goal) may use up to 32.
 MIN_N_COLOURS = 8
-MAX_N_COLOURS = 16
+MAX_N_COLOURS = 32
+STANDARD_MAX_N_COLOURS = 16
 DEFAULT_N_COLOURS = 32
-# Target the top of the 8–16 band; fixed-subset snapping often under-fills.
+# Default path remains Phase B standard (16); vibrant style opts into 24–32.
 DEFAULT_ILLUSTRATION_COLOURS = 16
 DEFAULT_MIN_ADJACENT_DELTA_E = 18.0
 DEFAULT_MIN_SUBJECT_BG_CONTRAST = 22.0

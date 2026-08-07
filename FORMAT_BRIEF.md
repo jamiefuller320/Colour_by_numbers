@@ -45,13 +45,24 @@ reconstruction target.
 Exact cover layout grids land with the book compiler; this brief only locks the
 visual family rules.
 
-## Difficulty banding (placeholder)
+## Difficulty banding / style templates
 
-| Band | Intent | Notes |
-|------|--------|-------|
-| Simple | Fewer, larger fills | Younger colourists; still ≥8mm blocks |
-| Standard (default) | 8–16 colours, mixed region sizes above the floor | Current Phase B path |
-| Busy | More regions / scene elements | Phase D set slots may add light scene cues; never below 8mm fills |
+`--style` is the seed of a **style-template** system for product variety. Near term: refine **one** adult template (`vibrant`) until it holds across subjects. Add further templates only after that bar is met — avoid a bake-off of half-finished looks.
+
+| Band | Intent | Knobs (`--style`) | Notes |
+|------|--------|-------------------|-------|
+| Simple | Fewer, larger fills | ~10 colours, ≥10mm | Younger colourists; keep, don’t expand yet |
+| Standard (default) | Hand-colourable A4 | 8–16 colours (target 16), ≥8mm, book palette | Current Phase B gate |
+| Vibrant (focus) | Adult paint-by-numbers mosaic for **any subject** | ~24–32 colours, ≥4mm, adaptive palette, cool shadow accents | Primary refinement target; house style on animals, vehicles, flowers, birds, people |
+
+**Vibrant checklist language** (aspirational, all categories):
+
+1. The subject reads instantly from the outline alone.
+2. The form is a **value mosaic** of many interlocking fills, not 3–6 large blobs (whether fur, petal, panel, or feather).
+3. Warm mid-tones and **cool shadow accents** both appear.
+4. Background may be abstract colour blocks; it must not flatten into empty white that starves the palette.
+5. Colouring the numbers still rebuilds the flat plate.
+6. The style stays recognisable when the subject changes category — same visual language, different entity.
 
 ## Set variety (Phase D)
 

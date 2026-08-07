@@ -31,7 +31,9 @@ def test_standard_palette_has_thirty_two_distinct_colours() -> None:
 
 def test_default_illustration_budget_targets_sixteen() -> None:
     assert DEFAULT_ILLUSTRATION_COLOURS == 16
-    assert clamp_n_colours(32) == 16
+    # Global ceiling is 32 (vibrant); standard style still targets 16.
+    assert clamp_n_colours(32) == 32
+    assert clamp_n_colours(32, maximum=16) == 16
 
 
 def test_snap_palette_to_standard_keeps_distinct_crayons() -> None:
@@ -117,7 +119,8 @@ def test_select_active_palette_respects_n() -> None:
 def test_clamp_n_colours_illustration_range() -> None:
     assert clamp_n_colours(3) == 8
     assert clamp_n_colours(12) == 12
-    assert clamp_n_colours(40) == 16
+    assert clamp_n_colours(40) == 32
+    assert clamp_n_colours(40, maximum=16) == 16
 
 
 def test_dog_dark_fur_maps_to_earthy_not_purple() -> None:
