@@ -17,8 +17,10 @@ from .palette import (
 )
 from .print_resolution import (
     DEFAULT_MIN_REGION_MM,
+    DEFAULT_OUTLINE_STROKE_MM,
     evaluate_print_resolution,
     min_region_size_for_a4_mm,
+    outline_stroke_pixels,
 )
 from .quantize import (
     QuantizedImage,
@@ -229,6 +231,12 @@ class ColourByNumbersResult:
         self.page.outline.save(paths["outline"])
         self.page.legend.save(paths["legend"])
         self.printable.save(paths["page"])
+        if self.page.outline_svg:
+            paths["outline_svg"] = out / f"{stem}_outline.svg"
+            paths["outline_svg"].write_text(self.page.outline_svg, encoding="utf-8")
+        if self.page.plate_svg:
+            paths["plate_svg"] = out / f"{stem}_plate.svg"
+            paths["plate_svg"].write_text(self.page.plate_svg, encoding="utf-8")
         if self.prepared is not None and self.subject_mode not in {"off", "none"}:
             prepared_path = out / f"{stem}_prepared.png"
             self.prepared.save(prepared_path)
@@ -390,14 +398,6 @@ def create_colour_by_numbers(
             )
         )
         blur = 0.0
-        stroke = int(
-            line_width
-            if line_width is not None
-            else max(
-                int(subject_preset["line_width"]),
-                int(background_preset["line_width"]),
-            )
-        )
     else:
         preset = uniform_preset
         blur = float(preset["blur_radius"] if blur_radius is None else blur_radius)
@@ -405,7 +405,6 @@ def create_colour_by_numbers(
             preset["structure_size"] if structure_size is None else structure_size
         )
         struct = min(struct, max_size)
-        stroke = int(preset["line_width"] if line_width is None else line_width)
         quant_input = prepared
 
     quantized = quantize_colours(
@@ -420,6 +419,15 @@ def create_colour_by_numbers(
     )
 
     height, width = quantized.labels.shape
+    stroke = (
+        int(line_width)
+        if line_width is not None
+        else outline_stroke_pixels(width, height)
+    )
+    subject_mask_for_eyes: np.ndarray | None = None
+    if subject_mask is not None:
+        aligned = align_mask(subject_mask, (width, height), firm=firm_border)
+        subject_mask_for_eyes = aligned.alpha >= 128
     used_subject_complexity: str | None = None
     used_background_complexity: str | None = None
 
@@ -483,12 +491,21 @@ def create_colour_by_numbers(
             min_adjacent_delta_e=min_adjacent_delta_e,
         )
         labels = upsample_labels(labels, prepared.size)
+        up_h, up_w = labels.shape
+        up_stroke = (
+            int(line_width)
+            if line_width is not None
+            else outline_stroke_pixels(up_w, up_h)
+        )
         page = build_outline_page(
             labels,
             palette,
-            line_width=stroke,
+            line_width=up_stroke,
+            stroke_mm=DEFAULT_OUTLINE_STROKE_MM,
             simplify=False,
             min_region_mm=min_region_mm,
+            palette_category=palette_category,
+            subject_mask=mask_bool,
         )
         from .simplify import SimplificationStats
 
@@ -507,6 +524,8 @@ def create_colour_by_numbers(
                 passes=subj_stats.passes,
             ),
             detail_ink=page.detail_ink,
+            outline_svg=page.outline_svg,
+            plate_svg=page.plate_svg,
         )
         complexity_label = f"{subject_complexity}+{background_complexity}"
         used_subject_complexity = subject_complexity
@@ -537,6 +556,7 @@ def create_colour_by_numbers(
             min_region_area=area,
             max_regions=region_cap,
             line_width=stroke,
+            stroke_mm=DEFAULT_OUTLINE_STROKE_MM,
             smooth_radius=smooth,
             morph_radius=morph,
             boundary_sigma=boundary,
@@ -545,6 +565,8 @@ def create_colour_by_numbers(
             min_adjacent_delta_e=min_adjacent_delta_e,
             min_thickness=min_thickness,
             min_region_mm=min_region_mm,
+            palette_category=palette_category,
+            subject_mask=subject_mask_for_eyes,
         )
         complexity_label = complexity
 

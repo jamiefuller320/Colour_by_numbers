@@ -52,6 +52,7 @@ In the Streamlit UI, searching `dogs` shows a breed shortlist first; choosing on
 # Production path: fal.ai Flux (export FAL_KEY from https://fal.ai/dashboard/keys)
 export FAL_KEY=...
 colour-by-numbers --query dogs --type "pug" --illustrate --output output
+# Writes PNG plus vector SVG: *_plate.svg (flat fills) and *_outline.svg (numbered outline)
 
 # Subject-recognition feedback loop (critique → revise → retry → learn)
 colour-by-numbers --query aircraft --type spitfire --illustrate \

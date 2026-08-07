@@ -112,8 +112,14 @@ def illustration_prompt(
         "no photorealism, no text, white background"
     )
     animal_detail = (
-        "clearly defined eyes with dark pupils and light eye highlights, "
-        "warm natural colours"
+        "large expressive eyes, each eye with a separate dark pupil and lighter "
+        "iris or sclera fill (at least two distinct colour regions per eye), "
+        "sharp eye definition, warm natural colours"
+    )
+    people_detail = (
+        "clear facial features, large expressive eyes with separate dark pupils "
+        "and lighter iris or sclera fills (at least two colour regions per eye), "
+        "natural skin tones"
     )
     negative = CATEGORY_NEGATIVE_CUES.get(category or "", "")
     negative_suffix = f", {negative}" if negative else ""
@@ -129,6 +135,11 @@ def illustration_prompt(
     if category == "birds":
         return (
             f"{kind_prefix}{subject} centred portrait, {animal_detail}"
+            f"{negative_suffix}, {style}"
+        )
+    if category in {"people", "portraits"}:
+        return (
+            f"{kind_prefix}{subject} portrait, centred face, {people_detail}"
             f"{negative_suffix}, {style}"
         )
     if category in EARTHY_CATEGORIES:
@@ -176,18 +187,33 @@ def prepare_illustration_for_colouring(
     labels = merge_adjacent_same_colour(labels, bridge_px=max(2.0, tip * 0.6))
     labels = absorb_small_regions(labels, min_area=region.min_area_px)
     labels = absorb_thin_regions(labels, min_thickness=tip)
+    from .eyes import compute_eye_protection_mask, portrait_subject, relaxed_eye_thresholds
+
+    eye_protected = compute_eye_protection_mask(
+        labels,
+        active,
+        category=category,
+        min_region_mm=min_region_mm,
+    )
+    eye_relaxed = (
+        relaxed_eye_thresholds(width, height) if portrait_subject(category) else None
+    )
     labels, _hl_detail = normalize_specular_highlights(
         labels,
         active,
         min_width_px=region.min_width_px,
         min_height_px=region.min_height_px,
         min_inscribed_px=tip,
+        protected=eye_protected if eye_protected.any() else None,
+        protected_relaxed=eye_relaxed,
     )
     labels, detail = enforce_colourable_blocks(
         labels,
         min_width_px=region.min_width_px,
         min_height_px=region.min_height_px,
         min_inscribed_px=tip,
+        protected=eye_protected if eye_protected.any() else None,
+        protected_relaxed=eye_relaxed,
     )
     labels, palette = compact_palette(labels, active)
     poster = palette[labels]

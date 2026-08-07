@@ -6,12 +6,14 @@
       "subject": "pug",
       "label": "Pug",
       "backend": "fal",
-      "note": "Live fal.ai Flux — Phase B quality PASS",
+      "note": "Live fal.ai Flux — vector SVG + thicker outlines, Phase B PASS",
       "images": {
         "plate": "samples/dogs/pug/plate.png",
         "outline": "samples/dogs/pug/outline.png",
         "page": "samples/dogs/pug/page.png",
-        "illustration": "samples/dogs/pug/illustration.png"
+        "illustration": "samples/dogs/pug/illustration.png",
+        "plate_svg": "samples/dogs/pug/plate.svg",
+        "outline_svg": "samples/dogs/pug/outline.svg"
       }
     }
   ]

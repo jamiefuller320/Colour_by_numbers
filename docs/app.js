@@ -11,7 +11,9 @@ const imageEl = document.getElementById("result-image");
 const outlineFrame = document.getElementById("outline-frame");
 const outlineImageEl = document.getElementById("outline-image");
 const downloadLink = document.getElementById("download");
+const downloadPlateSvg = document.getElementById("download-plate-svg");
 const downloadOutline = document.getElementById("download-outline");
+const downloadOutlineSvg = document.getElementById("download-outline-svg");
 const pageFrame = document.getElementById("page-frame");
 const pageImageEl = document.getElementById("page-image");
 const downloadPage = document.getElementById("download-page");
@@ -62,7 +64,7 @@ const MIN_COLOURS = 8;
 const MAX_COLOURS = 16;
 const MIN_REGION_MM = 8;
 const A4_MM = [210, 297];
-const OUTLINE_LINE_WIDTH = 1; // single-pixel edges (no thicken pass)
+const OUTLINE_LINE_WIDTH = 2; // single-pixel edges (no thicken pass)
 const DETAIL_INK_RGB = [18, 18, 18];
 
 
@@ -899,6 +901,22 @@ async function loadSamplePlate(sampleId) {
       downloadPage,
       `${sample.subject}_page.png`
     );
+    if (sample.images.plate_svg) {
+      const plateSvgUrl = new URL(sample.images.plate_svg, window.location.href).href;
+      downloadPlateSvg.href = plateSvgUrl;
+      downloadPlateSvg.download = `${sample.subject}_plate.svg`;
+      downloadPlateSvg.hidden = false;
+    } else {
+      downloadPlateSvg.hidden = true;
+    }
+    if (sample.images.outline_svg) {
+      const outlineSvgUrl = new URL(sample.images.outline_svg, window.location.href).href;
+      downloadOutlineSvg.href = outlineSvgUrl;
+      downloadOutlineSvg.download = `${sample.subject}_outline.svg`;
+      downloadOutlineSvg.hidden = false;
+    } else {
+      downloadOutlineSvg.hidden = true;
+    }
     if (categories[sample.category]) {
       categorySelect.value = sample.category;
     }
@@ -958,6 +976,8 @@ async function processPending() {
   clearSampleNote();
   sampleSelect.value = "";
   loadSampleBtn.disabled = !sampleSelect.value;
+  downloadPlateSvg.hidden = true;
+  downloadOutlineSvg.hidden = true;
   try {
     const prepared = prepareIllustrationCanvas(
       pendingImage,
