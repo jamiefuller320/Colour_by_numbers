@@ -42,8 +42,22 @@ st.write(
     "**Local stylize** uses a reference photo. "
     "**OpenAI** / **Pollinations** are optional fallbacks. "
     "Use **Set mode** for Phase D aspect/scene variety. "
+    "Browse ingested sets under **Library**. "
     "GitHub Pages is a plate/outline viewer only — generate here or via CLI."
 )
+
+ui_mode = st.radio(
+    "Workspace",
+    options=["Generate", "Library"],
+    horizontal=True,
+    help="Generate new plates, or browse the on-disk asset library.",
+)
+
+if ui_mode == "Library":
+    from ui_library import render_library_browser
+
+    render_library_browser(library_root="data/library", auto_seed_samples=True)
+    st.stop()
 
 with st.sidebar:
     st.header("Run settings")

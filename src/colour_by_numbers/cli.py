@@ -427,6 +427,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Render one colourway for a pair (e.g. set/p01:vivid) and exit",
     )
+    parser.add_argument(
+        "--library-seed-samples",
+        action="store_true",
+        help="Ingest docs/samples vibrant packs into the library for UI browsing",
+    )
     return parser
 
 
@@ -435,12 +440,23 @@ def main(argv: list[str] | None = None) -> int:
     output_dir = Path(args.output)
     min_a4 = None if args.no_a4_filter else args.min_a4_dpi
 
-    if args.library_list or args.library_compose or args.library_render_colourway:
-        from .library import AssetLibrary
+    if (
+        args.library_list
+        or args.library_compose
+        or args.library_render_colourway
+        or args.library_seed_samples
+    ):
+        from .library import AssetLibrary, seed_sample_sets
 
         lib = AssetLibrary(args.library_root)
+        if args.library_seed_samples:
+            created = seed_sample_sets(lib)
+            print(f"Seeded {len(created)} set(s) into {lib.root}")
+            for record in created:
+                print(f"  {record.set_id}: {record.title} ({len(record.pair_ids)} pairs)")
+            return 0
         if args.library_list:
-            sets = lib.list_sets()
+            sets = lib.browse_sets() if hasattr(lib, "browse_sets") else lib.list_sets()
             if not sets:
                 print(f"No sets in {lib.root}")
                 return 0

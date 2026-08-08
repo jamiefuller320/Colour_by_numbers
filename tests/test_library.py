@@ -123,3 +123,57 @@ def test_plan_mixed_colouring_set_offline() -> None:
     subjects = {slot.subject_label for slot in plan.slots}
     assert subjects == {"pug", "biplane"}
     assert all(slot.category for slot in plan.slots)
+
+
+def test_browse_sets_and_pair_previews(tmp_path) -> None:
+    from colour_by_numbers.library import seed_sample_sets
+
+    lib = AssetLibrary(tmp_path / "library")
+    plate = Image.new("RGB", (40, 40), (210, 90, 40))
+    outline = Image.new("RGB", (40, 40), (255, 255, 255))
+    record = lib.create_set(
+        title="browse me",
+        mode=SET_MODE_SINGLE,
+        categories=["dogs"],
+        subjects=["demo"],
+        style="vibrant",
+    )
+    lib.add_pair_from_images(
+        record.set_id,
+        plate=plate,
+        outline=outline,
+        category="dogs",
+        subject="demo",
+        style="vibrant",
+        n_colours=2,
+    )
+    rows = lib.browse_sets()
+    assert len(rows) == 1
+    assert rows[0]["title"] == "browse me"
+    assert rows[0]["thumbnail"]
+    assert rows[0]["n_pairs"] == 1
+    assert rows[0]["thumbnail_colours"]
+    previews = lib.list_pair_previews(record.set_id)
+    assert len(previews) == 1
+    assert previews[0]["assets"]["plate"]
+    assert previews[0]["assets"]["outline"]
+
+
+def test_seed_sample_sets_from_docs(tmp_path) -> None:
+    from pathlib import Path
+
+    from colour_by_numbers.library import seed_sample_sets
+
+    samples = Path("docs/samples")
+    if not (samples / "dogs" / "golden-retriever-vibrant" / "plate.png").exists():
+        return
+    lib = AssetLibrary(tmp_path / "library")
+    created = seed_sample_sets(lib, samples_root=samples)
+    assert len(created) >= 1
+    browsed = lib.browse_sets()
+    assert any(r["set_id"].startswith("sample-") for r in browsed)
+    first = next(r for r in browsed if r["set_id"].startswith("sample-"))
+    assert first["thumbnail"]
+    assert Path(first["thumbnail"]).exists()
+    gallery = lib.list_pair_previews(first["set_id"])
+    assert gallery and "plate" in gallery[0]["assets"]

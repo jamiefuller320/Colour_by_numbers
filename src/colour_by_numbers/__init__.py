@@ -5,7 +5,13 @@ from .discover import SubjectType, discover_subject_types
 from .feedback import FeedbackLoopResult, run_subject_feedback_loop
 from .generate import GeneratedPage, generate_colouring_page
 from .illustrate import IllustrationResult, generate_illustration
-from .library import AssetLibrary, PairRecord, SetRecord, ingest_generated_set
+from .library import (
+    AssetLibrary,
+    PairRecord,
+    SetRecord,
+    ingest_generated_set,
+    seed_sample_sets,
+)
 from .pipeline import ColourByNumbersResult, create_colour_by_numbers
 from .quality import PlateQualityReport, evaluate_plate_quality
 from .set_generate import GeneratedSet, generate_colouring_set
@@ -36,5 +42,6 @@ __all__ = [
     "remap_palette",
     "render_colourway_plate",
     "run_subject_feedback_loop",
+    "seed_sample_sets",
 ]
 __version__ = "0.1.0"

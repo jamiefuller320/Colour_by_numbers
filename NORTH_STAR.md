@@ -217,7 +217,13 @@ colour-by-numbers --library-compose "Pets & planes" \
 
 # Alternate colour plate for covers/guides
 colour-by-numbers --library-render-colourway 'set-id/p01:vivid'
+
+# Seed docs/samples into the library for Streamlit browsing
+colour-by-numbers --library-seed-samples
 ```
+
+Streamlit: open **Library** (sidebar page from `app.py`, or **Library** workspace in
+`testbed_app.py`) to browse sets as colour thumbnails and open each set’s gallery.
 
 ### Phase E — Covers + book compile (gate: print-ready PDF)
 

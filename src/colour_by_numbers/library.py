@@ -535,6 +535,317 @@ class AssetLibrary:
         self.save_set(record)
         return pair
 
+    # --- browse / gallery ------------------------------------------------------
+
+    def add_pair_from_images(
+        self,
+        set_id: str,
+        *,
+        plate: Image.Image,
+        outline: Image.Image | None = None,
+        page: Image.Image | None = None,
+        illustration: Image.Image | None = None,
+        legend: Image.Image | None = None,
+        index: int | None = None,
+        category: str | None = None,
+        subject: str | None = None,
+        role: str = PAIR_ROLE_INTERIOR,
+        aspect: str | None = None,
+        scene: str | None = None,
+        style: str | None = None,
+        colourways: list[str] | None = None,
+        notes: str = "",
+        n_colours: int | None = None,
+    ) -> PairRecord:
+        """Persist a plate/outline pair from existing images (no labels required)."""
+        record = self.load_set(set_id)
+        next_index = index if index is not None else (len(record.pair_ids) + 1)
+        pair_id = make_pair_id(set_id, next_index)
+        pair_path = self.pair_dir(pair_id)
+        pair_path.mkdir(parents=True, exist_ok=True)
+
+        plate_rgb = plate.convert("RGB")
+        plate_rgb.save(pair_path / "plate.png")
+        paths: dict[str, str] = {"plate": "plate.png"}
+        if outline is not None:
+            outline.convert("RGB").save(pair_path / "outline.png")
+            paths["outline"] = "outline.png"
+        if page is not None:
+            page.convert("RGB").save(pair_path / "page.png")
+            paths["page"] = "page.png"
+        if illustration is not None:
+            illustration.convert("RGB").save(pair_path / "illustration.png")
+            paths["illustration"] = "illustration.png"
+        if legend is not None:
+            legend.convert("RGB").save(pair_path / "legend.png")
+            paths["legend"] = "legend.png"
+
+        if n_colours is None:
+            arr = np.asarray(plate_rgb.resize((64, 64), Image.Resampling.NEAREST))
+            n_colours = int(
+                np.unique(arr.reshape(-1, 3), axis=0).shape[0]
+            )
+
+        pair = PairRecord(
+            pair_id=pair_id,
+            set_id=set_id,
+            index=next_index,
+            category=category or (record.categories[0] if record.categories else ""),
+            subject=subject or (record.subjects[0] if record.subjects else ""),
+            role=role,
+            aspect=aspect or "",
+            scene=scene or "",
+            style=style or record.style,
+            n_colours=int(n_colours),
+            paths=paths,
+            colourways=list(colourways or record.colourways or ["natural"]),
+            notes=notes,
+        )
+        self.save_pair(pair)
+        if pair_id not in record.pair_ids:
+            record.pair_ids.append(pair_id)
+        if pair.category and pair.category not in record.categories:
+            record.categories.append(pair.category)
+        if pair.subject and pair.subject not in record.subjects:
+            record.subjects.append(pair.subject)
+        if pair.style and not record.style:
+            record.style = pair.style
+        self.save_set(record)
+        return pair
+
+    def browse_sets(self) -> list[dict]:
+        """UI-ready set summaries with absolute preview paths."""
+        rows: list[dict] = []
+        for entry in self.list_sets():
+            set_id = str(entry.get("set_id") or "")
+            if not set_id:
+                continue
+            try:
+                record = self.load_set(set_id)
+            except FileNotFoundError:
+                continue
+            thumb = self.set_thumbnail_path(set_id)
+            rows.append(
+                {
+                    "set_id": record.set_id,
+                    "title": record.title,
+                    "mode": record.mode,
+                    "style": record.style,
+                    "categories": list(record.categories),
+                    "subjects": list(record.subjects),
+                    "colourways": list(record.colourways),
+                    "n_pairs": len(record.pair_ids),
+                    "pair_ids": list(record.pair_ids),
+                    "created_at": record.created_at,
+                    "thumbnail": str(thumb) if thumb else None,
+                    "thumbnail_colours": self.set_colour_swatches(set_id, max_swatches=8),
+                }
+            )
+        rows.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+        return rows
+
+    def set_thumbnail_path(self, set_id: str) -> Path | None:
+        """Return a colour plate path suitable as the set's gallery thumbnail."""
+        record = self.load_set(set_id)
+        for pair_id in record.pair_ids:
+            for name in ("plate.png", "illustration.png", "page.png", "outline.png"):
+                path = self.pair_dir(pair_id) / name
+                if path.exists():
+                    return path
+        return None
+
+    def set_colour_swatches(
+        self, set_id: str, *, max_swatches: int = 8
+    ) -> list[str]:
+        """Sample hex colours from the first plate for a colour-chip preview."""
+        thumb = self.set_thumbnail_path(set_id)
+        if thumb is None or not thumb.exists():
+            return []
+        try:
+            image = Image.open(thumb).convert("RGB")
+        except OSError:
+            return []
+        small = image.resize((48, 48), Image.Resampling.NEAREST)
+        arr = np.asarray(small).reshape(-1, 3)
+        # Prefer saturated / mid-luma colours over near-white background.
+        scored: list[tuple[float, tuple[int, int, int]]] = []
+        seen: set[tuple[int, int, int]] = set()
+        for rgb in arr[::3]:
+            key = (int(rgb[0]), int(rgb[1]), int(rgb[2]))
+            if key in seen:
+                continue
+            seen.add(key)
+            r, g, b = key
+            luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
+            sat = max(r, g, b) - min(r, g, b)
+            if luma > 245 and sat < 12:
+                continue
+            scored.append((float(sat) * 2.0 + (128.0 - abs(luma - 128.0)), key))
+        scored.sort(reverse=True)
+        hexes: list[str] = []
+        for _, (r, g, b) in scored[:max_swatches]:
+            hexes.append(f"#{r:02X}{g:02X}{b:02X}")
+        return hexes
+
+    def list_pair_previews(self, set_id: str) -> list[dict]:
+        """UI-ready pair rows for a set gallery."""
+        record = self.load_set(set_id)
+        rows: list[dict] = []
+        for pair_id in record.pair_ids:
+            try:
+                pair = self.load_pair(pair_id)
+            except FileNotFoundError:
+                continue
+            pair_path = self.pair_dir(pair_id)
+            assets: dict[str, str] = {}
+            for key, rel in pair.paths.items():
+                abs_path = pair_path / rel
+                if abs_path.exists():
+                    assets[key] = str(abs_path)
+            # Fallbacks if meta paths are incomplete
+            for name, key in (
+                ("plate.png", "plate"),
+                ("outline.png", "outline"),
+                ("page.png", "page"),
+                ("illustration.png", "illustration"),
+                ("legend.png", "legend"),
+            ):
+                if key not in assets and (pair_path / name).exists():
+                    assets[key] = str(pair_path / name)
+            rows.append(
+                {
+                    "pair_id": pair.pair_id,
+                    "index": pair.index,
+                    "category": pair.category,
+                    "subject": pair.subject,
+                    "role": pair.role,
+                    "aspect": pair.aspect,
+                    "scene": pair.scene,
+                    "style": pair.style,
+                    "n_colours": pair.n_colours,
+                    "colourways": list(pair.colourways),
+                    "notes": pair.notes,
+                    "assets": assets,
+                    "thumbnail": assets.get("plate")
+                    or assets.get("illustration")
+                    or assets.get("page")
+                    or assets.get("outline"),
+                }
+            )
+        rows.sort(key=lambda r: int(r.get("index") or 0))
+        return rows
+
+
+def seed_sample_sets(
+    library: AssetLibrary | None = None,
+    *,
+    samples_root: Path | None = None,
+    force: bool = False,
+) -> list[SetRecord]:
+    """Ingest curated ``docs/samples`` vibrant packs into the library for browsing.
+
+    Skips sets that already exist unless ``force=True``.
+    """
+    lib = library or AssetLibrary()
+    root = samples_root or (Path.cwd() / "docs" / "samples")
+    if not root.exists():
+        # Allow package-relative lookup when cwd differs
+        alt = Path(__file__).resolve().parents[2] / "docs" / "samples"
+        root = alt if alt.exists() else root
+
+    packs = [
+        {
+            "set_id": "sample-golden-retriever-vibrant",
+            "title": "Golden retriever (vibrant)",
+            "category": "animals",
+            "subject": "golden retriever",
+            "style": "vibrant",
+            "dir": root / "dogs" / "golden-retriever-vibrant",
+            "files": {
+                "plate": "plate.png",
+                "outline": "outline.png",
+                "page": "page.png",
+                "illustration": "illustration.png",
+            },
+        },
+        {
+            "set_id": "sample-tabby-cat-vibrant",
+            "title": "Tabby cat (vibrant)",
+            "category": "animals",
+            "subject": "tabby cat",
+            "style": "vibrant",
+            "dir": root / "cats" / "tabby-vibrant",
+            "files": {
+                "plate": "plate.png",
+                "outline": "outline.png",
+                "page": "page.png",
+                "illustration": "illustration.png",
+            },
+        },
+        {
+            "set_id": "sample-biplane-vibrant",
+            "title": "Biplane (vibrant)",
+            "category": "aircraft",
+            "subject": "biplane",
+            "style": "vibrant",
+            "dir": root / "aircraft" / "biplane-vibrant",
+            "files": {
+                "plate": "plate.png",
+                "outline": "outline.png",
+                "page": "page.png",
+                "illustration": "illustration.png",
+            },
+        },
+    ]
+
+    created: list[SetRecord] = []
+    for pack in packs:
+        set_id = str(pack["set_id"])
+        sample_dir = Path(pack["dir"])
+        if not sample_dir.exists():
+            continue
+        existing = lib.set_dir(set_id)
+        if existing.exists() and (existing / "set.json").exists() and not force:
+            created.append(lib.load_set(set_id))
+            continue
+        if force and existing.exists():
+            import shutil
+
+            shutil.rmtree(existing)
+
+        record = lib.create_set(
+            title=str(pack["title"]),
+            mode=SET_MODE_SINGLE,
+            style=str(pack["style"]),
+            categories=[str(pack["category"])],
+            subjects=[str(pack["subject"])],
+            colourways=["natural", "vivid", "pop_art", "pastel"],
+            set_id=set_id,
+            notes="Seeded from docs/samples for UI browsing.",
+        )
+        files = pack["files"]
+        plate_path = sample_dir / str(files["plate"])
+        if not plate_path.exists():
+            continue
+        outline_path = sample_dir / str(files.get("outline") or "")
+        page_path = sample_dir / str(files.get("page") or "")
+        illus_path = sample_dir / str(files.get("illustration") or "")
+        lib.add_pair_from_images(
+            record.set_id,
+            plate=Image.open(plate_path),
+            outline=Image.open(outline_path) if outline_path.exists() else None,
+            page=Image.open(page_path) if page_path.exists() else None,
+            illustration=Image.open(illus_path) if illus_path.exists() else None,
+            index=1,
+            category=str(pack["category"]),
+            subject=str(pack["subject"]),
+            style=str(pack["style"]),
+            colourways=["natural", "vivid", "pop_art", "pastel"],
+            notes="Sample plate from docs/samples.",
+        )
+        created.append(lib.load_set(record.set_id))
+    return created
+
 
 def ingest_generated_set(
     generated,
