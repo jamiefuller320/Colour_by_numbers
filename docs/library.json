@@ -168,18 +168,18 @@
       "subjects": [
         "golden retriever"
       ],
-      "note": "Vibrant dual simplify with subject/bg separation: contrasting cool backgrounds, no shared subject paints in the background, \u0394E\u226518 within 5mm of the silhouette.",
+      "note": "Vibrant dual simplify with subject recovery + multi-block cool backgrounds. No shared/near-twin subject paints in the background; portrait chests reclaimed when rembg drops them.",
       "n_pairs": 6,
       "thumbnail": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p01/plate.png",
       "thumbnail_colours": [
         "#B09070",
         "#806030",
-        "#604030",
+        "#605040",
         "#403010",
         "#603010",
-        "#D0C090",
-        "#C0D0C0",
-        "#B0B0A0"
+        "#D0C0A0",
+        "#706060",
+        "#D0D0C0"
       ],
       "pairs": [
         {

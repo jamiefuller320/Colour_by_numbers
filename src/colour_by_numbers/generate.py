@@ -364,7 +364,8 @@ def generate_colouring_page(
         palette_mode=pipeline_palette,
         palette_category=None if preset.cool_shadows else chosen.category,
         firm_border=True,
-        colour_refine=False,
+        # Snap + recover silhouette so pale chests / sheet-matched fur stay subject.
+        colour_refine=True,
         min_a4_dpi=min_a4_dpi,
         min_adjacent_delta_e=resolved_delta_e,
         max_plate_colours=preset.max_plate_colours,
