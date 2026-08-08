@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -18,7 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
             "for colouring books."
         ),
     )
-    source = parser.add_mutually_exclusive_group(required=True)
+    source = parser.add_mutually_exclusive_group(required=False)
     source.add_argument(
         "-q",
         "--query",
@@ -369,6 +370,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--variety",
+        choices=["balanced", "sequential"],
+        default="balanced",
+        help=(
+            "With --set-size: how to mix prompt variations. "
+            "balanced = diverse viewpoints/poses/scenes (default); "
+            "sequential = walk the category bank in order"
+        ),
+    )
+    parser.add_argument(
         "--set-attempts",
         type=int,
         default=3,
@@ -385,6 +396,51 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="With --set-size: print/write the set plan only (no image generation)",
     )
+    parser.add_argument(
+        "--library-root",
+        default="data/library",
+        help="Asset library root for linked plate/outline pairs (default: data/library)",
+    )
+    parser.add_argument(
+        "--library-ingest",
+        action="store_true",
+        help="With --set-size: also ingest accepted pairs into the asset library",
+    )
+    parser.add_argument(
+        "--library-list",
+        action="store_true",
+        help="List sets in the asset library and exit",
+    )
+    parser.add_argument(
+        "--library-compose",
+        metavar="TITLE",
+        default=None,
+        help="Compose a mixed library set from --library-pairs",
+    )
+    parser.add_argument(
+        "--library-pairs",
+        default=None,
+        help="Comma-separated pair IDs for --library-compose",
+    )
+    parser.add_argument(
+        "--library-render-colourway",
+        metavar="PAIR:COLOURWAY",
+        default=None,
+        help="Render one colourway for a pair (e.g. set/p01:vivid) and exit",
+    )
+    parser.add_argument(
+        "--library-seed-samples",
+        action="store_true",
+        help="Ingest docs/samples vibrant packs into the library for UI browsing",
+    )
+    parser.add_argument(
+        "--library-publish-pages",
+        metavar="DOCS",
+        nargs="?",
+        const="docs",
+        default=None,
+        help="Write docs/library.json for the GitHub Pages set gallery (default: docs)",
+    )
     return parser
 
 
@@ -392,6 +448,60 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     output_dir = Path(args.output)
     min_a4 = None if args.no_a4_filter else args.min_a4_dpi
+
+    if (
+        args.library_list
+        or args.library_compose
+        or args.library_render_colourway
+        or args.library_seed_samples
+        or args.library_publish_pages is not None
+    ):
+        from .library import AssetLibrary, publish_pages_library, seed_sample_sets
+
+        lib = AssetLibrary(args.library_root)
+        if args.library_publish_pages is not None:
+            path = publish_pages_library(args.library_publish_pages)
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            print(f"Wrote {path} ({len(payload.get('sets') or [])} sets)")
+            return 0
+        if args.library_seed_samples:
+            created = seed_sample_sets(lib)
+            print(f"Seeded {len(created)} set(s) into {lib.root}")
+            for record in created:
+                print(f"  {record.set_id}: {record.title} ({len(record.pair_ids)} pairs)")
+            return 0
+        if args.library_list:
+            sets = lib.list_sets()
+            if not sets:
+                print(f"No sets in {lib.root}")
+                return 0
+            for item in sets:
+                cats = ",".join(item.get("categories") or []) or "—"
+                print(
+                    f"{item['set_id']}: {item.get('title')} "
+                    f"[{item.get('mode')}] {item.get('n_pairs')} pairs ({cats})"
+                )
+            return 0
+        if args.library_render_colourway:
+            raw = args.library_render_colourway
+            if ":" not in raw:
+                print("--library-render-colourway needs PAIR:COLOURWAY", file=sys.stderr)
+                return 2
+            pair_id, way = raw.rsplit(":", 1)
+            path = lib.render_pair_colourway(pair_id, way)
+            print(f"Wrote {path}")
+            return 0
+        if not args.library_pairs:
+            print("--library-compose requires --library-pairs", file=sys.stderr)
+            return 2
+        pair_ids = [p.strip() for p in args.library_pairs.split(",") if p.strip()]
+        record = lib.compose_mixed_set(title=args.library_compose, pair_ids=pair_ids)
+        print(f"Composed mixed set {record.set_id} with {len(record.pair_ids)} pairs")
+        return 0
+
+    if not args.query and not args.input and not args.list_types:
+        print("Provide --query, --input, or a --library-* command", file=sys.stderr)
+        return 2
 
     if args.list_types:
         if not args.query:
@@ -468,6 +578,7 @@ def main(argv: list[str] | None = None) -> int:
                 base_seed=args.seed if args.seed is not None else 0,
                 discover_types=not args.no_discover,
                 style=args.style,
+                variety=args.variety,
             )
             output_dir.mkdir(parents=True, exist_ok=True)
             if args.plan_only:
@@ -475,11 +586,13 @@ def main(argv: list[str] | None = None) -> int:
                     json.dumps(plan.to_dict(), indent=2), encoding="utf-8"
                 )
                 print(f"Subject: {plan.subject_type.label} ({plan.subject_type.category})")
+                print(f"Variety: {args.variety}")
                 print(f"Planned {plan.n_plates} slots:")
                 for slot in plan.slots:
+                    tag_bit = f" [{', '.join(slot.tags)}]" if slot.tags else ""
                     print(
                         f"  {slot.index:02d}. {slot.aspect} / {slot.scene} "
-                        f"(seed {slot.seed})"
+                        f"(seed {slot.seed}){tag_bit}"
                     )
                     print(f"      {slot.prompt[:120]}…")
                 print(f"Wrote {output_dir / 'plan.json'}")
@@ -491,6 +604,7 @@ def main(argv: list[str] | None = None) -> int:
                 attempts_per_slot=args.set_attempts,
                 require_plate_quality=not args.no_quality_check,
                 output_dir=output_dir,
+                library_root=args.library_root if args.library_ingest else None,
                 backend=args.illustration_backend,
                 style=args.style,
                 illustration_colours=args.illustration_colours,

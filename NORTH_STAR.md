@@ -188,9 +188,53 @@ Set gate (`evaluate_set_quality`): enough accepted plates, unique aspect/scene
 plan, each accepted plate passes Phase B/C, no near-duplicates, shared subject
 label. Manifest: `plan.json` + `manifest.json` under the output directory.
 
+**Bulk prompt variety** (`variation_banks.py`, `--variety balanced`): category
+banks mix interesting views so animals/people cover front/side/oblique,
+sitting/standing, portrait/scene, single/group; aircraft/vehicles cover
+on-ground/takeoff/airborne/landing (and docked/underway for boats).
+
+### Phase D+ — Asset library (pairs, sets, colourways)
+
+Durable storage for book building lives under `data/library/`:
+
+- **Pair** = linked colour plate ↔ numbered outline (+ editable `labels.npy` /
+  `palette.json`). Outlines are the main product; colour plates feed covers /
+  guide pages.
+- **Set** = collated pairs — **single-category** (generated together) or
+  **mixed** (compose from existing pair IDs across subjects).
+- **Colourways** = re-render the same label map as `natural` / `vivid` /
+  `pop_art` / `pastel` without regenerating geometry.
+
+```bash
+# Generate a set and ingest into the library
+colour-by-numbers --query dogs --type pug --illustrate --set-size 4 \
+  --library-ingest --library-root data/library --output output/pug-set
+
+# List sets / compose a mixed theme from existing pairs
+colour-by-numbers --library-list
+colour-by-numbers --library-compose "Pets & planes" \
+  --library-pairs dogs-…/p01,aircraft-…/p02
+
+# Alternate colour plate for covers/guides
+colour-by-numbers --library-render-colourway 'set-id/p01:vivid'
+
+# Seed docs/samples into the library for Streamlit browsing
+colour-by-numbers --library-seed-samples
+
+# Publish set thumbnails/gallery manifest for GitHub Pages
+colour-by-numbers --library-publish-pages
+```
+
+Streamlit: open **Library** (sidebar page from `app.py`, or **Library** workspace in
+`testbed_app.py`) to browse sets as colour thumbnails and open each set’s gallery.
+
+GitHub Pages: open `library.html` (set colour thumbnails → set gallery). Manifest is
+`docs/library.json`.
+
 ### Phase E — Covers + book compile (gate: print-ready PDF)
 
-- Front/back full-colour covers in the same family.
+- Front/back full-colour covers in the same family (from pair illustrations /
+  colourway plates).
 - Ordered interiors + keys + covers → PDF with trim/DPI checklist.
 - Provenance log: every asset marked generated or licensed.
 

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Asset library — Colour by Numbers</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page library-page">
+    <header class="hero">
+      <p class="brand">Colour by Numbers</p>
+      <h1>Asset library</h1>
+      <p class="lede">
+        Browse image sets as colour thumbnails. Open a set to view its linked
+        colour plates, numbered outlines, and print pages.
+        Generation stays in Streamlit/CLI — this page only reads published assets.
+      </p>
+      <nav class="review-nav">
+        <a href="index.html">← Plate viewer</a>
+        ·
+        <a href="vibrant.html">Vibrant samples</a>
+        ·
+        <a href="review.html">Review gallery</a>
+      </nav>
+    </header>
+
+    <p id="library-status" class="status" aria-live="polite"></p>
+
+    <section id="library-grid" class="library-grid" hidden></section>
+
+    <section id="library-gallery" class="library-gallery" hidden>
+      <button id="library-back" type="button" class="ghost">← All sets</button>
+      <header class="library-gallery-head">
+        <h2 id="gallery-title"></h2>
+        <p id="gallery-meta" class="fineprint"></p>
+        <p id="gallery-note" class="lede library-gallery-note"></p>
+      </header>
+      <div id="gallery-pairs" class="library-pairs"></div>
+    </section>
+
+    <footer>
+      <p>
+        <a href="index.html">Plate viewer</a> ·
+        <a href="vibrant.html">Vibrant samples</a> ·
+        <a href="review.html">Review gallery</a> ·
+        Published sets from <code>library.json</code>
+      </p>
+    </footer>
+  </div>
+  <script src="library.js" type="module"></script>
+</body>
+</html>

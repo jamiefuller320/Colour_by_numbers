@@ -12,5 +12,7 @@ venv/
 output/
 samples/*.png
 data/subject_lessons.jsonl
+data/library/sets/
+data/library/index.json
 .DS_Store
 .streamlit/secrets.toml

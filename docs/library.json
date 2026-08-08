@@ -1,0 +1,161 @@
+{
+  "version": 1,
+  "sets": [
+    {
+      "set_id": "sample-golden-retriever-vibrant",
+      "title": "Golden retriever (vibrant)",
+      "mode": "single",
+      "style": "vibrant",
+      "categories": [
+        "dogs"
+      ],
+      "subjects": [
+        "golden retriever"
+      ],
+      "note": "Vibrant house-style sample \u2014 exact palette preserve, denser regions.",
+      "n_pairs": 1,
+      "thumbnail": "samples/dogs/golden-retriever-vibrant/plate.png",
+      "thumbnail_colours": [
+        "#FBA213",
+        "#F59612",
+        "#E57F0D",
+        "#DC7611",
+        "#F8A827",
+        "#CE6711",
+        "#DF9229",
+        "#FDB643"
+      ],
+      "pairs": [
+        {
+          "pair_id": "sample-golden-retriever-vibrant/p01",
+          "index": 1,
+          "subject": "golden retriever",
+          "assets": {
+            "plate": "samples/dogs/golden-retriever-vibrant/plate.png",
+            "outline": "samples/dogs/golden-retriever-vibrant/outline.png",
+            "page": "samples/dogs/golden-retriever-vibrant/page.png",
+            "illustration": "samples/dogs/golden-retriever-vibrant/illustration.png"
+          },
+          "thumbnail": "samples/dogs/golden-retriever-vibrant/plate.png"
+        }
+      ]
+    },
+    {
+      "set_id": "sample-tabby-cat-vibrant",
+      "title": "Tabby cat (vibrant)",
+      "mode": "single",
+      "style": "vibrant",
+      "categories": [
+        "cats"
+      ],
+      "subjects": [
+        "tabby cat"
+      ],
+      "note": "Vibrant cross-subject check \u2014 cool teal shadows.",
+      "n_pairs": 1,
+      "thumbnail": "samples/cats/tabby-vibrant/plate.png",
+      "thumbnail_colours": [
+        "#986034",
+        "#A77C50",
+        "#C8A674",
+        "#763B1B",
+        "#548A90",
+        "#599095",
+        "#50848B",
+        "#497E84"
+      ],
+      "pairs": [
+        {
+          "pair_id": "sample-tabby-cat-vibrant/p01",
+          "index": 1,
+          "subject": "tabby cat",
+          "assets": {
+            "plate": "samples/cats/tabby-vibrant/plate.png",
+            "outline": "samples/cats/tabby-vibrant/outline.png",
+            "page": "samples/cats/tabby-vibrant/page.png",
+            "illustration": "samples/cats/tabby-vibrant/illustration.png"
+          },
+          "thumbnail": "samples/cats/tabby-vibrant/plate.png"
+        }
+      ]
+    },
+    {
+      "set_id": "sample-biplane-vibrant",
+      "title": "Biplane (vibrant)",
+      "mode": "single",
+      "style": "vibrant",
+      "categories": [
+        "aircraft"
+      ],
+      "subjects": [
+        "biplane"
+      ],
+      "note": "Vibrant aircraft sample \u2014 cool wing shadows; silhouette inked on outline.",
+      "n_pairs": 1,
+      "thumbnail": "samples/aircraft/biplane-vibrant/plate.png",
+      "thumbnail_colours": [
+        "#FC9916",
+        "#FC9919",
+        "#FA9718",
+        "#FC9A19",
+        "#FB9919",
+        "#FB991A",
+        "#F5981C",
+        "#F29A1F"
+      ],
+      "pairs": [
+        {
+          "pair_id": "sample-biplane-vibrant/p01",
+          "index": 1,
+          "subject": "biplane",
+          "assets": {
+            "plate": "samples/aircraft/biplane-vibrant/plate.png",
+            "outline": "samples/aircraft/biplane-vibrant/outline.png",
+            "page": "samples/aircraft/biplane-vibrant/page.png",
+            "illustration": "samples/aircraft/biplane-vibrant/illustration.png"
+          },
+          "thumbnail": "samples/aircraft/biplane-vibrant/plate.png"
+        }
+      ]
+    },
+    {
+      "set_id": "sample-pug",
+      "title": "Pug",
+      "mode": "single",
+      "style": "standard",
+      "categories": [
+        "dogs"
+      ],
+      "subjects": [
+        "pug"
+      ],
+      "note": "Live fal.ai Flux sample \u2014 Phase B PASS.",
+      "n_pairs": 1,
+      "thumbnail": "samples/dogs/pug/plate.png",
+      "thumbnail_colours": [
+        "#AF824B",
+        "#82552D",
+        "#DCB987",
+        "#969491",
+        "#371E10",
+        "#4E4844",
+        "#F0EEE8",
+        "#121212"
+      ],
+      "pairs": [
+        {
+          "pair_id": "sample-pug/p01",
+          "index": 1,
+          "subject": "pug",
+          "assets": {
+            "plate": "samples/dogs/pug/plate.png",
+            "outline": "samples/dogs/pug/outline.png",
+            "page": "samples/dogs/pug/page.png",
+            "illustration": "samples/dogs/pug/illustration.png"
+          },
+          "thumbnail": "samples/dogs/pug/plate.png"
+        }
+      ]
+    }
+  ]
+}

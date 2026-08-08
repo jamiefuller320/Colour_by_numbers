@@ -8,6 +8,10 @@ Search the web for images by description (for example `aircraft` or `dogs`), map
 
 **Visual end goal:** adult **vibrant** paint-by-numbers mosaics (dense interlocking fills, ~24–32 colours, cool shadow accents). `--style vibrant` selects denser region passes, exact plate-colour preservation, and cooler shadow prompts; `--style standard` remains the current kids/hand-colourable default. Illustration mode also inks the **subject silhouette** on the outline even when fills match the background (`--silhouette-outline`).
 
+**Asset library:** linked plate↔outline **pairs** and collated **sets** (single-category or mixed) live under `data/library/`. Colour plates stay editable via saved label maps so alternate **colourways** (`natural`, `vivid`, `pop_art`, `pastel`) can be rendered for covers/guides without changing the outline numbers. Browse sets in Streamlit (**Library** page / test-bed **Library** workspace) or on **GitHub Pages** (`library.html`): colour thumbnails open a set gallery. Seed local demos with `colour-by-numbers --library-seed-samples`; refresh the Pages manifest with `colour-by-numbers --library-publish-pages`.
+
+**Bulk themed variety:** `--set-size N --variety balanced` plans a mix of category-appropriate prompts (animals: front/side/oblique, sitting/standing, portrait/scene, single/group; aircraft: on-ground/takeoff/airborne/landing, etc.).
+
 ## What it produces
 
 For each source image the tool writes:

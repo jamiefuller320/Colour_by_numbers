@@ -1,7 +1,8 @@
 # Static plate viewer (GitHub Pages)
 
 This folder is published to **GitHub Pages**. It is a **viewer only**: browse
-example plates from the live fal.ai pipeline, or upload your own generated
+example plates from the live fal.ai pipeline, open the **asset library**
+(`library.html`) for set thumbnails → galleries, or upload your own generated
 colour plate, clamp it to the colouring palette, and preview the numbered
 outline. Works on **iPad / phone** with no localhost and **no API keys**.
 
@@ -9,6 +10,8 @@ outline. Works on **iPad / phone** with no localhost and **no API keys**.
 in the browser.
 
 Example assets live under `samples/` and are listed in `samples.json`.
+Published library sets are listed in `library.json` (regenerate with
+`colour-by-numbers --library-publish-pages`).
 
 ## Local preview
 
@@ -16,6 +19,7 @@ Example assets live under `samples/` and are listed in `samples.json`.
 cd docs
 python3 -m http.server 8080
 # open http://localhost:8080
+# library: http://localhost:8080/library.html
 ```
 
 ## Enable Pages on the repo

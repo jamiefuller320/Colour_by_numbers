@@ -24,9 +24,9 @@ def test_plan_spitfire_has_unique_aircraft_slots() -> None:
     assert len(keys) == 6
     assert plan.slots[0].seed == 10
     assert plan.slots[1].seed == 11
-    assert "side view" in plan.slots[0].aspect or "side view" in {
-        s.aspect for s in plan.slots
-    }
+    # Balanced aircraft mix should include a side-oriented variation.
+    covered = set().union(*(set(s.tags) for s in plan.slots))
+    assert "side" in covered or any("side" in s.aspect for s in plan.slots)
 
 
 def test_slot_prompts_include_aspect_and_identity() -> None:

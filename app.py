@@ -22,7 +22,8 @@ st.write(
     "Search the web for a subject, reduce it to a limited palette, simplify "
     "regions into coherent shapes, and export a numbered outline ready for a "
     "colouring book. Colour plates are the focus for now — outline demos are "
-    "paused while the palette work is refined."
+    "paused while the palette work is refined. "
+    "Open **Library** in the sidebar to browse saved image sets."
 )
 
 PRESET_NAMES = ["raw", "fine", "vibrant", "light", "medium", "simple"]
