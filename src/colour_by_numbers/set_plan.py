@@ -135,6 +135,29 @@ def _expand_bank(bank: list[VariationSlot], n: int) -> list[VariationSlot]:
     return picked
 
 
+def framing_from_slot(
+    *,
+    aspect: str,
+    composition: str,
+    tags: tuple[str, ...] | list[str] | None = None,
+) -> str:
+    """Choose illustration framing so set variation is not overridden by portrait defaults."""
+    tagset = {t.lower().strip() for t in (tags or ()) if t}
+    aspect_l = (aspect or "").lower()
+    composition_l = (composition or "").lower()
+    if "portrait" in tagset or "close" in tagset:
+        return "portrait"
+    if "full_body" in tagset or "action" in tagset or "lying" in tagset or "group" in tagset:
+        if "side" in tagset or "profile" in aspect_l or "side" in composition_l:
+            return "side"
+        return "full_body"
+    if "side" in tagset or "profile" in aspect_l or "side view" in composition_l:
+        return "side"
+    if "full body" in composition_l or "entire body" in composition_l:
+        return "full_body"
+    return "portrait"
+
+
 def compose_slot_prompt(
     subject_type: SubjectType,
     *,
@@ -144,21 +167,40 @@ def compose_slot_prompt(
     style_preset: str | None = None,
     tags: tuple[str, ...] | list[str] | None = None,
 ) -> str:
-    """Base illustration prompt plus unique aspect/scene cues."""
+    """Build a set-slot prompt with pose/composition leading.
+
+    Curated vibrant *singles* keep the portrait house look. Set slots must put
+    aspect/scene/composition first and switch framing for full-body variations,
+    otherwise fal/Flux ignores late pose tags and collapses to headshots.
+    """
+    tag_list = tuple(tags or ())
+    framing = framing_from_slot(aspect=aspect, composition=composition, tags=tag_list)
     base = illustration_prompt(
         subject_type.label,
         category=subject_type.category,
         style_preset=style_preset,
+        framing=framing,
     )
-    tag_bit = ""
-    if tags:
-        tag_bit = f", variation tags: {', '.join(tags)}"
-    extras = (
-        f"aspect: {aspect}, scene: {scene}, {composition}{tag_bit}, "
-        "same subject identity, distinct pose from other pages in the set, "
-        "subject fills most of the frame"
+    if framing == "portrait":
+        pose_lock = (
+            f"COMPOSITION: {composition}; camera: head-and-shoulders; "
+            f"aspect: {aspect}; scene: {scene}"
+        )
+        frame_rule = "subject fills most of the frame"
+    else:
+        pose_lock = (
+            f"COMPOSITION LOCK (must obey): {composition}; "
+            f"aspect: {aspect}; scene: {scene}; "
+            "show the entire animal from head to paws/tail in frame, "
+            "not a close-up headshot, not a cropped face portrait"
+        )
+        frame_rule = "entire body visible with a small margin around the subject"
+    tag_bit = f"; variation tags: {', '.join(tag_list)}" if tag_list else ""
+    return (
+        f"{pose_lock}{tag_bit}. {base}, "
+        f"same subject identity, distinct pose from other pages in the set, "
+        f"{frame_rule}"
     )
-    return f"{base}, {extras}"
 
 
 def plan_colouring_set(

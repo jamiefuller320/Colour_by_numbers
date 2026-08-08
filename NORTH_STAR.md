@@ -229,6 +229,10 @@ Generated plates are **ingested into `data/library/` by default** (CLI
 `--library-ingest`; opt out with `--no-library-ingest`). Streamlit test-bed and
 Phase D scripts do the same.
 
+Set variation prompts **lead with composition/aspect/scene** and switch framing
+(`portrait` vs `full_body` / `side`) so fal/Flux does not ignore late pose tags.
+Curated vibrant *singles* still use the portrait house look unchanged.
+
 Streamlit: open **Library** (sidebar page from `app.py`, or **Library** workspace in
 `testbed_app.py`) to browse sets as colour thumbnails and open each set’s gallery.
 
