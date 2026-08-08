@@ -501,13 +501,50 @@ def seed_prompt_with_plate_lessons(
     *,
     category: str | None,
     path: Path | str | None = None,
+    style_preset: str | None = None,
 ) -> tuple[str, list[str]]:
-    """Append collated plate-lesson hints not already present in the prompt."""
+    """Append collated plate-lesson hints not already present in the prompt.
+
+    Skips hints that fight the active style or a set composition lock (e.g.
+    ``prefer 12–16 colours`` against vibrant, or extra face-crop cues after a
+    FULL BODY lock — those were burying pose variation for fal/Flux).
+    """
     prompt_l = prompt.lower()
+    style = (style_preset or "").lower().strip()
+    locked = prompt_l.startswith("composition")
+    vibrant = style == "vibrant" or "vibrant paint-by-numbers" in prompt_l
+    full_body = (
+        "composition lock" in prompt_l
+        or "full body" in prompt_l
+        or "entire body" in prompt_l
+        or "head to paws" in prompt_l
+    )
     applied: list[str] = []
     for hint in load_plate_lessons(category=category, path=path):
-        if hint.lower() in prompt_l:
+        hint_l = hint.lower()
+        if hint_l in prompt_l:
             continue
+        if vibrant and (
+            "12–16" in hint_l
+            or "12-16" in hint_l
+            or "prefer 12" in hint_l
+        ):
+            continue
+        if full_body and any(
+            cue in hint_l
+            for cue in (
+                "both eyes matching",
+                "nostril",
+                "muzzle",
+                "centred, not over-cropped",
+                "over-enlarged",
+                "facial features",
+            )
+        ):
+            continue
+        # Set prompts already carry identity + style; keep lesson appends tiny.
+        if locked and len(applied) >= 2:
+            break
         prompt = f"{prompt}, {hint}"
         applied.append(hint)
         prompt_l = prompt.lower()

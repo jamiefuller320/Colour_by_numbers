@@ -252,6 +252,23 @@ def illustration_prompt(
             f"{negative_suffix}, {style}"
         )
     if category in EARTHY_CATEGORIES:
+        # Full-body set slots need a shorter identity block so the leading
+        # composition lock is not drowned by face-mosaic language.
+        if frame in {"side", "full_body"} and preset.name == "vibrant":
+            body_style = (
+                f"{preset.prompt_style}, "
+                f"colourable mosaic wedges at least {region_mm:g}mm on A4, "
+                "no gradients, no photorealism, no text"
+            )
+            view = (
+                "full body side view, clear silhouette"
+                if frame == "side"
+                else "entire body visible head to paws"
+            )
+            return (
+                f"{kind_prefix}{subject} {view}, {animal_body_detail}"
+                f"{negative_suffix}, {body_style}"
+            )
         if frame == "side":
             return (
                 f"{kind_prefix}{subject} full body side view, clear silhouette, "
@@ -788,7 +805,9 @@ def generate_illustration(
     if prompt:
         from .plate_critique import seed_prompt_with_plate_lessons
 
-        prompt, _ = seed_prompt_with_plate_lessons(prompt, category=category)
+        prompt, _ = seed_prompt_with_plate_lessons(
+            prompt, category=category, style_preset=preset.name
+        )
 
     side = max(512, min(int(output_size), 1280))
     if backend == "fal":

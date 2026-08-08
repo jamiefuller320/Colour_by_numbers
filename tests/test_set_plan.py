@@ -90,8 +90,12 @@ def test_full_body_slots_drop_portrait_bias() -> None:
     assert full.startswith("COMPOSITION LOCK")
     assert "portrait, centred subject" not in full
     assert "full body side view" in full.lower() or "entire body" in full.lower()
-    assert "not a close-up headshot" in full
+    assert "NOT a headshot" in full
+    assert "REMEMBER COMPOSITION" in full
     assert full.index("aspect:") < full.index("subject kind:")
+    assert full.rfind("REMEMBER COMPOSITION") > full.index("subject kind:")
+    # Keep set full-body prompts short enough that fal keeps the pose lock.
+    assert len(full.split()) < 320
 
     portrait = compose_slot_prompt(
         subject,

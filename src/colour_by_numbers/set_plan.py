@@ -181,25 +181,36 @@ def compose_slot_prompt(
         style_preset=style_preset,
         framing=framing,
     )
+    label = subject_type.label
+    tag_bit = f"; variation tags: {', '.join(tag_list)}" if tag_list else ""
     if framing == "portrait":
         pose_lock = (
             f"COMPOSITION: {composition}; camera: head-and-shoulders; "
-            f"aspect: {aspect}; scene: {scene}"
+            f"aspect: {aspect}; scene: {scene}{tag_bit}"
         )
-        frame_rule = "subject fills most of the frame"
-    else:
-        pose_lock = (
-            f"COMPOSITION LOCK (must obey): {composition}; "
-            f"aspect: {aspect}; scene: {scene}; "
-            "show the entire animal from head to paws/tail in frame, "
-            "not a close-up headshot, not a cropped face portrait"
+        return (
+            f"{pose_lock}. {base}, "
+            "same subject identity, distinct pose from other pages in the set, "
+            "subject fills most of the frame"
         )
-        frame_rule = "entire body visible with a small margin around the subject"
-    tag_bit = f"; variation tags: {', '.join(tag_list)}" if tag_list else ""
+
+    # Bookend the pose lock: Flux often drops mid/late tokens on long briefs.
+    pose_lock = (
+        f"COMPOSITION LOCK (must obey): a {label}, {composition}; "
+        f"aspect: {aspect}; scene: {scene}; "
+        f"wide shot, camera pulled back, entire {label} from head to "
+        f"paws/tail and all legs visible in frame, "
+        f"NOT a close-up, NOT a headshot, NOT a face crop{tag_bit}"
+    )
+    pose_end = (
+        f"REMEMBER COMPOSITION: a {label}, {composition}, wide shot, "
+        f"entire body head-to-paws visible, not a headshot"
+    )
     return (
-        f"{pose_lock}{tag_bit}. {base}, "
+        f"{pose_lock}. {base}, "
         f"same subject identity, distinct pose from other pages in the set, "
-        f"{frame_rule}"
+        f"wide shot with the entire body visible and a small margin "
+        f"around the subject. {pose_end}"
     )
 
 
