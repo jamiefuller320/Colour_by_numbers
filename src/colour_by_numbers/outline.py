@@ -227,6 +227,35 @@ def build_outline_page(
         else detail_ink.astype(bool, copy=True)
     )
 
+    from .eyes import (
+        compute_eye_protection_mask,
+        emphasize_protected_pupils,
+        portrait_subject,
+        relaxed_eye_thresholds,
+    )
+
+    eye_protected = compute_eye_protection_mask(
+        working_labels,
+        working_palette,
+        category=palette_category,
+        subject_mask=subject_mask,
+        min_region_mm=float(min_region_mm or 8.0),
+    )
+    if eye_protected.any():
+        working_labels, working_palette = emphasize_protected_pupils(
+            working_labels, working_palette, eye_protected
+        )
+        labels = working_labels
+        palette = working_palette
+        eye_protected = compute_eye_protection_mask(
+            working_labels,
+            working_palette,
+            category=palette_category,
+            subject_mask=subject_mask,
+            min_region_mm=float(min_region_mm or 8.0),
+        )
+    eye_mask = eye_protected if eye_protected.any() else None
+
     if simplify:
         working_labels, working_palette, stats = simplify_labels(
             labels,
@@ -238,6 +267,7 @@ def build_outline_page(
             boundary_sigma=boundary_sigma,
             min_adjacent_delta_e=min_adjacent_delta_e,
             min_thickness=min_thickness,
+            protected=eye_mask,
         )
     else:
         before = count_regions(labels)
@@ -256,6 +286,14 @@ def build_outline_page(
             detail_img = Image.fromarray(detail.astype(np.uint8) * 255, mode="L")
             detail_img = detail_img.resize(output_size, Image.Resampling.NEAREST)
             detail = np.asarray(detail_img) > 0
+        if eye_mask is not None:
+            eye_img = Image.fromarray(eye_mask.astype(np.uint8) * 255, mode="L")
+            eye_img = eye_img.resize(output_size, Image.Resampling.NEAREST)
+            eye_mask = np.asarray(eye_img) > 0
+        if subject_mask is not None and subject_mask.shape != working_labels.shape:
+            sub_img = Image.fromarray(subject_mask.astype(np.uint8) * 255, mode="L")
+            sub_img = sub_img.resize(output_size, Image.Resampling.NEAREST)
+            subject_mask = np.asarray(sub_img) > 0
         if simplify:
             height_up, width_up = working_labels.shape
             scale = (width_up * height_up) / max(1, source_h * source_w)
@@ -270,13 +308,27 @@ def build_outline_page(
                 working_labels = smooth_boundaries(
                     working_labels, sigma=max(0.8, boundary_sigma)
                 )
-            working_labels = absorb_small_regions(working_labels, min_area=up_min)
+                if eye_mask is not None:
+                    # Re-snap eyes after boundary smoothing.
+                    eye_protected = compute_eye_protection_mask(
+                        working_labels,
+                        working_palette,
+                        category=palette_category,
+                        subject_mask=subject_mask,
+                        min_region_mm=float(min_region_mm or 8.0),
+                    )
+                    eye_mask = eye_protected if eye_protected.any() else eye_mask
+            working_labels = absorb_small_regions(
+                working_labels, min_area=up_min, protected=eye_mask
+            )
             if min_thickness is not None and min_thickness > 0:
                 up_thickness = max(2.0, float(min_thickness) * side_scale)
                 working_labels = absorb_thin_regions(
-                    working_labels, min_thickness=up_thickness
+                    working_labels, min_thickness=up_thickness, protected=eye_mask
                 )
-                working_labels = absorb_small_regions(working_labels, min_area=up_min)
+                working_labels = absorb_small_regions(
+                    working_labels, min_area=up_min, protected=eye_mask
+                )
 
     # Colourable blocks: ≥min wide AND high on the final canvas, fitting a
     # min-diameter tip circle. Anything smaller becomes black line detail.
@@ -294,8 +346,6 @@ def build_outline_page(
         height_req = width_req
     if width_req and height_req:
         tip = float(min(width_req, height_req))
-        from .eyes import compute_eye_protection_mask, portrait_subject, relaxed_eye_thresholds
-
         eye_protected = compute_eye_protection_mask(
             working_labels,
             working_palette,

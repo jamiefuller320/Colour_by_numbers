@@ -120,6 +120,7 @@ def absorb_thin_regions(
     *,
     min_thickness: float = 4.0,
     max_passes: int = 8,
+    protected: np.ndarray | None = None,
 ) -> np.ndarray:
     """Absorb ribbon-like regions whose inscribed diameter is too thin to colour."""
     if min_thickness <= 0:
@@ -127,6 +128,11 @@ def absorb_thin_regions(
 
     structure = np.ones((3, 3), dtype=bool)
     current = labels.astype(np.int32, copy=True)
+    protect = (
+        protected.astype(bool)
+        if protected is not None and protected.shape == current.shape and protected.any()
+        else None
+    )
 
     for _ in range(max_passes):
         work = current.copy()
@@ -137,6 +143,8 @@ def absorb_thin_regions(
                 continue
             for comp_id in range(1, n + 1):
                 component = labeled == comp_id
+                if protect is not None and (protect & component).any():
+                    continue
                 # Inscribed diameter ≈ 2 * max distance-to-border.
                 thickness = 2.0 * float(ndimage.distance_transform_edt(component).max())
                 if thickness >= min_thickness:
@@ -449,12 +457,19 @@ def enforce_colourable_blocks(
                         relaxed_inscribed_px=relax_inscribed,
                     ):
                         continue
-                # Compact undersized puddles (e.g. eye speckles) absorb quietly.
-                # Only stroke-like remnants become black line detail.
+                # Compact undersized puddles absorb quietly — except protected
+                # eye pixels, which become black detail ink so pupils stay visible
+                # even when too small to number as fills.
                 thickness = _inscribed_diameter_px(component)
                 bw, bh = _component_bbox(component)
                 aspect = max(bw, bh) / max(1, min(bw, bh))
-                if thickness <= 3.0 or aspect >= 2.5:
+                if (
+                    protected is not None
+                    and protected.any()
+                    and (protected & component).any()
+                ):
+                    detail |= component
+                elif thickness <= 3.0 or aspect >= 2.5:
                     detail |= detail_ink_from_component(component)
                 votes = _neighbour_colour_votes(current, component)
                 if votes.size == 0:
@@ -489,18 +504,25 @@ def absorb_small_regions(
     *,
     min_area: int,
     max_passes: int = 32,
+    protected: np.ndarray | None = None,
 ) -> np.ndarray:
     """Merge connected components smaller than ``min_area`` into neighbours.
 
     Each small region is reassigned to the adjacent colour with the longest
     shared border. Repeats until every remaining region meets the threshold
-    (or ``max_passes`` is hit).
+    (or ``max_passes`` is hit). Components that overlap ``protected`` (eyes)
+    are left alone.
     """
     if min_area <= 1:
         return labels.astype(np.int32, copy=True)
 
     structure = np.ones((3, 3), dtype=bool)
     current = labels.astype(np.int32, copy=True)
+    protect = (
+        protected.astype(bool)
+        if protected is not None and protected.shape == current.shape and protected.any()
+        else None
+    )
 
     for _ in range(max_passes):
         work = current.copy()
@@ -532,6 +554,8 @@ def absorb_small_regions(
             labeled = labeled_by_colour[colour]
             component = labeled == comp_id
             if not component.any() or not np.all(current[component] == colour):
+                continue
+            if protect is not None and (protect & component).any():
                 continue
 
             votes = _neighbour_colour_votes(current, component)
@@ -566,6 +590,7 @@ def limit_region_count(
     *,
     max_regions: int,
     max_passes: int = 32,
+    protected: np.ndarray | None = None,
 ) -> np.ndarray:
     """Keep absorbing the smallest regions until ``max_regions`` is reached."""
     if max_regions <= 0:
@@ -573,6 +598,11 @@ def limit_region_count(
 
     current = labels.astype(np.int32, copy=True)
     structure = np.ones((3, 3), dtype=bool)
+    protect = (
+        protected.astype(bool)
+        if protected is not None and protected.shape == current.shape and protected.any()
+        else None
+    )
 
     for _ in range(max_passes):
         inventory: list[tuple[int, int, int, np.ndarray]] = []
@@ -594,6 +624,8 @@ def limit_region_count(
         for _area, colour, comp_id, labeled in inventory[: max(excess, 1)]:
             component = labeled == comp_id
             if not component.any() or not np.all(work[component] == colour):
+                continue
+            if protect is not None and (protect & component).any():
                 continue
             votes = _neighbour_colour_votes(work, component)
             if votes.size == 0:
@@ -712,11 +744,15 @@ def simplify_labels(
     min_thickness: float | None = None,
     min_adjacent_delta_e: float = 18.0,
     compact: bool = True,
+    protected: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray, SimplificationStats]:
     """Full simplification pipeline for colour-by-numbers pages.
 
     Returns ``(labels, palette, stats)``. When ``compact`` is False, palette
     indices are preserved so dual-path results can be merged.
+
+    ``protected`` marks eye (or other) pixels that must survive smoothing and
+    small/thin absorption.
     """
     height, width = labels.shape
     if min_region_area is None:
@@ -726,18 +762,45 @@ def simplify_labels(
     if min_thickness is None:
         min_thickness = max(3.0, min(width, height) * 0.015)
 
+    protect = (
+        protected.astype(bool)
+        if protected is not None and protected.shape == labels.shape and protected.any()
+        else None
+    )
+    snapshot = labels.astype(np.int32, copy=True) if protect is not None else None
+
     before = count_regions(labels)
     simplified = majority_smooth(
         labels, radius=smooth_radius, iterations=smooth_iterations
     )
     simplified = morphological_clean(simplified, radius=morph_radius)
-    simplified = absorb_small_regions(simplified, min_area=min_region_area)
-    simplified = absorb_thin_regions(simplified, min_thickness=min_thickness)
-    simplified = limit_region_count(simplified, max_regions=max_regions)
+    if protect is not None and snapshot is not None:
+        simplified[protect] = snapshot[protect]
+    simplified = absorb_small_regions(
+        simplified, min_area=min_region_area, protected=protect
+    )
+    simplified = absorb_thin_regions(
+        simplified, min_thickness=min_thickness, protected=protect
+    )
+    simplified = limit_region_count(
+        simplified, max_regions=max_regions, protected=protect
+    )
+    if protect is not None and snapshot is not None:
+        simplified[protect] = snapshot[protect]
     simplified = smooth_boundaries(simplified, sigma=boundary_sigma)
-    simplified = absorb_small_regions(simplified, min_area=min_region_area)
-    simplified = absorb_thin_regions(simplified, min_thickness=min_thickness)
-    simplified = limit_region_count(simplified, max_regions=max_regions)
+    if protect is not None and snapshot is not None:
+        simplified[protect] = snapshot[protect]
+    simplified = absorb_small_regions(
+        simplified, min_area=min_region_area, protected=protect
+    )
+    simplified = absorb_thin_regions(
+        simplified, min_thickness=min_thickness, protected=protect
+    )
+    simplified = limit_region_count(
+        simplified, max_regions=max_regions, protected=protect
+    )
+    if protect is not None and snapshot is not None:
+        simplified[protect] = snapshot[protect]
     if compact:
         simplified, new_palette = compact_palette(simplified, palette)
         if min_adjacent_delta_e and min_adjacent_delta_e > 0:
