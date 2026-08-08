@@ -327,6 +327,8 @@ def generate_colouring_page(
         "background_complexity",
         "max_plate_colours",
         "min_similar_delta_e",
+        "subject_bg_separation_mm",
+        "min_subject_bg_delta_e",
     ):
         pipeline_kwargs.pop(key, None)
     pipeline_kwargs.setdefault("min_region_mm", min_region_mm)
@@ -367,6 +369,8 @@ def generate_colouring_page(
         min_adjacent_delta_e=resolved_delta_e,
         max_plate_colours=preset.max_plate_colours,
         min_similar_delta_e=preset.min_similar_delta_e,
+        subject_bg_separation_mm=preset.subject_bg_separation_mm,
+        min_subject_bg_delta_e=preset.min_subject_bg_delta_e,
         source_hit=reference_hit,
         **pipeline_kwargs,
     )

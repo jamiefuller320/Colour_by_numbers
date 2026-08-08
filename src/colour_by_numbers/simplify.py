@@ -799,6 +799,14 @@ def merge_similar_colours_budgeted(
                     if count_i == 0 or count_j == 0:
                         continue
                     small = (work == i) if count_i <= count_j else (work == j)
+                    if mask is not None:
+                        frac_i = float((mask & (work == i)).sum()) / max(1, count_i)
+                        frac_j = float((mask & (work == j)).sum()) / max(1, count_j)
+                        # Never merge a mostly-subject paint into a mostly-background
+                        # paint (or vice versa) — that dissolves the silhouette.
+                        i_subj, j_subj = frac_i >= 0.5, frac_j >= 0.5
+                        if i_subj != j_subj:
+                            continue
                     if mask is not None and prefer_background:
                         bg_frac = float((small & ~mask).sum()) / max(
                             1, int(small.sum())

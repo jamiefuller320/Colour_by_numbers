@@ -103,7 +103,8 @@ def test_full_body_slots_drop_portrait_bias() -> None:
     assert "REMEMBER: wide shot" in full
     assert "Aspect: side profile" in full
     # Keep set full-body prompts short enough that fal keeps the pose lock.
-    assert len(full.split()) < 250
+    assert len(full.split()) < 280
+    assert "Cool abstract background" in full
 
     portrait = compose_slot_prompt(
         subject,

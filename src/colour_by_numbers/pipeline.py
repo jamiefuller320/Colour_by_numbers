@@ -314,6 +314,8 @@ def create_colour_by_numbers(
     min_adjacent_delta_e: float = DEFAULT_MIN_ADJACENT_DELTA_E,
     max_plate_colours: int | None = None,
     min_similar_delta_e: float = 0.0,
+    subject_bg_separation_mm: float = 0.0,
+    min_subject_bg_delta_e: float = 0.0,
     colour_refine: bool = True,
     min_subject_bg_contrast: float | None = None,
     silhouette_outline: bool = False,
@@ -539,6 +541,11 @@ def create_colour_by_numbers(
         )
         labels = upsample_labels(labels, prepared.size)
         up_h, up_w = labels.shape
+        mask_up = np.asarray(
+            Image.fromarray(mask_bool.astype(np.uint8) * 255, mode="L").resize(
+                (up_w, up_h), Image.Resampling.NEAREST
+            )
+        ) > 0
         up_stroke = (
             int(line_width)
             if line_width is not None
@@ -552,9 +559,50 @@ def create_colour_by_numbers(
             simplify=False,
             min_region_mm=min_region_mm,
             palette_category=palette_category,
-            subject_mask=mask_bool,
+            subject_mask=mask_up,
             silhouette_mask=silhouette_bool,
             force_silhouette_outline=bool(silhouette_outline and silhouette_bool is not None),
+        )
+        # Outline absorb can re-bleed subject paints into the background — apply
+        # the separation gate on the final labels, then rebuild without absorb.
+        if subject_bg_separation_mm > 0 and min_subject_bg_delta_e > 0:
+            from .contrast import enforce_subject_background_separation
+
+            sep_labels, sep_palette = enforce_subject_background_separation(
+                page.labels,
+                page.palette,
+                mask_up,
+                min_delta_e=float(min_subject_bg_delta_e),
+                separation_mm=float(subject_bg_separation_mm),
+            )
+            # Rebuild outline/legend/SVG only — skip colourable-block absorb and
+            # pupil recolour so the separation mapping is not undone.
+            page = build_outline_page(
+                sep_labels,
+                sep_palette,
+                line_width=up_stroke,
+                stroke_mm=DEFAULT_OUTLINE_STROKE_MM,
+                simplify=False,
+                min_region_mm=None,
+                detail_ink=page.detail_ink,
+                palette_category=None,
+                subject_mask=None,
+                silhouette_mask=silhouette_bool,
+                force_silhouette_outline=bool(
+                    silhouette_outline and silhouette_bool is not None
+                ),
+            )
+        mask_bool = mask_up
+        # Expose the exact dual-path mask used for simplify/separation (after
+        # quantize↔full-res round-trip), not the pre-resize firm matte.
+        subject_mask = SubjectMask(
+            alpha=(mask_up.astype(np.uint8) * 255),
+            model=(
+                subject_mask.model
+                if subject_mask is not None
+                else "dual"
+            ),
+            foreground_fraction=float(mask_up.mean()),
         )
         from .simplify import SimplificationStats
 

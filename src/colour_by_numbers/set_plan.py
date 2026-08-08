@@ -207,6 +207,11 @@ def compose_slot_prompt(
     )
     kind = subject_kind_frame(subject_type.category)
     kind_bit = f"{kind}. " if kind else ""
+    bg_bit = (
+        "Cool abstract background (blue/teal/sage), not the subject's coat colours. "
+        if (preset is not None and preset.name == "vibrant")
+        else "High subject-background contrast. "
+    )
     return (
         f"Wide shot of a {label}: {composition}. "
         f"Aspect: {aspect}. Scene: {scene}. "
@@ -216,7 +221,7 @@ def compose_slot_prompt(
         f"{kind_bit}"
         f"Recognisable face with clear eyes and nose, dense interlocking "
         f"colour mosaic across the whole body, cool teal shadow wedges with "
-        f"warm mid-tones. {style_bit}. "
+        f"warm mid-tones. {bg_bit}{style_bit}. "
         f"Same subject identity, distinct pose from other pages in the set. "
         f"REMEMBER: wide shot, full body of a {label}, {composition}."
     )
