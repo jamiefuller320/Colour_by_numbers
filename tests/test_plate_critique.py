@@ -141,3 +141,57 @@ def test_record_plate_critique_appends(tmp_path: Path) -> None:
     assert len(lines) == 1
     row = json.loads(lines[0])
     assert row["plate_id"] == "x"
+
+
+def test_seed_lessons_skip_conflicts_for_vibrant_full_body(tmp_path: Path) -> None:
+    lessons_path = tmp_path / "lessons.json"
+    lessons_path.write_text(
+        json.dumps(
+            {
+                "global_hints": [
+                    "distinct flat colour blocks with clear value steps between "
+                    "neighbouring parts, prefer 12–16 colours",
+                    "unmistakable animal of the correct species/breed",
+                    "enough distinct colour regions for depth",
+                    "extra filler hint four",
+                ],
+                "lessons": [
+                    {
+                        "category": "dogs",
+                        "tag": "eyes",
+                        "count": 2,
+                        "prompt_hint": (
+                            "both eyes matching, each with separate dark pupil "
+                            "and lighter iris fills"
+                        ),
+                    },
+                    {
+                        "category": "dogs",
+                        "tag": "nose_detail",
+                        "count": 2,
+                        "prompt_hint": (
+                            "clearly defined nose with visible nostrils and "
+                            "muzzle wrinkles"
+                        ),
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    locked = (
+        "Wide shot of a golden retriever: FULL BODY side silhouette. "
+        "Aspect: side profile. Camera pulled back so the entire golden "
+        "retriever is visible. adult vibrant paint-by-numbers kit style"
+    )
+    prompt, applied = seed_prompt_with_plate_lessons(
+        locked,
+        category="dogs",
+        path=lessons_path,
+        style_preset="vibrant",
+    )
+    assert "12–16" not in prompt
+    assert "prefer 12" not in prompt.lower()
+    assert "both eyes matching" not in prompt.lower()
+    assert "nostril" not in prompt.lower()
+    assert len(applied) <= 1

@@ -8,8 +8,10 @@ from .discover import (
     SubjectType,
     discover_subject_types,
     pick_subject_type,
+    subject_kind_frame,
 )
 from .illustrate import illustration_prompt
+from .style_presets import resolve_style_preset
 from .variation_banks import (
     VariationSlot,
     bank_as_tuples,
@@ -135,6 +137,29 @@ def _expand_bank(bank: list[VariationSlot], n: int) -> list[VariationSlot]:
     return picked
 
 
+def framing_from_slot(
+    *,
+    aspect: str,
+    composition: str,
+    tags: tuple[str, ...] | list[str] | None = None,
+) -> str:
+    """Choose illustration framing so set variation is not overridden by portrait defaults."""
+    tagset = {t.lower().strip() for t in (tags or ()) if t}
+    aspect_l = (aspect or "").lower()
+    composition_l = (composition or "").lower()
+    if "portrait" in tagset or "close" in tagset:
+        return "portrait"
+    if "full_body" in tagset or "action" in tagset or "lying" in tagset or "group" in tagset:
+        if "side" in tagset or "profile" in aspect_l or "side" in composition_l:
+            return "side"
+        return "full_body"
+    if "side" in tagset or "profile" in aspect_l or "side view" in composition_l:
+        return "side"
+    if "full body" in composition_l or "entire body" in composition_l:
+        return "full_body"
+    return "portrait"
+
+
 def compose_slot_prompt(
     subject_type: SubjectType,
     *,
@@ -144,21 +169,57 @@ def compose_slot_prompt(
     style_preset: str | None = None,
     tags: tuple[str, ...] | list[str] | None = None,
 ) -> str:
-    """Base illustration prompt plus unique aspect/scene cues."""
-    base = illustration_prompt(
-        subject_type.label,
-        category=subject_type.category,
-        style_preset=style_preset,
+    """Build a set-slot prompt with pose/composition leading.
+
+    Curated vibrant *singles* keep the portrait house look. Set slots must put
+    aspect/scene/composition first and switch framing for full-body variations,
+    otherwise fal/Flux ignores late pose tags and collapses to headshots.
+    """
+    tag_list = tuple(tags or ())
+    framing = framing_from_slot(aspect=aspect, composition=composition, tags=tag_list)
+    label = subject_type.label
+    tag_bit = f"; tags: {', '.join(tag_list)}" if tag_list else ""
+    if framing == "portrait":
+        # Same house look as curated vibrant singles; pose still leads.
+        base = illustration_prompt(
+            label,
+            category=subject_type.category,
+            style_preset=style_preset,
+            framing="portrait",
+        )
+        pose_lock = (
+            f"COMPOSITION: {composition}; camera: head-and-shoulders; "
+            f"aspect: {aspect}; scene: {scene}{tag_bit}"
+        )
+        return (
+            f"{pose_lock}. {base}, "
+            "same subject identity, distinct pose from other pages in the set, "
+            "subject fills most of the frame"
+        )
+
+    # Full-body / side / group: keep the prompt SHORT. Long vibrant face-mosaic
+    # briefs drown pose cues on fal Flux schnell (no negative prompt support).
+    preset = resolve_style_preset(style_preset) if style_preset else None
+    style_bit = (
+        preset.prompt_style
+        if preset is not None
+        else "flat colouring-book illustration, bold black outlines, no photorealism"
     )
-    tag_bit = ""
-    if tags:
-        tag_bit = f", variation tags: {', '.join(tags)}"
-    extras = (
-        f"aspect: {aspect}, scene: {scene}, {composition}{tag_bit}, "
-        "same subject identity, distinct pose from other pages in the set, "
-        "subject fills most of the frame"
+    kind = subject_kind_frame(subject_type.category)
+    kind_bit = f"{kind}. " if kind else ""
+    return (
+        f"Wide shot of a {label}: {composition}. "
+        f"Aspect: {aspect}. Scene: {scene}. "
+        f"Camera pulled back so the entire {label} is visible from head to "
+        f"paws/tail with all legs shown and space around the subject. "
+        f"NOT a close-up, NOT a headshot, NOT a face crop{tag_bit}. "
+        f"{kind_bit}"
+        f"Recognisable face with clear eyes and nose, dense interlocking "
+        f"colour mosaic across the whole body, cool teal shadow wedges with "
+        f"warm mid-tones. {style_bit}. "
+        f"Same subject identity, distinct pose from other pages in the set. "
+        f"REMEMBER: wide shot, full body of a {label}, {composition}."
     )
-    return f"{base}, {extras}"
 
 
 def plan_colouring_set(

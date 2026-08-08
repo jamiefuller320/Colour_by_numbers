@@ -101,8 +101,17 @@ def illustration_prompt(
     max_colours: int | None = None,
     style_preset: str | None = None,
     min_region_mm: float | None = None,
+    framing: str | None = None,
 ) -> str:
-    """Text prompt used by API backends (and recorded for local runs)."""
+    """Text prompt used by API backends (and recorded for local runs).
+
+    ``framing`` controls camera distance for animals/vehicles:
+      - ``portrait`` (default for animals): close head-and-shoulders — the
+        house look that produced the curated vibrant singles
+      - ``full_body``: entire subject head-to-paws/tail in frame
+      - ``side``: full-body side silhouette
+      - ``None``: category default (animals→portrait, aircraft→side, …)
+    """
     preset = resolve_style_preset(style_preset) if style_preset else STYLE_STANDARD
     lo = int(min_colours if min_colours is not None else preset.min_colours)
     hi = int(max_colours if max_colours is not None else preset.max_colours)
@@ -114,6 +123,7 @@ def illustration_prompt(
         else float(preset.min_region_mm)
     )
     subject = disambiguate_subject_label(subject_type_label, category=category)
+    frame = (framing or "").lower().strip() or None
     if preset.name == "vibrant":
         style = (
             f"{preset.prompt_style}, "
@@ -147,6 +157,12 @@ def illustration_prompt(
             "dense interlocking fur mosaic with many value steps, cool teal and "
             "blue shadow wedges under the chin, ears, and muzzle folds plus warm "
             "gold and orange mid-tones on the lit fur"
+        )
+        animal_body_detail = (
+            "recognisable head with clear matching eyes and defined nose, "
+            "dense interlocking fur mosaic across the whole body with many value "
+            "steps, cool teal and blue shadow wedges mixed with warm gold and "
+            "orange mid-tones on the lit coat, legs and paws fully visible"
         )
         bird_detail = (
             "species-accurate plumage as a dense mosaic of interlocking colour "
@@ -183,6 +199,11 @@ def illustration_prompt(
             "clear value steps between head, neck and body for depth, "
             "warm natural colours"
         )
+        animal_body_detail = (
+            "recognisable head with clear matching eyes and defined nose, "
+            "clear value steps across the whole body coat, legs and paws fully "
+            "visible, warm natural colours"
+        )
         bird_detail = (
             "species-accurate plumage colours and markings, "
             "large expressive matching eyes with separate dark pupil and lighter "
@@ -216,6 +237,11 @@ def illustration_prompt(
             f"{kind_prefix}{subject} {flower_detail}{negative_suffix}, {style}"
         )
     if category == "birds":
+        if frame in {"full_body", "side"}:
+            return (
+                f"{kind_prefix}{subject} full body in frame, {bird_detail}"
+                f"{negative_suffix}, {style}"
+            )
         return (
             f"{kind_prefix}{subject} centred portrait, {bird_detail}"
             f"{negative_suffix}, {style}"
@@ -226,6 +252,34 @@ def illustration_prompt(
             f"{negative_suffix}, {style}"
         )
     if category in EARTHY_CATEGORIES:
+        # Full-body set slots need a shorter identity block so the leading
+        # composition lock is not drowned by face-mosaic language.
+        if frame in {"side", "full_body"} and preset.name == "vibrant":
+            body_style = (
+                f"{preset.prompt_style}, "
+                f"colourable mosaic wedges at least {region_mm:g}mm on A4, "
+                "no gradients, no photorealism, no text"
+            )
+            view = (
+                "full body side view, clear silhouette"
+                if frame == "side"
+                else "entire body visible head to paws"
+            )
+            return (
+                f"{kind_prefix}{subject} {view}, {animal_body_detail}"
+                f"{negative_suffix}, {body_style}"
+            )
+        if frame == "side":
+            return (
+                f"{kind_prefix}{subject} full body side view, clear silhouette, "
+                f"{animal_body_detail}{negative_suffix}, {style}"
+            )
+        if frame == "full_body":
+            return (
+                f"{kind_prefix}{subject}, entire body visible head to paws, "
+                f"{animal_body_detail}{negative_suffix}, {style}"
+            )
+        # Default / portrait — matches curated vibrant singles.
         return (
             f"{kind_prefix}{subject} portrait, centred subject, {animal_detail}"
             f"{negative_suffix}, {style}"
@@ -233,6 +287,11 @@ def illustration_prompt(
     if category in {"cars", "boats"}:
         return (
             f"{kind_prefix}{subject} side view, clear silhouette, {vehicle_detail}"
+            f"{negative_suffix}, {style}"
+        )
+    if frame in {"full_body", "side"}:
+        return (
+            f"{kind_prefix}{subject}, entire subject visible in frame"
             f"{negative_suffix}, {style}"
         )
     return f"{kind_prefix}{subject} portrait, centred subject{negative_suffix}, {style}"
@@ -483,6 +542,15 @@ def generate_illustration_fal(
         raise RuntimeError(
             "fal backend requested but FAL_KEY is not set. "
             "Create a key at https://fal.ai/dashboard/keys and export FAL_KEY."
+        )
+
+    # Flux prompt encoders quietly drop late tokens on very long briefs.
+    words = len(prompt.split())
+    if words > 420 or len(prompt) > 2400:
+        logger.warning(
+            "fal prompt is long (%s words / %s chars); late cues may be ignored",
+            words,
+            len(prompt),
         )
 
     model_id = resolve_fal_model_id(model)
@@ -737,14 +805,27 @@ def generate_illustration(
     if prompt:
         from .plate_critique import seed_prompt_with_plate_lessons
 
-        prompt, _ = seed_prompt_with_plate_lessons(prompt, category=category)
+        prompt, _ = seed_prompt_with_plate_lessons(
+            prompt, category=category, style_preset=preset.name
+        )
 
     side = max(512, min(int(output_size), 1280))
+    # Square canvases bias fal/Flux toward centred headshots. Full-body set
+    # slots ask for a wide shot — use landscape so the pose can fit.
+    prompt_l = (prompt or "").lower()
+    use_landscape = (
+        "wide shot" in prompt_l
+        or "composition lock" in prompt_l
+        or "full body" in prompt_l
+        or "entire body" in prompt_l
+    )
+    width = int(round(side * 4 / 3)) if use_landscape else side
+    height = side
     if backend == "fal":
         result = generate_illustration_fal(
             prompt or "colouring book illustration of a clear subject",
-            width=side,
-            height=side,
+            width=width,
+            height=height,
             model=fal_model,
             seed=seed,
             api_key=fal_api_key,
@@ -752,8 +833,8 @@ def generate_illustration(
     elif backend == "pollinations":
         result = generate_illustration_pollinations(
             prompt or "colouring book illustration of a clear subject",
-            width=side,
-            height=side,
+            width=width,
+            height=height,
             model=pollinations_model,
             seed=seed,
             api_key=pollinations_api_key,

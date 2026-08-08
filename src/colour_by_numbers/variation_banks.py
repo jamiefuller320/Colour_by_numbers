@@ -55,7 +55,7 @@ ANIMAL_VARIATIONS: tuple[VariationSlot, ...] = (
     _slot(
         "side profile",
         "plain background",
-        "full body clear side silhouette",
+        "FULL BODY clear side silhouette, all four legs visible, head to tail in frame",
         "side",
         "full_body",
         "single",
@@ -64,7 +64,7 @@ ANIMAL_VARIATIONS: tuple[VariationSlot, ...] = (
     _slot(
         "oblique three-quarter",
         "simple yard",
-        "body angled toward viewer, three-quarter standing pose",
+        "FULL BODY angled toward viewer, three-quarter standing pose, legs and tail visible",
         "oblique",
         "full_body",
         "single",
@@ -74,7 +74,7 @@ ANIMAL_VARIATIONS: tuple[VariationSlot, ...] = (
     _slot(
         "sitting front",
         "garden lawn",
-        "full body sitting facing viewer, tail visible where typical",
+        "FULL BODY sitting facing viewer, legs and tail visible where typical",
         "front",
         "full_body",
         "single",
@@ -84,7 +84,7 @@ ANIMAL_VARIATIONS: tuple[VariationSlot, ...] = (
     _slot(
         "sitting side",
         "rug",
-        "full body sitting side profile",
+        "FULL BODY sitting side profile, head to paws in frame",
         "side",
         "full_body",
         "single",
@@ -94,7 +94,7 @@ ANIMAL_VARIATIONS: tuple[VariationSlot, ...] = (
     _slot(
         "standing scene",
         "park path",
-        "full body standing in a simple outdoor scene",
+        "FULL BODY standing in a simple outdoor scene, head to paws in frame",
         "oblique",
         "full_body",
         "single",
@@ -104,7 +104,7 @@ ANIMAL_VARIATIONS: tuple[VariationSlot, ...] = (
     _slot(
         "close oblique portrait",
         "plain background",
-        "head study three-quarter view, muzzle and eyes clear",
+        "head-and-shoulders study, three-quarter view, muzzle and eyes clear",
         "oblique",
         "portrait",
         "close",
@@ -113,7 +113,7 @@ ANIMAL_VARIATIONS: tuple[VariationSlot, ...] = (
     _slot(
         "action stride",
         "open field",
-        "subject mid-stride or playful motion, simple ground",
+        "FULL BODY mid-stride or playful motion, all legs visible, simple ground",
         "side",
         "full_body",
         "single",
@@ -123,7 +123,7 @@ ANIMAL_VARIATIONS: tuple[VariationSlot, ...] = (
     _slot(
         "pair together",
         "plain background",
-        "two of the same subject side by side, both fully visible",
+        "two FULL BODY subjects side by side, both head-to-paws visible",
         "front",
         "full_body",
         "group",
@@ -132,7 +132,7 @@ ANIMAL_VARIATIONS: tuple[VariationSlot, ...] = (
     _slot(
         "group scene",
         "simple meadow",
-        "small group of three, staggered depth, still colourable",
+        "small group of three FULL BODY figures, staggered depth, still colourable",
         "oblique",
         "full_body",
         "group",
@@ -142,8 +142,8 @@ ANIMAL_VARIATIONS: tuple[VariationSlot, ...] = (
     _slot(
         "lying relaxed",
         "soft blanket",
-        "subject lying down facing viewer, calm pose",
-        "front",
+        "FULL BODY lying stretched along the frame, whole torso and all four legs visible, calm pose",
+        "side",
         "full_body",
         "single",
         "lying",
@@ -152,9 +152,9 @@ ANIMAL_VARIATIONS: tuple[VariationSlot, ...] = (
     _slot(
         "looking back",
         "plain background",
-        "over-shoulder glance, body mostly side-on",
+        "FULL BODY mostly side-on with over-shoulder glance, not a head crop",
         "side",
-        "portrait",
+        "full_body",
         "single",
         "standing",
     ),
