@@ -40,8 +40,9 @@ def test_vibrant_prompt_asks_for_mosaic_and_cool_shadows() -> None:
     assert STYLE_VIBRANT.subject_mode == "dual"
     assert STYLE_VIBRANT.subject_complexity == "preserve"
     assert STYLE_VIBRANT.background_complexity == "simple"
-    assert STYLE_VIBRANT.keep_illustration_plate is True
-    assert STYLE_VIBRANT.max_plate_colours == 28
+    assert STYLE_VIBRANT.keep_illustration_plate is False
+    assert STYLE_VIBRANT.max_plate_colours == 22
+    assert STYLE_VIBRANT.min_similar_delta_e == 10.0
 
 
 def test_vibrant_complexity_preset_is_dense() -> None:

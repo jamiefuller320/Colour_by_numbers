@@ -38,10 +38,13 @@ class StylePreset:
     subject_mode: str = "off"
     subject_complexity: str = "fine"
     background_complexity: str = "light"
-    # When set, merge near-duplicate colours only if over this budget,
+    # When set, merge near-duplicate colours if over this budget,
     # preferring background merges so subject integrity wins.
     max_plate_colours: int | None = None
-    # Match the three happy vibrant samples: gallery plate = illustration.
+    # Always merge paints closer than this Lab ΔE (even under the budget).
+    min_similar_delta_e: float = 0.0
+    # When True, gallery plate is the illustration (may diverge from outline).
+    # Default False so the colour plate is exactly the numbered fills.
     keep_illustration_plate: bool = False
 
 
@@ -109,14 +112,16 @@ STYLE_VIBRANT = StylePreset(
         "Isolates the subject, preserves subject mosaic, simplifies backgrounds."
     ),
     complexity="vibrant",
-    # Prefer budgeted / background-first merges over a global ΔE crush.
+    # Similarity merge handles near-duplicates; keep adjacent merge off here.
     min_adjacent_delta_e=0.0,
     pipeline_palette_mode="exact",
     subject_mode="dual",
     subject_complexity="preserve",
     background_complexity="simple",
-    max_plate_colours=28,
-    keep_illustration_plate=True,
+    max_plate_colours=22,
+    # Collapse near-twins like p05's 5≈7 / 17≈18 (ΔE≈6) and 1≈2 (ΔE≈10).
+    min_similar_delta_e=10.0,
+    keep_illustration_plate=False,
 )
 
 STYLE_PRESETS: dict[str, StylePreset] = {

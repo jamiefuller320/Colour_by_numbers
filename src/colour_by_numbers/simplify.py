@@ -735,62 +735,91 @@ def merge_similar_colours_budgeted(
     labels: np.ndarray,
     palette: np.ndarray,
     *,
-    max_colours: int,
+    max_colours: int | None = None,
+    min_delta_e: float = 0.0,
     subject_mask: np.ndarray | None = None,
     start_delta_e: float = 4.0,
-    max_delta_e: float = 14.0,
+    max_delta_e: float = 16.0,
     delta_step: float = 2.0,
+    prefer_background: bool = True,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Reduce palette size only when over ``max_colours``, favouring background.
+    """Merge near-duplicate paints by Lab ΔE, optionally down to a colour budget.
 
-    Near-duplicate colours merge first. When ``subject_mask`` is provided,
-    pairs whose smaller paint sits mostly outside the subject are preferred so
-    subject mosaic integrity wins over background clutter.
+    1. Always collapse pairs closer than ``min_delta_e`` (closest first).
+    2. If still over ``max_colours``, keep merging up to ``max_delta_e``.
+
+    When ``subject_mask`` is set and ``prefer_background`` is True, background
+    paints are favoured as merge victims so subject wedges stay distinct longer.
     """
     from .palette import colour_distance_matrix
 
-    if max_colours <= 0 or palette.shape[0] <= max_colours:
-        return labels.astype(np.int32, copy=True), palette.astype(np.uint8, copy=True)
-
     work = labels.astype(np.int32, copy=True)
     pal = palette.astype(np.uint8, copy=True)
+    if pal.shape[0] < 2:
+        return work, pal
+
     mask = (
         subject_mask.astype(bool)
         if subject_mask is not None and subject_mask.shape == work.shape
         else None
     )
-    delta = float(start_delta_e)
+    budget = int(max_colours) if max_colours is not None and max_colours > 0 else 0
+    # Phase 1: mandatory similarity floor. Phase 2: optional budget.
+    phase_limits = []
+    if min_delta_e and min_delta_e > 0:
+        phase_limits.append(("similarity", float(min_delta_e), False))
+    if budget > 0:
+        phase_limits.append(("budget", float(max_delta_e), True))
 
-    while pal.shape[0] > max_colours and delta <= max_delta_e + 1e-6:
-        dist = colour_distance_matrix(pal)
-        best: tuple[float, int, int, int, int, float] | None = None
-        for i in range(pal.shape[0]):
-            for j in range(i + 1, pal.shape[0]):
-                d = float(dist[i, j])
-                if d >= delta:
-                    continue
-                count_i = int((work == i).sum())
-                count_j = int((work == j).sum())
-                if count_i == 0 or count_j == 0:
-                    continue
-                small = (work == i) if count_i <= count_j else (work == j)
-                if mask is not None:
-                    bg_frac = float((small & ~mask).sum()) / max(1, int(small.sum()))
-                    # Hold subject colours until the ΔE band is looser.
-                    if bg_frac < 0.55 and delta < 10.0:
+    for _phase, phase_max, require_over_budget in phase_limits:
+        delta = float(start_delta_e)
+        while delta <= phase_max + 1e-6:
+            if pal.shape[0] < 2:
+                break
+            if require_over_budget and pal.shape[0] <= budget:
+                break
+            if not require_over_budget:
+                # Stop early once every remaining pair is beyond the floor.
+                dist = colour_distance_matrix(pal)
+                if float(dist[np.triu_indices(pal.shape[0], k=1)].min()) >= float(
+                    min_delta_e
+                ):
+                    break
+
+            dist = colour_distance_matrix(pal)
+            best: tuple[float, int, int, int, int] | None = None
+            for i in range(pal.shape[0]):
+                for j in range(i + 1, pal.shape[0]):
+                    d = float(dist[i, j])
+                    limit = float(min_delta_e) if not require_over_budget else delta
+                    if d >= limit:
                         continue
-                else:
-                    bg_frac = 0.5
-                score = d - 6.0 * bg_frac
-                if best is None or score < best[0]:
-                    best = (score, i, j, count_i, count_j, bg_frac)
-        if best is None:
-            delta += delta_step
-            continue
-        _score, i, j, count_i, count_j, _bg = best
-        keep, drop = (i, j) if count_i >= count_j else (j, i)
-        work[work == drop] = keep
-        work, pal = compact_palette(work, pal)
+                    count_i = int((work == i).sum())
+                    count_j = int((work == j).sum())
+                    if count_i == 0 or count_j == 0:
+                        continue
+                    small = (work == i) if count_i <= count_j else (work == j)
+                    if mask is not None and prefer_background:
+                        bg_frac = float((small & ~mask).sum()) / max(
+                            1, int(small.sum())
+                        )
+                        # In the soft budget phase, hold subject colours a bit.
+                        if require_over_budget and bg_frac < 0.45 and delta < 10.0:
+                            continue
+                    else:
+                        bg_frac = 0.5
+                    score = d - (6.0 * bg_frac if prefer_background else 0.0)
+                    if best is None or score < best[0]:
+                        best = (score, i, j, count_i, count_j)
+            if best is None:
+                if require_over_budget:
+                    delta += delta_step
+                    continue
+                break
+            _score, i, j, count_i, count_j = best
+            keep, drop = (i, j) if count_i >= count_j else (j, i)
+            work[work == drop] = keep
+            work, pal = compact_palette(work, pal)
 
     return work, pal
 
@@ -895,6 +924,7 @@ def simplify_dual(
     firm_border: bool = True,
     min_adjacent_delta_e: float = 18.0,
     max_colours: int | None = None,
+    min_similar_delta_e: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray, SimplificationStats, SimplificationStats]:
     """Simplify subject pixels with one preset and background with another.
 
@@ -902,8 +932,8 @@ def simplify_dual(
     When ``firm_border`` is True, the hard mask silhouette is preserved with
     no seam softening across the subject edge.
 
-    When ``max_colours`` is set, near-duplicate colours are merged only if the
-    palette is over budget, preferring background paints.
+    After dual combine, near-duplicate colours are merged when
+    ``min_similar_delta_e`` / ``max_colours`` ask for it (background preferred).
     """
     if subject_mask.shape != labels.shape:
         raise ValueError("subject_mask must match labels shape")
@@ -935,11 +965,14 @@ def simplify_dual(
             softened = smooth_boundaries(combined, sigma=0.8)
             combined = np.where(seam, softened, combined).astype(np.int32)
     combined, new_palette = compact_palette(combined, palette)
-    if max_colours is not None and max_colours > 0:
+    if (max_colours is not None and max_colours > 0) or (
+        min_similar_delta_e and min_similar_delta_e > 0
+    ):
         combined, new_palette = merge_similar_colours_budgeted(
             combined,
             new_palette,
-            max_colours=int(max_colours),
+            max_colours=max_colours,
+            min_delta_e=float(min_similar_delta_e or 0.0),
             subject_mask=subject_mask,
         )
     elif min_adjacent_delta_e and min_adjacent_delta_e > 0:
