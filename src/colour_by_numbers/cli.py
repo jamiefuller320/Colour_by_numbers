@@ -87,6 +87,7 @@ def build_parser() -> argparse.ArgumentParser:
             "raw",
             "fine",
             "vibrant",
+            "preserve",
             "light",
             "medium",
             "simple",
@@ -602,6 +603,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Wrote {output_dir / 'plan.json'}")
                 return 0
 
+            from .style_presets import resolve_style_preset
+
+            style_preset = resolve_style_preset(args.style)
             generated = generate_colouring_set(
                 args.query,
                 plan=plan,
@@ -615,7 +619,9 @@ def main(argv: list[str] | None = None) -> int:
                 illustration_size=args.illustration_size,
                 n_colours=args.colours,
                 complexity=args.complexity,
-                subject_mode="off",
+                subject_mode=style_preset.subject_mode,
+                subject_complexity=style_preset.subject_complexity,
+                background_complexity=style_preset.background_complexity,
                 fal_model=args.fal_model,
                 pollinations_model=args.pollinations_model,
                 min_region_mm=args.min_region_mm,
@@ -644,7 +650,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if generated.passed or not args.require_quality else 1
 
         from .generate import generate_colouring_page
+        from .style_presets import resolve_style_preset
 
+        style_preset = resolve_style_preset(args.style)
         illustrate_kwargs = {}
         if args.silhouette_outline is not None:
             illustrate_kwargs["silhouette_outline"] = args.silhouette_outline
@@ -659,7 +667,9 @@ def main(argv: list[str] | None = None) -> int:
             illustration_size=args.illustration_size,
             n_colours=args.colours,
             complexity=args.complexity,
-            subject_mode="off",
+            subject_mode=style_preset.subject_mode,
+            subject_complexity=style_preset.subject_complexity,
+            background_complexity=style_preset.background_complexity,
             min_adjacent_delta_e=args.min_adjacent_delta_e,
             firm_border=args.firm_border,
             max_size=args.max_size,

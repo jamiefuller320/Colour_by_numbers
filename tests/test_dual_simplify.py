@@ -4,7 +4,35 @@ from __future__ import annotations
 
 import numpy as np
 
-from colour_by_numbers.simplify import count_regions, simplify_dual
+from colour_by_numbers.simplify import (
+    count_regions,
+    merge_similar_colours_budgeted,
+    simplify_dual,
+)
+
+
+def test_merge_budget_prefers_background_colours() -> None:
+    labels = np.zeros((40, 60), dtype=np.int32)
+    labels[:, 30:] = 1  # subject right
+    labels[:10, :20] = 2  # bg accent A
+    labels[10:20, :20] = 3  # bg accent B (near A)
+    palette = np.array(
+        [
+            [200, 160, 100],
+            [180, 140, 80],
+            [240, 240, 240],
+            [230, 230, 230],
+        ],
+        dtype=np.uint8,
+    )
+    mask = np.zeros((40, 60), dtype=bool)
+    mask[:, 30:] = True
+    merged, new_pal = merge_similar_colours_budgeted(
+        labels, palette, max_colours=3, subject_mask=mask, max_delta_e=20.0
+    )
+    assert new_pal.shape[0] <= 3
+    # Subject colours should still be present as distinct fills when possible.
+    assert np.any(merged[:, 30:] == merged[20, 40])
 
 
 def test_simplify_dual_merges_background_more_than_subject() -> None:
