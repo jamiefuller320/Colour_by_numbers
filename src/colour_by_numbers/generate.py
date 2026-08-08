@@ -326,6 +326,7 @@ def generate_colouring_page(
         "subject_complexity",
         "background_complexity",
         "max_plate_colours",
+        "min_similar_delta_e",
     ):
         pipeline_kwargs.pop(key, None)
     pipeline_kwargs.setdefault("min_region_mm", min_region_mm)
@@ -365,12 +366,13 @@ def generate_colouring_page(
         min_a4_dpi=min_a4_dpi,
         min_adjacent_delta_e=resolved_delta_e,
         max_plate_colours=preset.max_plate_colours,
+        min_similar_delta_e=preset.min_similar_delta_e,
         source_hit=reference_hit,
         **pipeline_kwargs,
     )
     quantized = result.quantized
     if preset.keep_illustration_plate:
-        # Match the three happy vibrant samples: colour plate = illustration.
+        # Optional: gallery plate = illustration (may diverge from outline fills).
         from .quantize import QuantizedImage
 
         quantized = QuantizedImage(

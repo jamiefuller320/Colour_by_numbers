@@ -35,6 +35,32 @@ def test_merge_budget_prefers_background_colours() -> None:
     assert np.any(merged[:, 30:] == merged[20, 40])
 
 
+def test_merge_by_similarity_collapses_near_twins() -> None:
+    """Pairs closer than min_delta_e merge even when under the colour budget."""
+    labels = np.zeros((30, 30), dtype=np.int32)
+    labels[:, 15:] = 1
+    labels[:10, :10] = 2
+    labels[10:20, :10] = 3
+    palette = np.array(
+        [
+            [20, 20, 20],
+            [200, 160, 100],
+            [102, 57, 18],  # ~p05 #5
+            [110, 70, 31],  # ~p05 #7  ΔE≈6
+        ],
+        dtype=np.uint8,
+    )
+    merged, new_pal = merge_similar_colours_budgeted(
+        labels,
+        palette,
+        max_colours=8,  # under budget — similarity floor still applies
+        min_delta_e=10.0,
+    )
+    assert new_pal.shape[0] == 3
+    # The two browns should be one paint now.
+    assert len({int(merged[5, 5]), int(merged[15, 5])}) == 1
+
+
 def test_simplify_dual_merges_background_more_than_subject() -> None:
     rng = np.random.default_rng(0)
     h, w = 80, 100

@@ -313,6 +313,7 @@ def create_colour_by_numbers(
     palette_category: str | None = None,
     min_adjacent_delta_e: float = DEFAULT_MIN_ADJACENT_DELTA_E,
     max_plate_colours: int | None = None,
+    min_similar_delta_e: float = 0.0,
     colour_refine: bool = True,
     min_subject_bg_contrast: float | None = None,
     silhouette_outline: bool = False,
@@ -534,6 +535,7 @@ def create_colour_by_numbers(
             firm_border=firm_border,
             min_adjacent_delta_e=min_adjacent_delta_e,
             max_colours=max_plate_colours,
+            min_similar_delta_e=min_similar_delta_e,
         )
         labels = upsample_labels(labels, prepared.size)
         up_h, up_w = labels.shape
@@ -597,9 +599,23 @@ def create_colour_by_numbers(
                 )
                 area = max(area, region.min_area_px)
                 min_thickness = float(max(2, region.min_side_px))
+        uniform_labels = quantized.labels
+        uniform_palette = quantized.palette
+        if (max_plate_colours is not None and max_plate_colours > 0) or (
+            min_similar_delta_e and min_similar_delta_e > 0
+        ):
+            from .simplify import merge_similar_colours_budgeted
+
+            uniform_labels, uniform_palette = merge_similar_colours_budgeted(
+                uniform_labels,
+                uniform_palette,
+                max_colours=max_plate_colours,
+                min_delta_e=float(min_similar_delta_e or 0.0),
+                subject_mask=subject_mask_for_eyes,
+            )
         page = build_outline_page(
-            quantized.labels,
-            quantized.palette,
+            uniform_labels,
+            uniform_palette,
             min_region_area=area,
             max_regions=region_cap,
             line_width=stroke,
