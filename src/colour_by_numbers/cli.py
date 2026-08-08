@@ -456,7 +456,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  {record.set_id}: {record.title} ({len(record.pair_ids)} pairs)")
             return 0
         if args.library_list:
-            sets = lib.browse_sets() if hasattr(lib, "browse_sets") else lib.list_sets()
+            sets = lib.list_sets()
             if not sets:
                 print(f"No sets in {lib.root}")
                 return 0
