@@ -131,6 +131,8 @@ def illustration_prompt(
             f"{region_mm:g}mm high when printed on A4 where possible "
             f"(finer accents as black line), "
             "prefer many small interlocking wedges over large flat areas, "
+            "background fills must stay a different hue family from the subject "
+            "so the silhouette reads clearly, "
             "no gradients, no photorealism, no text, "
             "full subject in frame with a small margin, not over-cropped"
         )

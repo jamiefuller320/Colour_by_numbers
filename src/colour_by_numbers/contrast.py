@@ -111,3 +111,170 @@ def refine_mask_by_colour(
         model=mask.model,
         foreground_fraction=float(refined.mean()),
     )
+
+
+def _contrasting_background_rgb(
+    subject_mean: np.ndarray,
+    subject_palette: np.ndarray,
+    *,
+    min_delta_e: float,
+) -> np.ndarray:
+    """Pick a flat background RGB at least ``min_delta_e`` from subject paints."""
+    from .palette import colour_distance_matrix
+
+    mean = np.asarray(subject_mean, dtype=np.float64).reshape(3)
+    mean_l = float(0.2126 * mean[0] + 0.7152 * mean[1] + 0.0722 * mean[2])
+    # Prefer cool pale behind warm subjects (typical animals); flip if subject is cool/dark.
+    if mean_l >= 90:
+        candidates = np.array(
+            [
+                [70, 95, 125],
+                [55, 75, 105],
+                [100, 120, 140],
+                [45, 55, 70],
+            ],
+            dtype=np.uint8,
+        )
+    elif mean_l <= 50:
+        candidates = np.array(
+            [
+                [230, 236, 245],
+                [210, 220, 235],
+                [245, 240, 230],
+                [200, 210, 220],
+            ],
+            dtype=np.uint8,
+        )
+    else:
+        candidates = np.array(
+            [
+                [210, 222, 235],
+                [180, 200, 220],
+                [140, 165, 195],
+                [230, 236, 245],
+                [90, 115, 145],
+            ],
+            dtype=np.uint8,
+        )
+
+    subj = np.asarray(subject_palette, dtype=np.uint8).reshape(-1, 3)
+    if subj.size == 0:
+        return candidates[0]
+    best = candidates[0]
+    best_score = -1.0
+    for cand in candidates:
+        stacked = np.vstack([cand, subj])
+        dist = colour_distance_matrix(stacked)[0, 1:]
+        score = float(dist.min())
+        if score >= min_delta_e and score > best_score:
+            best = cand
+            best_score = score
+    if best_score < 0:
+        # Force a cool pale / dark pair until separation is met.
+        fallback = np.array([220, 230, 242], dtype=np.uint8)
+        stacked = np.vstack([fallback, subj])
+        if float(colour_distance_matrix(stacked)[0, 1:].min()) < min_delta_e:
+            fallback = np.array([50, 70, 100], dtype=np.uint8)
+        return fallback
+    return best
+
+
+def enforce_subject_background_separation(
+    labels: np.ndarray,
+    palette: np.ndarray,
+    subject_mask: np.ndarray,
+    *,
+    min_delta_e: float = 18.0,
+    separation_mm: float = 5.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Keep background paints distinct from the subject near the silhouette.
+
+    Two-layer rule:
+    1. A paint index may not appear in both subject and background (splits
+       distant subject-coloured islands as well as edge bleed).
+    2. Within ``separation_mm`` of the subject on A4, a background fill may not
+       use a *different* colour within ``min_delta_e`` of any subject paint.
+
+    Offending background pixels are remapped onto a contrasting flat swatch;
+    subject pixels of a previously shared paint are left intact.
+    """
+    from scipy import ndimage
+
+    from .print_resolution import min_region_size_for_a4_mm
+    from .simplify import compact_palette
+
+    if min_delta_e <= 0 or separation_mm <= 0:
+        return labels.astype(np.int32, copy=True), palette.astype(np.uint8, copy=True)
+
+    work = labels.astype(np.int32, copy=True)
+    pal = palette.astype(np.uint8, copy=True)
+    mask = subject_mask.astype(bool)
+    if mask.shape != work.shape or not mask.any() or bool(mask.all()):
+        return work, pal
+
+    h, w = work.shape
+    band_px = max(1, min_region_size_for_a4_mm(w, h, min_mm=separation_mm).min_width_px)
+    dilated = ndimage.binary_dilation(mask, iterations=int(band_px))
+    band = dilated & ~mask
+
+    from .palette import colour_distance_matrix
+
+    subj_colours = {int(c) for c in np.unique(work[mask])}
+    if not subj_colours:
+        return work, pal
+    subj_pal = pal[sorted(subj_colours)]
+    subj_mean = mean_rgb(pal[work[mask]])
+    dist = colour_distance_matrix(pal)
+
+    offenders: set[int] = set()
+    # Global: never share a paint index across subject and background.
+    bg_colours = {int(c) for c in np.unique(work[~mask])}
+    offenders.update(subj_colours & bg_colours)
+    # Local: within the separation band, forbid near-twin (ΔE) bg paints.
+    if band.any():
+        for colour in np.unique(work[band]):
+            c = int(colour)
+            if c in subj_colours:
+                continue
+            min_de = min(float(dist[c, s]) for s in subj_colours)
+            if min_de < float(min_delta_e):
+                offenders.add(c)
+
+    if not offenders:
+        return work, pal
+
+    # One contrasting swatch for all remapped background paints.
+    target = _contrasting_background_rgb(
+        subj_mean, subj_pal, min_delta_e=float(min_delta_e)
+    )
+    # Reuse an existing palette entry if it's already far enough from the subject.
+    new_idx = None
+    for idx, rgb in enumerate(pal):
+        if idx in subj_colours or idx in offenders:
+            continue
+        stacked = np.vstack([rgb, subj_pal])
+        if float(colour_distance_matrix(stacked)[0, 1:].min()) >= float(min_delta_e):
+            new_idx = int(idx)
+            break
+    if new_idx is None:
+        pal = np.vstack([pal, target.reshape(1, 3)]).astype(np.uint8)
+        new_idx = int(pal.shape[0] - 1)
+
+    remapped = 0
+    for c in sorted(offenders):
+        # Remap all background uses (keep subject pixels of a shared paint).
+        hit = (~mask) & (work == c)
+        if hit.any():
+            work[hit] = new_idx
+            remapped += int(hit.sum())
+
+    work, pal = compact_palette(work, pal)
+    logger.info(
+        "Subject/bg separation: remapped %d bg px (shared paints + ≈%.1fmm band) "
+        "using ΔE≥%.1f (%dpx band)",
+        remapped,
+        separation_mm,
+        min_delta_e,
+        band_px,
+    )
+    return work, pal

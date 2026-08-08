@@ -46,6 +46,10 @@ class StylePreset:
     # When True, gallery plate is the illustration (may diverge from outline).
     # Default False so the colour plate is exactly the numbered fills.
     keep_illustration_plate: bool = False
+    # Two-layer subject/background gate: bg paints inside this A4 band must
+    # stay at least ``min_subject_bg_delta_e`` from every subject paint.
+    subject_bg_separation_mm: float = 0.0
+    min_subject_bg_delta_e: float = 0.0
 
 
 STYLE_SIMPLE = StylePreset(
@@ -102,8 +106,10 @@ STYLE_VIBRANT = StylePreset(
         "colours with clear cool teal and blue shadow wedges plus cool specular "
         "accents mixed among warm gold and orange mid-tones (shadows must not "
         "be only brown or orange), bold black outlines of varying weight, "
-        "abstract colour-block background with two to four solid fills "
-        "(not empty white), high-energy colouring-kit look, "
+        "abstract colour-block background with two to four solid fills in a "
+        "different hue family from the subject (cool blue/teal/sage behind warm "
+        "subjects; never reuse coat browns/creams in the background), "
+        "high subject-background colour contrast, high-energy colouring-kit look, "
         "no gradients, no photorealism"
     ),
     description=(
@@ -122,6 +128,8 @@ STYLE_VIBRANT = StylePreset(
     # Collapse near-twins like p05's 5≈7 / 17≈18 (ΔE≈6) and 1≈2 (ΔE≈10).
     min_similar_delta_e=10.0,
     keep_illustration_plate=False,
+    subject_bg_separation_mm=5.0,
+    min_subject_bg_delta_e=18.0,
 )
 
 STYLE_PRESETS: dict[str, StylePreset] = {
