@@ -1119,9 +1119,14 @@ def publish_pages_library(
                     dest_pair = dest_set / "pairs" / folder
                     dest_pair.mkdir(parents=True, exist_ok=True)
                     assets: dict[str, str] = {}
+                    # Pages only needs viewable media — skip editable label maps.
+                    skip_keys = {"labels"}
+                    skip_names = {"labels.npy"}
                     for key, abs_path in (pair.get("assets") or {}).items():
+                        if key in skip_keys:
+                            continue
                         src = Path(abs_path)
-                        if not src.exists():
+                        if not src.exists() or src.name in skip_names:
                             continue
                         name = src.name
                         shutil.copy2(src, dest_pair / name)
