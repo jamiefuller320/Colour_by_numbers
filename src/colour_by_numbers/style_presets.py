@@ -50,6 +50,10 @@ class StylePreset:
     # stay at least ``min_subject_bg_delta_e`` from every subject paint.
     subject_bg_separation_mm: float = 0.0
     min_subject_bg_delta_e: float = 0.0
+    # When True (API backends), generate a subject-only companion image on a
+    # flat studio ground and derive the subject mask from that layer instead
+    # of rembg guessing on the busy subject+background plate.
+    paired_illustration_layers: bool = False
 
 
 STYLE_SIMPLE = StylePreset(
@@ -130,6 +134,7 @@ STYLE_VIBRANT = StylePreset(
     keep_illustration_plate=False,
     subject_bg_separation_mm=5.0,
     min_subject_bg_delta_e=18.0,
+    paired_illustration_layers=True,
 )
 
 STYLE_PRESETS: dict[str, StylePreset] = {

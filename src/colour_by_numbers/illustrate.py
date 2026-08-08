@@ -93,6 +93,16 @@ class IllustrationResult:
     notes: str = ""
 
 
+@dataclass(frozen=True)
+class PairedIllustration:
+    """Subject+background plate plus a flat-ground subject-only companion."""
+
+    scene: IllustrationResult
+    subject_only: IllustrationResult
+    scene_prompt: str
+    subject_only_prompt: str
+
+
 def illustration_prompt(
     subject_type_label: str,
     *,
@@ -297,6 +307,158 @@ def illustration_prompt(
             f"{negative_suffix}, {style}"
         )
     return f"{kind_prefix}{subject} portrait, centred subject{negative_suffix}, {style}"
+
+
+def subject_only_illustration_prompt(
+    subject_type_label: str,
+    *,
+    category: str | None = None,
+    style_preset: str | None = None,
+    min_region_mm: float | None = None,
+    framing: str | None = None,
+    scene_prompt: str | None = None,
+) -> str:
+    """Prompt for a flat-ground cutout used only to derive the subject mask.
+
+    Keeps the same subject identity / pose language as the scene plate, but
+    forbids abstract background blocks so rembg (or abs-diff) can read a clean
+    silhouette.
+    """
+    preset = resolve_style_preset(style_preset) if style_preset else STYLE_STANDARD
+    region_mm = (
+        float(min_region_mm)
+        if min_region_mm is not None
+        else float(preset.min_region_mm)
+    )
+    subject = disambiguate_subject_label(subject_type_label, category=category)
+    frame = (framing or "").lower().strip() or None
+    kind = subject_kind_frame(category)
+    kind_prefix = f"{kind}. " if kind else ""
+    negative = CATEGORY_NEGATIVE_CUES.get(category or "", "")
+    negative_suffix = f", {negative}" if negative else ""
+
+    if frame in {"side", "full_body"}:
+        view = (
+            "full body side view, clear silhouette, entire subject visible"
+            if frame == "side"
+            else "entire body visible head to paws/tail, clear silhouette"
+        )
+    else:
+        view = "centred portrait, same pose and framing as the companion plate"
+
+    # Pull a short pose cue from the scene prompt when available (set slots).
+    pose_bit = ""
+    if scene_prompt:
+        lowered = scene_prompt.lower()
+        for key in (
+            "lying relaxed",
+            "sitting upright",
+            "running mid-stride",
+            "close front portrait",
+            "standing three-quarter",
+            "wide shot",
+        ):
+            if key in lowered:
+                pose_bit = f", {key}"
+                break
+
+    mosaic = (
+        "dense interlocking flat colour mosaic on the subject, "
+        f"colourable wedges at least {region_mm:g}mm on A4, "
+        "bold black outlines, no gradients, no photorealism, no text"
+    )
+    return (
+        f"{kind_prefix}{subject} {view}{pose_bit}{negative_suffix}, {mosaic}, "
+        "SUBJECT ONLY on a perfectly flat solid pale grey studio background "
+        "(#F0F0F0), no second background colour, no abstract colour blocks, "
+        "no environment, no cast shadow on the backdrop, no props behind the "
+        "subject, clean cutout-ready silhouette with a small margin"
+    )
+
+
+def generate_illustration_pair(
+    *,
+    subject_type_label: str,
+    category: str | None = None,
+    backend: str = "fal",
+    n_colours: int = DEFAULT_ILLUSTRATION_COLOURS,
+    output_size: int = DEFAULT_ILLUSTRATION_SIZE,
+    fal_api_key: str | None = None,
+    pollinations_api_key: str | None = None,
+    openai_api_key: str | None = None,
+    scene_prompt: str | None = None,
+    fal_model: str = DEFAULT_FAL_MODEL,
+    pollinations_model: str = "flux",
+    seed: int | None = None,
+    min_region_mm: float = DEFAULT_MIN_REGION_MM,
+    style: str = "vibrant",
+    framing: str | None = None,
+) -> PairedIllustration:
+    """Generate subject+background and subject-only plates with the same seed.
+
+    The scene image is the published colour plate. The subject-only companion
+    is a mask helper (flat studio ground) — not shown to colourists.
+    """
+    preset = resolve_style_preset(style)
+    scene_prompt_text = scene_prompt or illustration_prompt(
+        subject_type_label,
+        category=category,
+        style_preset=preset.name,
+        min_region_mm=min_region_mm,
+        framing=framing,
+    )
+    only_prompt = subject_only_illustration_prompt(
+        subject_type_label,
+        category=category,
+        style_preset=preset.name,
+        min_region_mm=min_region_mm,
+        framing=framing,
+        scene_prompt=scene_prompt_text,
+    )
+    # Scene plate — keep prepare_for_colouring on; subject-only stays raw so
+    # rembg sees the flat ground fal actually painted.
+    scene = generate_illustration(
+        None,
+        subject_type_label=subject_type_label,
+        category=category,
+        backend=backend,
+        n_colours=n_colours,
+        output_size=output_size,
+        fal_api_key=fal_api_key,
+        pollinations_api_key=pollinations_api_key,
+        openai_api_key=openai_api_key,
+        prompt_override=scene_prompt_text,
+        fal_model=fal_model,
+        pollinations_model=pollinations_model,
+        seed=seed,
+        min_region_mm=min_region_mm,
+        prepare_for_colouring=True,
+        style=preset.name,
+    )
+    subject_only = generate_illustration(
+        None,
+        subject_type_label=subject_type_label,
+        category=category,
+        backend=backend,
+        n_colours=n_colours,
+        output_size=output_size,
+        fal_api_key=fal_api_key,
+        pollinations_api_key=pollinations_api_key,
+        openai_api_key=openai_api_key,
+        prompt_override=only_prompt,
+        fal_model=fal_model,
+        pollinations_model=pollinations_model,
+        seed=seed,
+        min_region_mm=min_region_mm,
+        prepare_for_colouring=False,
+        style=preset.name,
+    )
+    return PairedIllustration(
+        scene=scene,
+        subject_only=subject_only,
+        scene_prompt=scene_prompt_text,
+        subject_only_prompt=only_prompt,
+    )
 
 
 def prepare_illustration_for_colouring(

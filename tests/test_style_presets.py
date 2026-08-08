@@ -45,6 +45,7 @@ def test_vibrant_prompt_asks_for_mosaic_and_cool_shadows() -> None:
     assert STYLE_VIBRANT.min_similar_delta_e == 10.0
     assert STYLE_VIBRANT.subject_bg_separation_mm == 5.0
     assert STYLE_VIBRANT.min_subject_bg_delta_e == 18.0
+    assert STYLE_VIBRANT.paired_illustration_layers is True
     assert "subject-background" in STYLE_VIBRANT.prompt_style.lower() or (
         "different hue" in STYLE_VIBRANT.prompt_style.lower()
     )
