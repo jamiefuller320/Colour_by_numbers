@@ -18,7 +18,7 @@ def build_parser() -> argparse.ArgumentParser:
             "for colouring books."
         ),
     )
-    source = parser.add_mutually_exclusive_group(required=True)
+    source = parser.add_mutually_exclusive_group(required=False)
     source.add_argument(
         "-q",
         "--query",
@@ -385,6 +385,38 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="With --set-size: print/write the set plan only (no image generation)",
     )
+    parser.add_argument(
+        "--library-root",
+        default="data/library",
+        help="Asset library root for linked plate/outline pairs (default: data/library)",
+    )
+    parser.add_argument(
+        "--library-ingest",
+        action="store_true",
+        help="With --set-size: also ingest accepted pairs into the asset library",
+    )
+    parser.add_argument(
+        "--library-list",
+        action="store_true",
+        help="List sets in the asset library and exit",
+    )
+    parser.add_argument(
+        "--library-compose",
+        metavar="TITLE",
+        default=None,
+        help="Compose a mixed library set from --library-pairs",
+    )
+    parser.add_argument(
+        "--library-pairs",
+        default=None,
+        help="Comma-separated pair IDs for --library-compose",
+    )
+    parser.add_argument(
+        "--library-render-colourway",
+        metavar="PAIR:COLOURWAY",
+        default=None,
+        help="Render one colourway for a pair (e.g. set/p01:vivid) and exit",
+    )
     return parser
 
 
@@ -392,6 +424,43 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     output_dir = Path(args.output)
     min_a4 = None if args.no_a4_filter else args.min_a4_dpi
+
+    if args.library_list or args.library_compose or args.library_render_colourway:
+        from .library import AssetLibrary
+
+        lib = AssetLibrary(args.library_root)
+        if args.library_list:
+            sets = lib.list_sets()
+            if not sets:
+                print(f"No sets in {lib.root}")
+                return 0
+            for item in sets:
+                cats = ",".join(item.get("categories") or []) or "—"
+                print(
+                    f"{item['set_id']}: {item.get('title')} "
+                    f"[{item.get('mode')}] {item.get('n_pairs')} pairs ({cats})"
+                )
+            return 0
+        if args.library_render_colourway:
+            raw = args.library_render_colourway
+            if ":" not in raw:
+                print("--library-render-colourway needs PAIR:COLOURWAY", file=sys.stderr)
+                return 2
+            pair_id, way = raw.rsplit(":", 1)
+            path = lib.render_pair_colourway(pair_id, way)
+            print(f"Wrote {path}")
+            return 0
+        if not args.library_pairs:
+            print("--library-compose requires --library-pairs", file=sys.stderr)
+            return 2
+        pair_ids = [p.strip() for p in args.library_pairs.split(",") if p.strip()]
+        record = lib.compose_mixed_set(title=args.library_compose, pair_ids=pair_ids)
+        print(f"Composed mixed set {record.set_id} with {len(record.pair_ids)} pairs")
+        return 0
+
+    if not args.query and not args.input and not args.list_types:
+        print("Provide --query, --input, or a --library-* command", file=sys.stderr)
+        return 2
 
     if args.list_types:
         if not args.query:
@@ -491,6 +560,7 @@ def main(argv: list[str] | None = None) -> int:
                 attempts_per_slot=args.set_attempts,
                 require_plate_quality=not args.no_quality_check,
                 output_dir=output_dir,
+                library_root=args.library_root if args.library_ingest else None,
                 backend=args.illustration_backend,
                 style=args.style,
                 illustration_colours=args.illustration_colours,

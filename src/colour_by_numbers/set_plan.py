@@ -108,10 +108,14 @@ class PlateSlot:
     composition: str
     seed: int
     prompt: str
+    # Optional overrides for mixed-theme sets (defaults to the plan subject).
+    subject_label: str | None = None
+    category: str | None = None
 
     @property
     def slug(self) -> str:
-        raw = f"{self.index:02d}-{self.aspect}-{self.scene}"
+        subject_bit = f"{self.subject_label}-" if self.subject_label else ""
+        raw = f"{self.index:02d}-{subject_bit}{self.aspect}-{self.scene}"
         cleaned = "".join(ch if ch.isalnum() else "-" for ch in raw.lower())
         while "--" in cleaned:
             cleaned = cleaned.replace("--", "-")
@@ -129,6 +133,7 @@ class SetPlan:
         "shared colouring-book style, same subject identity, "
         "flat fills, bold outlines, white or pale background"
     )
+    mode: str = "single"  # single | mixed (mixed plans carry per-slot subjects)
 
     @property
     def n_plates(self) -> int:
@@ -139,6 +144,7 @@ class SetPlan:
             "original_query": self.original_query,
             "subject_label": self.subject_type.label,
             "category": self.subject_type.category,
+            "mode": self.mode,
             "style_notes": self.style_notes,
             "slots": [
                 {
@@ -149,6 +155,14 @@ class SetPlan:
                     "seed": slot.seed,
                     "slug": slot.slug,
                     "prompt": slot.prompt,
+                    **(
+                        {
+                            "subject_label": slot.subject_label,
+                            "category": slot.category,
+                        }
+                        if slot.subject_label
+                        else {}
+                    ),
                 }
                 for slot in self.slots
             ],
@@ -244,4 +258,80 @@ def plan_colouring_set(
             raise RuntimeError(f"Duplicate slot planned: {key}")
         seen.add(key)
 
-    return SetPlan(original_query=query, subject_type=chosen, slots=tuple(slots))
+    return SetPlan(
+        original_query=query,
+        subject_type=chosen,
+        slots=tuple(slots),
+        mode="single",
+    )
+
+
+def plan_mixed_colouring_set(
+    entries: list[tuple[str, str | None]],
+    *,
+    plates_per_subject: int = 2,
+    base_seed: int = 0,
+    discover_types: bool = True,
+    style: str | None = None,
+) -> SetPlan:
+    """Plan a mixed-theme set from ``(query, optional_type)`` entries.
+
+    Each subject contributes ``plates_per_subject`` aspect/scene slots. The
+    plan's top-level ``subject_type`` is the first entry (for compatibility);
+    per-slot ``subject_label`` / ``category`` carry the mixed identity.
+    """
+    if not entries:
+        raise ValueError("entries must be non-empty")
+    if plates_per_subject < 1:
+        raise ValueError("plates_per_subject must be >= 1")
+
+    slots: list[PlateSlot] = []
+    first_chosen: SubjectType | None = None
+    index = 1
+    for entry_i, (query, type_name) in enumerate(entries):
+        discovery = discover_subject_types(
+            query,
+            probe_search=discover_types and type_name is None,
+        )
+        chosen = pick_subject_type(discovery, type_name=type_name, pick=0)
+        if first_chosen is None:
+            first_chosen = chosen
+        bank = list(slot_bank_for_category(chosen.category)) or list(DEFAULT_SLOT_BANK)
+        for j in range(plates_per_subject):
+            aspect, scene, composition = bank[j % len(bank)]
+            if j >= len(bank):
+                scene = f"{scene} variant {(j // len(bank)) + 1}"
+            seed = int(base_seed) + entry_i * 100 + j
+            prompt = compose_slot_prompt(
+                chosen,
+                aspect=aspect,
+                scene=scene,
+                composition=composition,
+                style_preset=style,
+            )
+            slots.append(
+                PlateSlot(
+                    index=index,
+                    aspect=aspect,
+                    scene=scene,
+                    composition=composition,
+                    seed=seed,
+                    prompt=prompt,
+                    subject_label=chosen.label,
+                    category=chosen.category,
+                )
+            )
+            index += 1
+
+    assert first_chosen is not None
+    queries = ", ".join(q for q, _ in entries)
+    return SetPlan(
+        original_query=queries,
+        subject_type=first_chosen,
+        slots=tuple(slots),
+        mode="mixed",
+        style_notes=(
+            "mixed-theme colouring set; each slot keeps its own subject identity; "
+            "shared house style, flat fills, bold outlines"
+        ),
+    )

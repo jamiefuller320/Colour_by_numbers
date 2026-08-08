@@ -163,18 +163,47 @@ def evaluate_set_quality(
         )
     )
 
-    identity = plan.subject_type.label
-    checks.append(
-        SetQualityCheck(
-            name="shared_subject_identity",
-            passed=bool(identity) and all(
-                item.page is not None
-                and item.page.subject_type.label == identity
-                for item in accepted
-            ),
-            detail=f"subject “{identity}” on all accepted plates",
+    if getattr(plan, "mode", "single") == "mixed":
+        identity_ok = all(
+            item.page is not None
+            and (
+                item.slot.subject_label is None
+                or item.page.subject_type.label == item.slot.subject_label
+            )
+            for item in accepted
         )
-    )
+        subjects = sorted(
+            {
+                (item.slot.subject_label or plan.subject_type.label)
+                for item in plan.slots
+            }
+        )
+        identity_detail = (
+            f"mixed subjects match slots ({', '.join(subjects)})"
+            if identity_ok
+            else "one or more plates mismatched their slot subject"
+        )
+        checks.append(
+            SetQualityCheck(
+                name="slot_subject_identity",
+                passed=identity_ok and bool(accepted),
+                detail=identity_detail,
+            )
+        )
+    else:
+        identity = plan.subject_type.label
+        checks.append(
+            SetQualityCheck(
+                name="shared_subject_identity",
+                passed=bool(identity)
+                and all(
+                    item.page is not None
+                    and item.page.subject_type.label == identity
+                    for item in accepted
+                ),
+                detail=f"subject “{identity}” on all accepted plates",
+            )
+        )
 
     return SetQualityReport(checks=tuple(checks))
 
@@ -213,6 +242,8 @@ def generate_colouring_set(
     output_dir: Path | str | None = None,
     plan: SetPlan | None = None,
     generate_page_fn=None,
+    library_root: Path | str | None = None,
+    library_title: str | None = None,
     **page_kwargs,
 ) -> GeneratedSet:
     """Generate a varied plate set from one phrase.
@@ -243,9 +274,10 @@ def generate_colouring_set(
         for attempt in range(max(1, attempts_per_slot)):
             seed = slot.seed + attempt * 17
             try:
+                slot_subject = slot.subject_label or active_plan.subject_type.label
                 page: GeneratedPage = generate(
-                    active_plan.original_query,
-                    subject_type=active_plan.subject_type.label,
+                    slot_subject,
+                    subject_type=slot_subject,
                     discover_types=False,
                     prompt_override=slot.prompt,
                     seed=seed,
@@ -326,6 +358,24 @@ def generate_colouring_set(
 
     if out is not None:
         write_set_manifest(generated, out)
+
+    if library_root is not None:
+        from .library import AssetLibrary, ingest_generated_set
+
+        style = page_kwargs.get("style")
+        record = ingest_generated_set(
+            generated,
+            library=AssetLibrary(library_root),
+            title=library_title,
+            style=style if isinstance(style, str) else None,
+        )
+        logger.info(
+            "Ingested set into library %s (%s pairs)",
+            record.set_id,
+            len(record.pair_ids),
+        )
+        if out is not None:
+            (out / "library_set_id.txt").write_text(record.set_id + "\n", encoding="utf-8")
 
     return generated
 

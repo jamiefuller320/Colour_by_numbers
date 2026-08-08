@@ -8,6 +8,8 @@ Search the web for images by description (for example `aircraft` or `dogs`), map
 
 **Visual end goal:** adult **vibrant** paint-by-numbers mosaics (dense interlocking fills, ~24–32 colours, cool shadow accents). `--style vibrant` selects denser region passes, exact plate-colour preservation, and cooler shadow prompts; `--style standard` remains the current kids/hand-colourable default. Illustration mode also inks the **subject silhouette** on the outline even when fills match the background (`--silhouette-outline`).
 
+**Asset library:** linked plate↔outline **pairs** and collated **sets** (single-category or mixed) live under `data/library/`. Colour plates stay editable via saved label maps so alternate **colourways** (`natural`, `vivid`, `pop_art`, `pastel`) can be rendered for covers/guides without changing the outline numbers.
+
 ## What it produces
 
 For each source image the tool writes:

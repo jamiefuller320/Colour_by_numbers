@@ -188,9 +188,36 @@ Set gate (`evaluate_set_quality`): enough accepted plates, unique aspect/scene
 plan, each accepted plate passes Phase B/C, no near-duplicates, shared subject
 label. Manifest: `plan.json` + `manifest.json` under the output directory.
 
+### Phase D+ — Asset library (pairs, sets, colourways)
+
+Durable storage for book building lives under `data/library/`:
+
+- **Pair** = linked colour plate ↔ numbered outline (+ editable `labels.npy` /
+  `palette.json`). Outlines are the main product; colour plates feed covers /
+  guide pages.
+- **Set** = collated pairs — **single-category** (generated together) or
+  **mixed** (compose from existing pair IDs across subjects).
+- **Colourways** = re-render the same label map as `natural` / `vivid` /
+  `pop_art` / `pastel` without regenerating geometry.
+
+```bash
+# Generate a set and ingest into the library
+colour-by-numbers --query dogs --type pug --illustrate --set-size 4 \
+  --library-ingest --library-root data/library --output output/pug-set
+
+# List sets / compose a mixed theme from existing pairs
+colour-by-numbers --library-list
+colour-by-numbers --library-compose "Pets & planes" \
+  --library-pairs dogs-…/p01,aircraft-…/p02
+
+# Alternate colour plate for covers/guides
+colour-by-numbers --library-render-colourway 'set-id/p01:vivid'
+```
+
 ### Phase E — Covers + book compile (gate: print-ready PDF)
 
-- Front/back full-colour covers in the same family.
+- Front/back full-colour covers in the same family (from pair illustrations /
+  colourway plates).
 - Ordered interiors + keys + covers → PDF with trim/DPI checklist.
 - Provenance log: every asset marked generated or licensed.
 
