@@ -179,6 +179,30 @@ def test_seed_sample_sets_from_docs(tmp_path) -> None:
     assert gallery and "plate" in gallery[0]["assets"]
 
 
+def test_ingest_generated_page_goes_to_library(tmp_path) -> None:
+    from colour_by_numbers.generate import GeneratedPage
+    from colour_by_numbers.illustrate import IllustrationResult
+    from colour_by_numbers.library import ingest_generated_page
+    from colour_by_numbers.discover import SubjectType
+
+    result = _tiny_result()
+    page = GeneratedPage(
+        illustration=IllustrationResult(
+            image=result.source or Image.new("RGB", (96, 96), (200, 100, 40)),
+            backend="test",
+            prompt="demo",
+        ),
+        result=result,
+        subject_type=SubjectType(
+            label="demo dog", category="dogs", search_query="demo dog"
+        ),
+    )
+    lib = AssetLibrary(tmp_path / "library")
+    record = ingest_generated_page(page, library=lib, style="vibrant")
+    assert len(record.pair_ids) == 1
+    assert lib.open_pair_asset(record.pair_ids[0], "plate").exists()
+
+
 def test_publish_pages_library_manifest(tmp_path) -> None:
     import json
     import shutil

@@ -274,6 +274,8 @@ if generate and set_mode and planned is not None:
                 plan=planned,
                 attempts_per_slot=set_attempts,
                 require_plate_quality=require_quality,
+                output_dir="output/testbed_set",
+                library_root="data/library",
                 backend=backend,
                 n_colours=n_colours,
                 illustration_colours=n_colours,
@@ -328,6 +330,11 @@ elif generate and not set_mode:
                 critique_mode=critique_mode,
                 max_feedback_attempts=max_feedback_attempts,
             )
+            from colour_by_numbers.library import AssetLibrary, ingest_generated_page
+
+            record = ingest_generated_page(
+                page, library=AssetLibrary("data/library")
+            )
             st.session_state.testbed_set = None
             st.session_state.testbed_illustration = page.illustration
             st.session_state.testbed_result = page.result if run_cbn else None
@@ -335,7 +342,8 @@ elif generate and not set_mode:
             st.session_state.testbed_quality = page.quality
             st.session_state.testbed_feedback = page.feedback
             st.success(
-                f"Generated “{chosen.label}” via {page.illustration.backend}"
+                f"Generated “{chosen.label}” via {page.illustration.backend} "
+                f"(library {record.set_id})"
             )
             if page.feedback is not None:
                 st.info(page.feedback.notes)

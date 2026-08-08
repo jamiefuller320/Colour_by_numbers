@@ -9,6 +9,7 @@ from .library import (
     AssetLibrary,
     PairRecord,
     SetRecord,
+    ingest_generated_page,
     ingest_generated_set,
     publish_pages_library,
     seed_sample_sets,
@@ -36,6 +37,7 @@ __all__ = [
     "generate_colouring_page",
     "generate_colouring_set",
     "generate_illustration",
+    "ingest_generated_page",
     "ingest_generated_set",
     "list_colourways",
     "plan_colouring_set",
@@ -43,6 +45,7 @@ __all__ = [
     "remap_palette",
     "render_colourway_plate",
     "run_subject_feedback_loop",
+    "publish_pages_library",
     "seed_sample_sets",
 ]
 __version__ = "0.1.0"
