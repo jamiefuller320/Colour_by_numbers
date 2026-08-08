@@ -225,11 +225,15 @@ colour-by-numbers --library-seed-samples
 colour-by-numbers --library-publish-pages
 ```
 
+Generated plates are **ingested into `data/library/` by default** (CLI
+`--library-ingest`; opt out with `--no-library-ingest`). Streamlit test-bed and
+Phase D scripts do the same.
+
 Streamlit: open **Library** (sidebar page from `app.py`, or **Library** workspace in
 `testbed_app.py`) to browse sets as colour thumbnails and open each set’s gallery.
 
 GitHub Pages: open `library.html` (set colour thumbnails → set gallery). Manifest is
-`docs/library.json`.
+`docs/library.json` (regenerate with `--library-publish-pages` to include library sets).
 
 ### Phase E — Covers + book compile (gate: print-ready PDF)
 

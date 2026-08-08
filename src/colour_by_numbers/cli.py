@@ -403,8 +403,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--library-ingest",
-        action="store_true",
-        help="With --set-size: also ingest accepted pairs into the asset library",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Ingest accepted generated plates into the asset library "
+            "(default: on; use --no-library-ingest to skip)"
+        ),
     )
     parser.add_argument(
         "--library-list",
@@ -631,6 +635,12 @@ def main(argv: list[str] | None = None) -> int:
             if generated.quality is not None:
                 print(generated.quality.summary())
             print(f"Wrote set under {output_dir}")
+            if args.library_ingest:
+                lib_id = output_dir / "library_set_id.txt"
+                if lib_id.exists():
+                    print(f"Library set: {lib_id.read_text(encoding='utf-8').strip()}")
+                else:
+                    print(f"Library root: {args.library_root}")
             return 0 if generated.passed or not args.require_quality else 1
 
         from .generate import generate_colouring_page
@@ -677,6 +687,15 @@ def main(argv: list[str] | None = None) -> int:
         illustration_path = output_dir / f"{stem}_illustration.png"
         page.illustration.image.save(illustration_path)
         paths["illustration"] = illustration_path
+        if args.library_ingest:
+            from .library import AssetLibrary, ingest_generated_page
+
+            record = ingest_generated_page(
+                page,
+                library=AssetLibrary(args.library_root),
+                style=args.style,
+            )
+            print(f"Library set: {record.set_id} ({len(record.pair_ids)} pairs)")
         print(f"Illustration backend: {page.illustration.backend}")
         print(f"Subject type: {page.subject_type.label}")
         if page.quality is not None:

@@ -73,6 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         attempts_per_slot=args.set_attempts,
         require_plate_quality=True,
         output_dir=args.output,
+        library_root="data/library",
         backend="fal",
         fal_model="fal-ai/flux/schnell",
         illustration_size=args.illustration_size,

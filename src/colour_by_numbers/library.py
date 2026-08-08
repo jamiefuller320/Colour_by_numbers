@@ -869,6 +869,39 @@ def ingest_generated_set(
     return final
 
 
+def ingest_generated_page(
+    page: GeneratedPage,
+    *,
+    library: AssetLibrary | None = None,
+    title: str | None = None,
+    style: str | None = None,
+    colourways: list[str] | None = None,
+    notes: str = "",
+) -> SetRecord:
+    """Write a single generated page into the asset library as a one-pair set."""
+    lib = library or AssetLibrary()
+    label = page.subject_type.label
+    category = page.subject_type.category or ""
+    record = lib.create_set(
+        title=title or label,
+        mode=SET_MODE_SINGLE,
+        style=style,
+        categories=[category] if category else [],
+        subjects=[label],
+        colourways=colourways,
+        notes=notes,
+    )
+    lib.add_pair_from_page(
+        record.set_id,
+        page,
+        index=1,
+        style=style,
+        colourways=colourways,
+        notes=notes,
+    )
+    return lib.load_set(record.set_id)
+
+
 def colour_swatches_from_image(
     image: Image.Image, *, max_swatches: int = 8
 ) -> list[str]:
@@ -1043,11 +1076,113 @@ def build_pages_library_manifest(docs_root: Path | str | None = None) -> dict:
     return {"version": 1, "sets": sets_out}
 
 
-def publish_pages_library(docs_root: Path | str | None = None) -> Path:
-    """Write ``docs/library.json`` for the GitHub Pages set gallery."""
+def publish_pages_library(
+    docs_root: Path | str | None = None,
+    *,
+    library: AssetLibrary | None = None,
+    include_library: bool = True,
+) -> Path:
+    """Write ``docs/library.json`` for the GitHub Pages set gallery.
+
+    Always includes curated ``docs/samples`` packs. When ``include_library`` is
+    true, also copies sets from the on-disk asset library into
+    ``docs/library/sets/`` so generated batches appear on Pages.
+    """
+    import shutil
+
     root = Path(docs_root) if docs_root is not None else Path("docs")
     root.mkdir(parents=True, exist_ok=True)
     payload = build_pages_library_manifest(root)
+    seen = {row["set_id"] for row in payload["sets"]}
+
+    if include_library:
+        lib = library or AssetLibrary()
+        if lib.root.exists():
+            for entry in lib.browse_sets():
+                set_id = str(entry.get("set_id") or "")
+                if not set_id or set_id in seen:
+                    continue
+                # Skip empty seed leftovers without assets.
+                previews = lib.list_pair_previews(set_id)
+                if not previews:
+                    continue
+                dest_set = root / "library" / "sets" / set_id
+                if dest_set.exists():
+                    shutil.rmtree(dest_set)
+                dest_set.mkdir(parents=True, exist_ok=True)
+                pairs_out: list[dict] = []
+                thumb_rel: str | None = None
+                for pair in previews:
+                    pair_id = str(pair["pair_id"])
+                    # Keep folder name as p01 under the set for stable URLs.
+                    folder = pair_id.rsplit("/", 1)[-1]
+                    dest_pair = dest_set / "pairs" / folder
+                    dest_pair.mkdir(parents=True, exist_ok=True)
+                    assets: dict[str, str] = {}
+                    # Pages only needs viewable media — skip editable label maps.
+                    skip_keys = {"labels"}
+                    skip_names = {"labels.npy"}
+                    for key, abs_path in (pair.get("assets") or {}).items():
+                        if key in skip_keys:
+                            continue
+                        src = Path(abs_path)
+                        if not src.exists() or src.name in skip_names:
+                            continue
+                        name = src.name
+                        shutil.copy2(src, dest_pair / name)
+                        rel = f"library/sets/{set_id}/pairs/{folder}/{name}"
+                        assets[key] = rel
+                        if thumb_rel is None and key in (
+                            "plate",
+                            "illustration",
+                            "page",
+                            "outline",
+                        ):
+                            thumb_rel = rel
+                    if not assets:
+                        continue
+                    pairs_out.append(
+                        {
+                            "pair_id": pair_id,
+                            "index": pair.get("index") or 0,
+                            "subject": pair.get("subject") or "",
+                            "aspect": pair.get("aspect") or "",
+                            "scene": pair.get("scene") or "",
+                            "assets": assets,
+                            "thumbnail": assets.get("plate")
+                            or assets.get("illustration")
+                            or assets.get("page")
+                            or assets.get("outline"),
+                        }
+                    )
+                if not pairs_out:
+                    continue
+                swatches: list[str] = []
+                if thumb_rel and (root / thumb_rel).exists():
+                    try:
+                        swatches = colour_swatches_from_image(
+                            Image.open(root / thumb_rel)
+                        )
+                    except OSError:
+                        swatches = []
+                payload["sets"].append(
+                    {
+                        "set_id": set_id,
+                        "title": entry.get("title") or set_id,
+                        "mode": entry.get("mode") or "single",
+                        "style": entry.get("style") or "",
+                        "categories": list(entry.get("categories") or []),
+                        "subjects": list(entry.get("subjects") or []),
+                        "note": "Published from asset library.",
+                        "n_pairs": len(pairs_out),
+                        "thumbnail": thumb_rel,
+                        "thumbnail_colours": swatches
+                        or list(entry.get("thumbnail_colours") or []),
+                        "pairs": pairs_out,
+                    }
+                )
+                seen.add(set_id)
+
     target = root / "library.json"
     target.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return target
