@@ -158,7 +158,7 @@
       ]
     },
     {
-      "set_id": "dogs-golden-retriever-20260808-fef4fa",
+      "set_id": "dogs-golden-retriever-20260808-5d1654",
       "title": "golden retriever",
       "mode": "single",
       "style": "vibrant",
@@ -170,125 +170,125 @@
       ],
       "note": "Published from asset library.",
       "n_pairs": 6,
-      "thumbnail": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p01/plate.png",
+      "thumbnail": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p01/plate.png",
       "thumbnail_colours": [
-        "#BE6C1B",
-        "#D48935",
-        "#DEA357",
-        "#A06528",
-        "#8C460B",
-        "#B08858",
-        "#E2B87A",
-        "#7C562A"
+        "#8D633C",
+        "#967653",
+        "#BF9C73",
+        "#DDBC8F",
+        "#643A19",
+        "#6B4D30",
+        "#6D5A45",
+        "#B9AA94"
       ],
       "pairs": [
         {
-          "pair_id": "dogs-golden-retriever-20260808-fef4fa/p01",
+          "pair_id": "dogs-golden-retriever-20260808-5d1654/p01",
           "index": 1,
           "subject": "golden retriever",
           "aspect": "lying relaxed",
           "scene": "soft blanket",
           "assets": {
-            "palette": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p01/palette.json",
-            "plate": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p01/plate.png",
-            "outline": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p01/outline.png",
-            "legend": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p01/legend.png",
-            "page": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p01/page.png",
-            "illustration": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p01/illustration.png",
-            "outline_svg": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p01/outline.svg",
-            "plate_svg": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p01/plate.svg"
+            "palette": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p01/palette.json",
+            "plate": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p01/plate.png",
+            "outline": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p01/outline.png",
+            "legend": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p01/legend.png",
+            "page": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p01/page.png",
+            "illustration": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p01/illustration.png",
+            "outline_svg": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p01/outline.svg",
+            "plate_svg": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p01/plate.svg"
           },
-          "thumbnail": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p01/plate.png"
+          "thumbnail": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p01/plate.png"
         },
         {
-          "pair_id": "dogs-golden-retriever-20260808-fef4fa/p02",
+          "pair_id": "dogs-golden-retriever-20260808-5d1654/p02",
           "index": 2,
           "subject": "golden retriever",
-          "aspect": "looking back",
+          "aspect": "close front portrait",
           "scene": "plain background",
           "assets": {
-            "palette": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p02/palette.json",
-            "plate": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p02/plate.png",
-            "outline": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p02/outline.png",
-            "legend": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p02/legend.png",
-            "page": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p02/page.png",
-            "illustration": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p02/illustration.png",
-            "outline_svg": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p02/outline.svg",
-            "plate_svg": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p02/plate.svg"
+            "palette": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p02/palette.json",
+            "plate": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p02/plate.png",
+            "outline": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p02/outline.png",
+            "legend": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p02/legend.png",
+            "page": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p02/page.png",
+            "illustration": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p02/illustration.png",
+            "outline_svg": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p02/outline.svg",
+            "plate_svg": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p02/plate.svg"
           },
-          "thumbnail": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p02/plate.png"
+          "thumbnail": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p02/plate.png"
         },
         {
-          "pair_id": "dogs-golden-retriever-20260808-fef4fa/p03",
+          "pair_id": "dogs-golden-retriever-20260808-5d1654/p03",
           "index": 3,
           "subject": "golden retriever",
           "aspect": "pair together",
           "scene": "plain background",
           "assets": {
-            "palette": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p03/palette.json",
-            "plate": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p03/plate.png",
-            "outline": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p03/outline.png",
-            "legend": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p03/legend.png",
-            "page": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p03/page.png",
-            "illustration": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p03/illustration.png",
-            "outline_svg": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p03/outline.svg",
-            "plate_svg": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p03/plate.svg"
+            "palette": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p03/palette.json",
+            "plate": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p03/plate.png",
+            "outline": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p03/outline.png",
+            "legend": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p03/legend.png",
+            "page": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p03/page.png",
+            "illustration": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p03/illustration.png",
+            "outline_svg": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p03/outline.svg",
+            "plate_svg": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p03/plate.svg"
           },
-          "thumbnail": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p03/plate.png"
+          "thumbnail": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p03/plate.png"
         },
         {
-          "pair_id": "dogs-golden-retriever-20260808-fef4fa/p04",
+          "pair_id": "dogs-golden-retriever-20260808-5d1654/p04",
           "index": 4,
-          "subject": "golden retriever",
-          "aspect": "close oblique portrait",
-          "scene": "plain background",
-          "assets": {
-            "palette": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p04/palette.json",
-            "plate": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p04/plate.png",
-            "outline": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p04/outline.png",
-            "legend": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p04/legend.png",
-            "page": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p04/page.png",
-            "illustration": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p04/illustration.png",
-            "outline_svg": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p04/outline.svg",
-            "plate_svg": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p04/plate.svg"
-          },
-          "thumbnail": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p04/plate.png"
-        },
-        {
-          "pair_id": "dogs-golden-retriever-20260808-fef4fa/p05",
-          "index": 5,
           "subject": "golden retriever",
           "aspect": "action stride",
           "scene": "open field",
           "assets": {
-            "palette": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p05/palette.json",
-            "plate": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p05/plate.png",
-            "outline": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p05/outline.png",
-            "legend": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p05/legend.png",
-            "page": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p05/page.png",
-            "illustration": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p05/illustration.png",
-            "outline_svg": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p05/outline.svg",
-            "plate_svg": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p05/plate.svg"
+            "palette": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p04/palette.json",
+            "plate": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p04/plate.png",
+            "outline": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p04/outline.png",
+            "legend": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p04/legend.png",
+            "page": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p04/page.png",
+            "illustration": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p04/illustration.png",
+            "outline_svg": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p04/outline.svg",
+            "plate_svg": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p04/plate.svg"
           },
-          "thumbnail": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p05/plate.png"
+          "thumbnail": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p04/plate.png"
         },
         {
-          "pair_id": "dogs-golden-retriever-20260808-fef4fa/p06",
+          "pair_id": "dogs-golden-retriever-20260808-5d1654/p05",
+          "index": 5,
+          "subject": "golden retriever",
+          "aspect": "oblique three-quarter",
+          "scene": "simple yard",
+          "assets": {
+            "palette": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p05/palette.json",
+            "plate": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p05/plate.png",
+            "outline": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p05/outline.png",
+            "legend": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p05/legend.png",
+            "page": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p05/page.png",
+            "illustration": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p05/illustration.png",
+            "outline_svg": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p05/outline.svg",
+            "plate_svg": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p05/plate.svg"
+          },
+          "thumbnail": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p05/plate.png"
+        },
+        {
+          "pair_id": "dogs-golden-retriever-20260808-5d1654/p06",
           "index": 6,
           "subject": "golden retriever",
-          "aspect": "side profile",
+          "aspect": "looking back",
           "scene": "plain background",
           "assets": {
-            "palette": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p06/palette.json",
-            "plate": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p06/plate.png",
-            "outline": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p06/outline.png",
-            "legend": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p06/legend.png",
-            "page": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p06/page.png",
-            "illustration": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p06/illustration.png",
-            "outline_svg": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p06/outline.svg",
-            "plate_svg": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p06/plate.svg"
+            "palette": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p06/palette.json",
+            "plate": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p06/plate.png",
+            "outline": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p06/outline.png",
+            "legend": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p06/legend.png",
+            "page": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p06/page.png",
+            "illustration": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p06/illustration.png",
+            "outline_svg": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p06/outline.svg",
+            "plate_svg": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p06/plate.svg"
           },
-          "thumbnail": "library/sets/dogs-golden-retriever-20260808-fef4fa/pairs/p06/plate.png"
+          "thumbnail": "library/sets/dogs-golden-retriever-20260808-5d1654/pairs/p06/plate.png"
         }
       ]
     }
