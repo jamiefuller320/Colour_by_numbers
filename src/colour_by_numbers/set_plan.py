@@ -1,4 +1,4 @@
-"""Phase D set planner: one phrase → N aspect/scene plate slots."""
+"""Phase D set planner: one phrase → N varied aspect/scene plate slots."""
 
 from __future__ import annotations
 
@@ -10,92 +10,31 @@ from .discover import (
     pick_subject_type,
 )
 from .illustrate import illustration_prompt
+from .variation_banks import (
+    VariationSlot,
+    bank_as_tuples,
+    select_varied_slots,
+    variation_bank_for_category,
+)
 
-# Category-aware variety banks. Each entry is (aspect, scene, composition_hint).
-# Keep scenes simple so format-brief subject-fill stays achievable.
+# Back-compat alias: older code/tests import CATEGORY_SLOT_BANK / DEFAULT_SLOT_BANK.
 CATEGORY_SLOT_BANK: dict[str, tuple[tuple[str, str, str], ...]] = {
-    "aircraft": (
-        ("side view", "clear sky", "full aeroplane silhouette, side profile"),
-        ("three-quarter view", "airfield", "parked on tarmac, wheels visible"),
-        ("front view", "runway", "nose and propeller facing the viewer"),
-        ("in flight", "above soft clouds", "banking gently, wheels up"),
-        ("takeoff", "runway", "wheels just leaving the ground"),
-        ("hangar", "hangar doorway", "aeroplane framed in hangar opening"),
-        ("landing", "runway approach", "low approach, landing gear down"),
-        ("top view", "plain background", "plan-view silhouette, wings spread"),
-    ),
-    "dogs": (
-        ("portrait", "plain background", "head and shoulders facing viewer"),
-        ("sitting", "garden lawn", "full body sitting, tail visible"),
-        ("standing side view", "park path", "full body side profile"),
-        ("lying down", "rug", "relaxed dog lying facing viewer"),
-        ("running", "open field", "dog in mid-stride, simple ground"),
-        ("puppy pose", "plain background", "playful sit, oversized paws"),
-        ("looking up", "kitchen floor", "head tilted upward"),
-        ("three-quarter view", "yard", "standing three-quarter body view"),
-    ),
-    "cats": (
-        ("portrait", "plain background", "head and shoulders facing viewer"),
-        ("sitting", "windowsill", "cat sitting upright, full body"),
-        ("side view", "garden", "standing side profile"),
-        ("curled sleeping", "cushion", "cat curled asleep"),
-        ("stretching", "plain background", "cat in long stretch pose"),
-        ("crouching", "grass", "alert crouch, simple ground"),
-        ("looking back", "plain background", "over-shoulder glance"),
-        ("kitten pose", "blanket", "small kitten sitting"),
-    ),
-    "birds": (
-        ("perched side view", "branch", "bird on simple branch, side profile"),
-        ("portrait", "plain background", "head and chest facing viewer"),
-        ("wings spread", "clear sky", "bird gliding, wings open"),
-        ("taking off", "branch", "wings raised leaving perch"),
-        ("standing", "ground", "full body standing bird"),
-        ("three-quarter view", "plain background", "body angled toward viewer"),
-        ("nesting", "nest", "bird on simple nest"),
-        ("in flight", "sky", "side flying silhouette"),
-    ),
-    "flowers": (
-        ("centred portrait", "plain background", "single bloom filling the frame"),
-        ("side view", "plain background", "bloom and stem from the side"),
-        ("bud and bloom", "plain background", "open flower beside a bud"),
-        ("top view", "plain background", "looking down into the bloom"),
-        ("in a pot", "simple pot", "potted plant, centred"),
-        ("bouquet pair", "plain background", "two stems, still simple"),
-        ("close petal study", "plain background", "large centred bloom"),
-        ("garden patch", "simple ground", "one main flower, minimal leaves"),
-    ),
-    "cars": (
-        ("side view", "road", "full car silhouette, side profile"),
-        ("three-quarter front", "driveway", "front and side visible"),
-        ("front view", "plain background", "headlights facing viewer"),
-        ("rear three-quarter", "street", "rear and side visible"),
-        ("parked", "garage", "car beside simple garage"),
-        ("on the road", "open road", "driving scene, simple horizon"),
-        ("top view", "plain background", "plan-view car silhouette"),
-        ("classic pose", "showroom", "centred three-quarter display"),
-    ),
-    "boats": (
-        ("side view", "calm water", "full boat silhouette on water"),
-        ("three-quarter view", "harbour", "boat angled toward viewer"),
-        ("front view", "water", "bow facing viewer"),
-        ("sailing", "open sea", "under sail, simple waves"),
-        ("docked", "pier", "tied at a simple pier"),
-        ("top view", "plain water", "plan-view boat silhouette"),
-        ("rowing", "lake", "small boat with oars"),
-        ("at anchor", "bay", "boat floating, simple shoreline"),
-    ),
+    key: bank_as_tuples(key)
+    for key in (
+        "aircraft",
+        "dogs",
+        "cats",
+        "birds",
+        "flowers",
+        "cars",
+        "boats",
+        "horses",
+        "people",
+        "portraits",
+    )
 }
 
-DEFAULT_SLOT_BANK: tuple[tuple[str, str, str], ...] = (
-    ("portrait", "plain background", "centred subject, clear silhouette"),
-    ("side view", "plain background", "full side profile"),
-    ("three-quarter view", "simple setting", "angled toward the viewer"),
-    ("action pose", "open space", "subject mid-action, simple ground"),
-    ("close-up", "plain background", "head or main feature fills frame"),
-    ("full body", "simple ground", "entire subject visible"),
-    ("looking left", "plain background", "subject facing left"),
-    ("looking right", "plain background", "subject facing right"),
-)
+DEFAULT_SLOT_BANK: tuple[tuple[str, str, str], ...] = bank_as_tuples(None)
 
 
 @dataclass(frozen=True)
@@ -111,6 +50,7 @@ class PlateSlot:
     # Optional overrides for mixed-theme sets (defaults to the plan subject).
     subject_label: str | None = None
     category: str | None = None
+    tags: tuple[str, ...] = ()
 
     @property
     def slug(self) -> str:
@@ -155,6 +95,7 @@ class SetPlan:
                     "seed": slot.seed,
                     "slug": slot.slug,
                     "prompt": slot.prompt,
+                    "tags": list(slot.tags),
                     **(
                         {
                             "subject_label": slot.subject_label,
@@ -170,9 +111,28 @@ class SetPlan:
 
 
 def slot_bank_for_category(category: str | None) -> tuple[tuple[str, str, str], ...]:
-    if category and category in CATEGORY_SLOT_BANK:
-        return CATEGORY_SLOT_BANK[category]
-    return DEFAULT_SLOT_BANK
+    return bank_as_tuples(category)
+
+
+def _expand_bank(bank: list[VariationSlot], n: int) -> list[VariationSlot]:
+    """Walk a bank in order, wrapping with scene variants when n exceeds length."""
+    if not bank:
+        raise ValueError("variation bank is empty")
+    picked: list[VariationSlot] = []
+    for i in range(n):
+        base = bank[i % len(bank)]
+        scene = base.scene
+        if i >= len(bank):
+            scene = f"{scene} variant {(i // len(bank)) + 1}"
+        picked.append(
+            VariationSlot(
+                aspect=base.aspect,
+                scene=scene,
+                composition=base.composition,
+                tags=base.tags,
+            )
+        )
+    return picked
 
 
 def compose_slot_prompt(
@@ -182,6 +142,7 @@ def compose_slot_prompt(
     scene: str,
     composition: str,
     style_preset: str | None = None,
+    tags: tuple[str, ...] | list[str] | None = None,
 ) -> str:
     """Base illustration prompt plus unique aspect/scene cues."""
     base = illustration_prompt(
@@ -189,8 +150,11 @@ def compose_slot_prompt(
         category=subject_type.category,
         style_preset=style_preset,
     )
+    tag_bit = ""
+    if tags:
+        tag_bit = f", variation tags: {', '.join(tags)}"
     extras = (
-        f"aspect: {aspect}, scene: {scene}, {composition}, "
+        f"aspect: {aspect}, scene: {scene}, {composition}{tag_bit}, "
         "same subject identity, distinct pose from other pages in the set, "
         "subject fills most of the frame"
     )
@@ -207,11 +171,14 @@ def plan_colouring_set(
     discover_types: bool = True,
     custom_slots: list[tuple[str, str, str]] | None = None,
     style: str | None = None,
+    variety: str = "balanced",
 ) -> SetPlan:
     """Turn a keyword/phrase into N unique aspect/scene plate slots.
 
-    Discovery runs once; each slot reuses the same subject identity with a
-    distinct aspect/scene prompt and seed.
+    ``variety``:
+      - ``balanced`` (default): greedy mix across viewpoint / pose / framing /
+        grouping / vehicle-state tags for interesting bulk sets
+      - ``sequential``: walk the category bank in order (legacy behaviour)
     """
     if n_plates < 1:
         raise ValueError("n_plates must be >= 1")
@@ -221,32 +188,43 @@ def plan_colouring_set(
         probe_search=discover_types and subject_type is None,
     )
     chosen = pick_subject_type(discovery, type_name=subject_type, pick=type_pick)
-    bank = list(custom_slots) if custom_slots else list(slot_bank_for_category(chosen.category))
-    if not bank:
-        bank = list(DEFAULT_SLOT_BANK)
+
+    if custom_slots is not None:
+        bank = [
+            VariationSlot(a, s, c, frozenset())
+            for a, s, c in custom_slots
+        ]
+        picked = _expand_bank(bank, n_plates)
+    elif (variety or "balanced").lower().strip() == "sequential":
+        picked = _expand_bank(
+            list(variation_bank_for_category(chosen.category)), n_plates
+        )
+    else:
+        picked = select_varied_slots(
+            chosen.category, n_plates, seed=int(base_seed)
+        )
 
     slots: list[PlateSlot] = []
-    for i in range(n_plates):
-        aspect, scene, composition = bank[i % len(bank)]
-        # If we wrap the bank, nudge the scene label so prompts stay unique.
-        if i >= len(bank):
-            scene = f"{scene} variant {(i // len(bank)) + 1}"
+    for i, var in enumerate(picked):
+        tags = tuple(sorted(var.tags))
         seed = int(base_seed) + i
         prompt = compose_slot_prompt(
             chosen,
-            aspect=aspect,
-            scene=scene,
-            composition=composition,
+            aspect=var.aspect,
+            scene=var.scene,
+            composition=var.composition,
             style_preset=style,
+            tags=tags,
         )
         slots.append(
             PlateSlot(
                 index=i + 1,
-                aspect=aspect,
-                scene=scene,
-                composition=composition,
+                aspect=var.aspect,
+                scene=var.scene,
+                composition=var.composition,
                 seed=seed,
                 prompt=prompt,
+                tags=tags,
             )
         )
 
@@ -263,6 +241,11 @@ def plan_colouring_set(
         subject_type=chosen,
         slots=tuple(slots),
         mode="single",
+        style_notes=(
+            "shared colouring-book style, same subject identity, "
+            "varied aspects/poses/scenes for a bulk themed set, "
+            "flat fills, bold outlines"
+        ),
     )
 
 
@@ -273,12 +256,11 @@ def plan_mixed_colouring_set(
     base_seed: int = 0,
     discover_types: bool = True,
     style: str | None = None,
+    variety: str = "balanced",
 ) -> SetPlan:
     """Plan a mixed-theme set from ``(query, optional_type)`` entries.
 
-    Each subject contributes ``plates_per_subject`` aspect/scene slots. The
-    plan's top-level ``subject_type`` is the first entry (for compatibility);
-    per-slot ``subject_label`` / ``category`` carry the mixed identity.
+    Each subject contributes ``plates_per_subject`` varied aspect/scene slots.
     """
     if not entries:
         raise ValueError("entries must be non-empty")
@@ -296,29 +278,39 @@ def plan_mixed_colouring_set(
         chosen = pick_subject_type(discovery, type_name=type_name, pick=0)
         if first_chosen is None:
             first_chosen = chosen
-        bank = list(slot_bank_for_category(chosen.category)) or list(DEFAULT_SLOT_BANK)
-        for j in range(plates_per_subject):
-            aspect, scene, composition = bank[j % len(bank)]
-            if j >= len(bank):
-                scene = f"{scene} variant {(j // len(bank)) + 1}"
+        if (variety or "balanced").lower().strip() == "sequential":
+            picked = _expand_bank(
+                list(variation_bank_for_category(chosen.category)),
+                plates_per_subject,
+            )
+        else:
+            picked = select_varied_slots(
+                chosen.category,
+                plates_per_subject,
+                seed=int(base_seed) + entry_i * 17,
+            )
+        for j, var in enumerate(picked):
+            tags = tuple(sorted(var.tags))
             seed = int(base_seed) + entry_i * 100 + j
             prompt = compose_slot_prompt(
                 chosen,
-                aspect=aspect,
-                scene=scene,
-                composition=composition,
+                aspect=var.aspect,
+                scene=var.scene,
+                composition=var.composition,
                 style_preset=style,
+                tags=tags,
             )
             slots.append(
                 PlateSlot(
                     index=index,
-                    aspect=aspect,
-                    scene=scene,
-                    composition=composition,
+                    aspect=var.aspect,
+                    scene=var.scene,
+                    composition=var.composition,
                     seed=seed,
                     prompt=prompt,
                     subject_label=chosen.label,
                     category=chosen.category,
+                    tags=tags,
                 )
             )
             index += 1
@@ -332,6 +324,6 @@ def plan_mixed_colouring_set(
         mode="mixed",
         style_notes=(
             "mixed-theme colouring set; each slot keeps its own subject identity; "
-            "shared house style, flat fills, bold outlines"
+            "varied category-appropriate aspects/poses; shared house style"
         ),
     )

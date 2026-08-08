@@ -188,6 +188,11 @@ Set gate (`evaluate_set_quality`): enough accepted plates, unique aspect/scene
 plan, each accepted plate passes Phase B/C, no near-duplicates, shared subject
 label. Manifest: `plan.json` + `manifest.json` under the output directory.
 
+**Bulk prompt variety** (`variation_banks.py`, `--variety balanced`): category
+banks mix interesting views so animals/people cover front/side/oblique,
+sitting/standing, portrait/scene, single/group; aircraft/vehicles cover
+on-ground/takeoff/airborne/landing (and docked/underway for boats).
+
 ### Phase D+ — Asset library (pairs, sets, colourways)
 
 Durable storage for book building lives under `data/library/`:

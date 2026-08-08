@@ -10,6 +10,8 @@ Search the web for images by description (for example `aircraft` or `dogs`), map
 
 **Asset library:** linked plate↔outline **pairs** and collated **sets** (single-category or mixed) live under `data/library/`. Colour plates stay editable via saved label maps so alternate **colourways** (`natural`, `vivid`, `pop_art`, `pastel`) can be rendered for covers/guides without changing the outline numbers.
 
+**Bulk themed variety:** `--set-size N --variety balanced` plans a mix of category-appropriate prompts (animals: front/side/oblique, sitting/standing, portrait/scene, single/group; aircraft: on-ground/takeoff/airborne/landing, etc.).
+
 ## What it produces
 
 For each source image the tool writes:

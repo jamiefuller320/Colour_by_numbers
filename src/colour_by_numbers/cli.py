@@ -369,6 +369,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--variety",
+        choices=["balanced", "sequential"],
+        default="balanced",
+        help=(
+            "With --set-size: how to mix prompt variations. "
+            "balanced = diverse viewpoints/poses/scenes (default); "
+            "sequential = walk the category bank in order"
+        ),
+    )
+    parser.add_argument(
         "--set-attempts",
         type=int,
         default=3,
@@ -537,6 +547,7 @@ def main(argv: list[str] | None = None) -> int:
                 base_seed=args.seed if args.seed is not None else 0,
                 discover_types=not args.no_discover,
                 style=args.style,
+                variety=args.variety,
             )
             output_dir.mkdir(parents=True, exist_ok=True)
             if args.plan_only:
@@ -544,11 +555,13 @@ def main(argv: list[str] | None = None) -> int:
                     json.dumps(plan.to_dict(), indent=2), encoding="utf-8"
                 )
                 print(f"Subject: {plan.subject_type.label} ({plan.subject_type.category})")
+                print(f"Variety: {args.variety}")
                 print(f"Planned {plan.n_plates} slots:")
                 for slot in plan.slots:
+                    tag_bit = f" [{', '.join(slot.tags)}]" if slot.tags else ""
                     print(
                         f"  {slot.index:02d}. {slot.aspect} / {slot.scene} "
-                        f"(seed {slot.seed})"
+                        f"(seed {slot.seed}){tag_bit}"
                     )
                     print(f"      {slot.prompt[:120]}…")
                 print(f"Wrote {output_dir / 'plan.json'}")
