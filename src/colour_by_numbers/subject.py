@@ -567,6 +567,15 @@ def prepare_subject_image(
         from .contrast import refine_mask_by_colour
 
         mask = refine_mask_by_colour(rgb, mask)
+    # Fill holes and reclaim truncated bodies (e.g. pale chest treated as bg).
+    from .contrast import recover_subject_mask, recolour_reclaimed_subject_pixels
+
+    pre_recover = mask
+    mask = recover_subject_mask(rgb, mask)
+    if mask.foreground_fraction > pre_recover.foreground_fraction + 0.01:
+        rgb = recolour_reclaimed_subject_pixels(rgb, pre_recover, mask)
+    if firm_border:
+        mask = harden_mask(mask)
 
     if mode == "mask-only":
         return rgb, mask
@@ -582,6 +591,10 @@ def prepare_subject_image(
             from .contrast import refine_mask_by_colour
 
             mask = refine_mask_by_colour(cropped, mask)
+        pre_recover = mask
+        mask = recover_subject_mask(cropped, mask)
+        if mask.foreground_fraction > pre_recover.foreground_fraction + 0.01:
+            cropped = recolour_reclaimed_subject_pixels(cropped, pre_recover, mask)
         if firm_border:
             mask = harden_mask(mask)
         return cropped, mask
@@ -611,6 +624,9 @@ def prepare_subject_image(
         from .contrast import refine_mask_by_colour
 
         mask = refine_mask_by_colour(isolated, mask)
+    from .contrast import recover_subject_mask
+
+    mask = recover_subject_mask(isolated, mask)
     if firm_border:
         mask = harden_mask(mask)
     return isolated, mask
