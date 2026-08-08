@@ -357,10 +357,35 @@ def prepare_illustration_for_colouring(
     # colourable-block rules. Do not morphologically open/thicken strokes —
     # that flattens fine illustration detail.
     labels = merge_adjacent_same_colour(labels, bridge_px=max(2.0, tip * 0.6))
-    labels = absorb_small_regions(labels, min_area=region.min_area_px)
-    labels = absorb_thin_regions(labels, min_thickness=tip)
-    from .eyes import compute_eye_protection_mask, portrait_subject, relaxed_eye_thresholds
+    from .eyes import (
+        compute_eye_protection_mask,
+        emphasize_protected_pupils,
+        portrait_subject,
+        relaxed_eye_thresholds,
+    )
 
+    # Protect eyes *before* small/thin absorption — pupils are often far below
+    # the A4 min-area threshold and otherwise vanish into fur.
+    eye_protected = compute_eye_protection_mask(
+        labels,
+        active,
+        category=category,
+        min_region_mm=min_region_mm,
+    )
+    if eye_protected.any():
+        labels, active = emphasize_protected_pupils(labels, active, eye_protected)
+        eye_protected = compute_eye_protection_mask(
+            labels,
+            active,
+            category=category,
+            min_region_mm=min_region_mm,
+        )
+    eye_mask = eye_protected if eye_protected.any() else None
+    labels = absorb_small_regions(
+        labels, min_area=region.min_area_px, protected=eye_mask
+    )
+    labels = absorb_thin_regions(labels, min_thickness=tip, protected=eye_mask)
+    # Recompute after absorb so catchlights / merged lids stay covered.
     eye_protected = compute_eye_protection_mask(
         labels,
         active,
