@@ -34,6 +34,15 @@ class StylePreset:
     # Pipeline quantize mode after prepare. ``exact`` keeps the plate's RGB
     # solids instead of re-median-cutting (critical for vibrant).
     pipeline_palette_mode: str | None = None
+    # Illustration path subject engine (photo path still defaults via CLI).
+    subject_mode: str = "off"
+    subject_complexity: str = "fine"
+    background_complexity: str = "light"
+    # When set, merge near-duplicate colours only if over this budget,
+    # preferring background merges so subject integrity wins.
+    max_plate_colours: int | None = None
+    # Match the three happy vibrant samples: gallery plate = illustration.
+    keep_illustration_plate: bool = False
 
 
 STYLE_SIMPLE = StylePreset(
@@ -52,6 +61,7 @@ STYLE_SIMPLE = StylePreset(
     complexity="simple",
     min_adjacent_delta_e=18.0,
     pipeline_palette_mode="standard",
+    subject_mode="off",
 )
 
 STYLE_STANDARD = StylePreset(
@@ -70,6 +80,7 @@ STYLE_STANDARD = StylePreset(
     complexity="fine",
     min_adjacent_delta_e=18.0,
     pipeline_palette_mode="standard",
+    subject_mode="off",
 )
 
 STYLE_VIBRANT = StylePreset(
@@ -94,11 +105,18 @@ STYLE_VIBRANT = StylePreset(
     ),
     description=(
         "End-goal adult vibrant band for all categories — denser regions, "
-        "fuller palette, cool shadow accents, mosaic form language."
+        "fuller palette, cool shadow accents, mosaic form language. "
+        "Isolates the subject, preserves subject mosaic, simplifies backgrounds."
     ),
     complexity="vibrant",
-    min_adjacent_delta_e=8.0,
+    # Prefer budgeted / background-first merges over a global ΔE crush.
+    min_adjacent_delta_e=0.0,
     pipeline_palette_mode="exact",
+    subject_mode="dual",
+    subject_complexity="preserve",
+    background_complexity="simple",
+    max_plate_colours=28,
+    keep_illustration_plate=True,
 )
 
 STYLE_PRESETS: dict[str, StylePreset] = {
