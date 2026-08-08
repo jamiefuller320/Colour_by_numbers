@@ -6,7 +6,7 @@ Search the web for images by description (for example `aircraft` or `dogs`), map
 
 **Phase B–D:** primary generator is **fal.ai Flux** (`FAL_KEY`); single plates use the B/C quality checklist ([FORMAT_BRIEF.md](FORMAT_BRIEF.md)); sets use `--set-size`. GitHub Pages is a **viewer** (upload plate → outline), not a generator.
 
-**Visual end goal:** adult **vibrant** paint-by-numbers mosaics (dense interlocking fills, ~24–32 colours, cool shadow accents). `--style vibrant` selects denser region passes, exact plate-colour preservation, and cooler shadow prompts; `--style standard` remains the current kids/hand-colourable default.
+**Visual end goal:** adult **vibrant** paint-by-numbers mosaics (dense interlocking fills, ~24–32 colours, cool shadow accents). `--style vibrant` selects denser region passes, exact plate-colour preservation, and cooler shadow prompts; `--style standard` remains the current kids/hand-colourable default. Illustration mode also inks the **subject silhouette** on the outline even when fills match the background (`--silhouette-outline`).
 
 ## What it produces
 

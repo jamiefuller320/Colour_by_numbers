@@ -75,6 +75,65 @@ def estimate_subject_mask(
     return SubjectMask(alpha=alpha, model=model_name, foreground_fraction=fraction)
 
 
+def silhouette_binary_from_mask(
+    mask: SubjectMask,
+    *,
+    threshold: int = 64,
+    close_iterations: int = 5,
+    keep_largest: bool = True,
+) -> np.ndarray:
+    """Firm boolean silhouette from a soft rembg matte.
+
+    Flat colouring plates often need a lower alpha threshold than the default
+    harden cut (128) so same-colour subject/background seams still count as
+    subject for outline ink.
+    """
+    from scipy import ndimage
+
+    binary = mask.alpha >= int(threshold)
+    if close_iterations > 0:
+        binary = ndimage.binary_closing(binary, iterations=int(close_iterations))
+        binary = ndimage.binary_fill_holes(binary)
+    if keep_largest and binary.any():
+        labelled, count = ndimage.label(binary)
+        if count > 1:
+            sizes = np.bincount(labelled.ravel())
+            sizes[0] = 0
+            binary = labelled == int(sizes.argmax())
+    return binary.astype(bool)
+
+
+def estimate_silhouette_mask(
+    image: Image.Image,
+    *,
+    model_name: str = "u2net",
+    threshold: int = 64,
+    min_foreground: float = 0.04,
+    max_foreground: float = 0.85,
+) -> np.ndarray | None:
+    """Return a cleaned subject silhouette, or ``None`` if rembg is unusable."""
+    if not rembg_available():
+        logger.warning("Silhouette outline skipped: rembg is not installed")
+        return None
+    try:
+        soft = estimate_subject_mask(image, model_name=model_name)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Silhouette outline skipped: rembg failed (%s)", exc)
+        return None
+    binary = silhouette_binary_from_mask(soft, threshold=threshold)
+    fraction = float(binary.mean())
+    if fraction < min_foreground or fraction > max_foreground:
+        logger.warning(
+            "Silhouette outline skipped: foreground %.1f%% outside %.0f–%.0f%%",
+            100.0 * fraction,
+            100.0 * min_foreground,
+            100.0 * max_foreground,
+        )
+        return None
+    logger.info("Silhouette mask ready: %.1f%% foreground", 100.0 * fraction)
+    return binary
+
+
 def align_mask(
     mask: SubjectMask,
     size: tuple[int, int],

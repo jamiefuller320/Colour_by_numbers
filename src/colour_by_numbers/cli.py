@@ -141,6 +141,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Use a hard binary subject mask for firm silhouette borders (default: on)",
     )
     parser.add_argument(
+        "--silhouette-outline",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Ink the subject silhouette even when fills match the background "
+            "(default: on for --illustrate, off for photo path)"
+        ),
+    )
+    parser.add_argument(
         "--min-a4-dpi",
         type=float,
         default=150.0,
@@ -423,6 +432,9 @@ def main(argv: list[str] | None = None) -> int:
         subject_complexity=args.subject_complexity,
         background_complexity=args.background_complexity,
         firm_border=args.firm_border,
+        silhouette_outline=(
+            True if args.silhouette_outline is None else args.silhouette_outline
+        ),
         min_a4_dpi=min_a4,
         structure_size=args.structure_size,
         line_width=args.line_width,
@@ -509,6 +521,9 @@ def main(argv: list[str] | None = None) -> int:
 
         from .generate import generate_colouring_page
 
+        illustrate_kwargs = {}
+        if args.silhouette_outline is not None:
+            illustrate_kwargs["silhouette_outline"] = args.silhouette_outline
         page = generate_colouring_page(
             args.query,
             subject_type=args.subject_type,
@@ -537,6 +552,7 @@ def main(argv: list[str] | None = None) -> int:
             subject_feedback=args.subject_feedback,
             critique_mode=args.critique_mode,
             max_feedback_attempts=args.max_feedback_attempts,
+            **illustrate_kwargs,
         )
         result = page.result
         stem_base = page.subject_type.label
