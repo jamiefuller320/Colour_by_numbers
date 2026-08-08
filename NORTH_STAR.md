@@ -220,10 +220,16 @@ colour-by-numbers --library-render-colourway 'set-id/p01:vivid'
 
 # Seed docs/samples into the library for Streamlit browsing
 colour-by-numbers --library-seed-samples
+
+# Publish set thumbnails/gallery manifest for GitHub Pages
+colour-by-numbers --library-publish-pages
 ```
 
 Streamlit: open **Library** (sidebar page from `app.py`, or **Library** workspace in
 `testbed_app.py`) to browse sets as colour thumbnails and open each set’s gallery.
+
+GitHub Pages: open `library.html` (set colour thumbnails → set gallery). Manifest is
+`docs/library.json`.
 
 ### Phase E — Covers + book compile (gate: print-ready PDF)
 

@@ -665,27 +665,7 @@ class AssetLibrary:
             image = Image.open(thumb).convert("RGB")
         except OSError:
             return []
-        small = image.resize((48, 48), Image.Resampling.NEAREST)
-        arr = np.asarray(small).reshape(-1, 3)
-        # Prefer saturated / mid-luma colours over near-white background.
-        scored: list[tuple[float, tuple[int, int, int]]] = []
-        seen: set[tuple[int, int, int]] = set()
-        for rgb in arr[::3]:
-            key = (int(rgb[0]), int(rgb[1]), int(rgb[2]))
-            if key in seen:
-                continue
-            seen.add(key)
-            r, g, b = key
-            luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
-            sat = max(r, g, b) - min(r, g, b)
-            if luma > 245 and sat < 12:
-                continue
-            scored.append((float(sat) * 2.0 + (128.0 - abs(luma - 128.0)), key))
-        scored.sort(reverse=True)
-        hexes: list[str] = []
-        for _, (r, g, b) in scored[:max_swatches]:
-            hexes.append(f"#{r:02X}{g:02X}{b:02X}")
-        return hexes
+        return colour_swatches_from_image(image, max_swatches=max_swatches)
 
     def list_pair_previews(self, set_id: str) -> list[dict]:
         """UI-ready pair rows for a set gallery."""
@@ -887,6 +867,190 @@ def ingest_generated_set(
     final = lib.load_set(record.set_id)
     # Keep a pointer beside the classic set output if present later.
     return final
+
+
+def colour_swatches_from_image(
+    image: Image.Image, *, max_swatches: int = 8
+) -> list[str]:
+    """Sample distinctive hex colours from a plate for thumbnail chips."""
+    small = image.convert("RGB").resize((48, 48), Image.Resampling.NEAREST)
+    arr = np.asarray(small).reshape(-1, 3)
+    scored: list[tuple[float, tuple[int, int, int]]] = []
+    seen: set[tuple[int, int, int]] = set()
+    for rgb in arr[::3]:
+        key = (int(rgb[0]), int(rgb[1]), int(rgb[2]))
+        if key in seen:
+            continue
+        seen.add(key)
+        r, g, b = key
+        luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        sat = max(r, g, b) - min(r, g, b)
+        if luma > 245 and sat < 12:
+            continue
+        scored.append((float(sat) * 2.0 + (128.0 - abs(luma - 128.0)), key))
+    scored.sort(reverse=True)
+    return [f"#{r:02X}{g:02X}{b:02X}" for _, (r, g, b) in scored[:max_swatches]]
+
+
+# Curated packs published to GitHub Pages (paths relative to docs/).
+_PAGES_SAMPLE_SETS: list[dict] = [
+    {
+        "set_id": "sample-golden-retriever-vibrant",
+        "title": "Golden retriever (vibrant)",
+        "mode": "single",
+        "style": "vibrant",
+        "categories": ["dogs"],
+        "subjects": ["golden retriever"],
+        "note": "Vibrant house-style sample — exact palette preserve, denser regions.",
+        "pairs": [
+            {
+                "pair_id": "sample-golden-retriever-vibrant/p01",
+                "index": 1,
+                "subject": "golden retriever",
+                "assets": {
+                    "plate": "samples/dogs/golden-retriever-vibrant/plate.png",
+                    "outline": "samples/dogs/golden-retriever-vibrant/outline.png",
+                    "page": "samples/dogs/golden-retriever-vibrant/page.png",
+                    "illustration": "samples/dogs/golden-retriever-vibrant/illustration.png",
+                },
+            }
+        ],
+    },
+    {
+        "set_id": "sample-tabby-cat-vibrant",
+        "title": "Tabby cat (vibrant)",
+        "mode": "single",
+        "style": "vibrant",
+        "categories": ["cats"],
+        "subjects": ["tabby cat"],
+        "note": "Vibrant cross-subject check — cool teal shadows.",
+        "pairs": [
+            {
+                "pair_id": "sample-tabby-cat-vibrant/p01",
+                "index": 1,
+                "subject": "tabby cat",
+                "assets": {
+                    "plate": "samples/cats/tabby-vibrant/plate.png",
+                    "outline": "samples/cats/tabby-vibrant/outline.png",
+                    "page": "samples/cats/tabby-vibrant/page.png",
+                    "illustration": "samples/cats/tabby-vibrant/illustration.png",
+                },
+            }
+        ],
+    },
+    {
+        "set_id": "sample-biplane-vibrant",
+        "title": "Biplane (vibrant)",
+        "mode": "single",
+        "style": "vibrant",
+        "categories": ["aircraft"],
+        "subjects": ["biplane"],
+        "note": "Vibrant aircraft sample — cool wing shadows; silhouette inked on outline.",
+        "pairs": [
+            {
+                "pair_id": "sample-biplane-vibrant/p01",
+                "index": 1,
+                "subject": "biplane",
+                "assets": {
+                    "plate": "samples/aircraft/biplane-vibrant/plate.png",
+                    "outline": "samples/aircraft/biplane-vibrant/outline.png",
+                    "page": "samples/aircraft/biplane-vibrant/page.png",
+                    "illustration": "samples/aircraft/biplane-vibrant/illustration.png",
+                },
+            }
+        ],
+    },
+    {
+        "set_id": "sample-pug",
+        "title": "Pug",
+        "mode": "single",
+        "style": "standard",
+        "categories": ["dogs"],
+        "subjects": ["pug"],
+        "note": "Live fal.ai Flux sample — Phase B PASS.",
+        "pairs": [
+            {
+                "pair_id": "sample-pug/p01",
+                "index": 1,
+                "subject": "pug",
+                "assets": {
+                    "plate": "samples/dogs/pug/plate.png",
+                    "outline": "samples/dogs/pug/outline.png",
+                    "page": "samples/dogs/pug/page.png",
+                    "illustration": "samples/dogs/pug/illustration.png",
+                },
+            }
+        ],
+    },
+]
+
+
+def build_pages_library_manifest(docs_root: Path | str | None = None) -> dict:
+    """Build a GitHub Pages library.json payload from curated sample packs."""
+    root = Path(docs_root) if docs_root is not None else Path("docs")
+    sets_out: list[dict] = []
+    for pack in _PAGES_SAMPLE_SETS:
+        pairs_out: list[dict] = []
+        thumb_rel: str | None = None
+        swatches: list[str] = []
+        for pair in pack["pairs"]:
+            assets = {
+                key: rel
+                for key, rel in pair["assets"].items()
+                if (root / rel).exists()
+            }
+            if not assets:
+                continue
+            if thumb_rel is None:
+                for key in ("plate", "illustration", "page", "outline"):
+                    if key in assets:
+                        thumb_rel = assets[key]
+                        break
+            pairs_out.append(
+                {
+                    "pair_id": pair["pair_id"],
+                    "index": pair["index"],
+                    "subject": pair.get("subject") or "",
+                    "assets": assets,
+                    "thumbnail": assets.get("plate")
+                    or assets.get("illustration")
+                    or assets.get("page")
+                    or assets.get("outline"),
+                }
+            )
+        if not pairs_out:
+            continue
+        if thumb_rel and (root / thumb_rel).exists():
+            try:
+                swatches = colour_swatches_from_image(Image.open(root / thumb_rel))
+            except OSError:
+                swatches = []
+        sets_out.append(
+            {
+                "set_id": pack["set_id"],
+                "title": pack["title"],
+                "mode": pack["mode"],
+                "style": pack.get("style") or "",
+                "categories": list(pack.get("categories") or []),
+                "subjects": list(pack.get("subjects") or []),
+                "note": pack.get("note") or "",
+                "n_pairs": len(pairs_out),
+                "thumbnail": thumb_rel,
+                "thumbnail_colours": swatches,
+                "pairs": pairs_out,
+            }
+        )
+    return {"version": 1, "sets": sets_out}
+
+
+def publish_pages_library(docs_root: Path | str | None = None) -> Path:
+    """Write ``docs/library.json`` for the GitHub Pages set gallery."""
+    root = Path(docs_root) if docs_root is not None else Path("docs")
+    root.mkdir(parents=True, exist_ok=True)
+    payload = build_pages_library_manifest(root)
+    target = root / "library.json"
+    target.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return target
 
 
 _SAFE_SET_ID = re.compile(r"^[a-z0-9][a-z0-9._/-]*$", re.I)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -432,6 +433,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Ingest docs/samples vibrant packs into the library for UI browsing",
     )
+    parser.add_argument(
+        "--library-publish-pages",
+        metavar="DOCS",
+        nargs="?",
+        const="docs",
+        default=None,
+        help="Write docs/library.json for the GitHub Pages set gallery (default: docs)",
+    )
     return parser
 
 
@@ -445,10 +454,16 @@ def main(argv: list[str] | None = None) -> int:
         or args.library_compose
         or args.library_render_colourway
         or args.library_seed_samples
+        or args.library_publish_pages is not None
     ):
-        from .library import AssetLibrary, seed_sample_sets
+        from .library import AssetLibrary, publish_pages_library, seed_sample_sets
 
         lib = AssetLibrary(args.library_root)
+        if args.library_publish_pages is not None:
+            path = publish_pages_library(args.library_publish_pages)
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            print(f"Wrote {path} ({len(payload.get('sets') or [])} sets)")
+            return 0
         if args.library_seed_samples:
             created = seed_sample_sets(lib)
             print(f"Seeded {len(created)} set(s) into {lib.root}")

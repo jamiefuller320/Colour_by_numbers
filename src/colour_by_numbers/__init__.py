@@ -10,6 +10,7 @@ from .library import (
     PairRecord,
     SetRecord,
     ingest_generated_set,
+    publish_pages_library,
     seed_sample_sets,
 )
 from .pipeline import ColourByNumbersResult, create_colour_by_numbers

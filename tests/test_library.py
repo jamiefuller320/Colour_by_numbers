@@ -177,3 +177,31 @@ def test_seed_sample_sets_from_docs(tmp_path) -> None:
     assert Path(first["thumbnail"]).exists()
     gallery = lib.list_pair_previews(first["set_id"])
     assert gallery and "plate" in gallery[0]["assets"]
+
+
+def test_publish_pages_library_manifest(tmp_path) -> None:
+    import json
+    import shutil
+    from pathlib import Path
+
+    from colour_by_numbers.library import publish_pages_library
+
+    src = Path("docs/samples/dogs/golden-retriever-vibrant")
+    if not (src / "plate.png").exists():
+        return
+    docs = tmp_path / "docs"
+    dest = docs / "samples" / "dogs" / "golden-retriever-vibrant"
+    dest.parent.mkdir(parents=True)
+    shutil.copytree(src, dest)
+    path = publish_pages_library(docs)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["version"] == 1
+    assert any(
+        s["set_id"] == "sample-golden-retriever-vibrant" for s in payload["sets"]
+    )
+    row = next(
+        s for s in payload["sets"] if s["set_id"] == "sample-golden-retriever-vibrant"
+    )
+    assert row["thumbnail"]
+    assert row["thumbnail_colours"]
+    assert row["pairs"][0]["assets"]["plate"].endswith("plate.png")
