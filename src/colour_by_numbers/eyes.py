@@ -255,43 +255,13 @@ def emphasize_protected_pupils(
     target_rgb: tuple[int, int, int] = (22, 18, 14),
     max_lightness: float = 55.0,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Snap protected pupil cores to a near-black swatch so eyes stay readable.
+    """No-op: forced pupil recolouring distorted plates and misplaced “eyes”.
 
-    Quantization often maps small black pupils onto mid-brown fur. After the
-    protection mask is known, reassign darker protected pixels to a dedicated
-    dark palette entry (added if needed). Bright catchlights are left alone.
+    Kept as a stable API stub so call sites can stay unchanged. Subject
+    integrity is handled by dual preserve/background simplify instead.
     """
-    if protected is None or not protected.any():
-        return labels.astype(np.int32, copy=True), palette.astype(np.uint8, copy=True)
-
-    current = labels.astype(np.int32, copy=True)
-    active = palette.astype(np.uint8, copy=True)
-    lab = rgb_to_lab(active)
-
-    # Prefer an existing near-black swatch; otherwise append one.
-    dark_idx = None
-    for idx, lightness in enumerate(lab[:, 0]):
-        if float(lightness) <= 40.0 and float(np.mean(active[idx])) <= 55:
-            dark_idx = int(idx)
-            break
-    if dark_idx is None:
-        active = np.vstack([active, np.array([target_rgb], dtype=np.uint8)])
-        dark_idx = int(active.shape[0] - 1)
-        lab = rgb_to_lab(active)
-
-    pixel_l = lab[np.clip(current, 0, len(lab) - 1), 0]
-    core = protected & (pixel_l <= max_lightness)
-    # Avoid painting huge fur shadows that were mis-tagged as eyes.
-    structure = np.ones((3, 3), dtype=bool)
-    labeled, n = ndimage.label(core, structure=structure)
-    max_area = max(900, int(current.size * 0.01))
-    for comp_id in range(1, n + 1):
-        component = labeled == comp_id
-        if int(component.sum()) > max_area:
-            continue
-        current[component] = dark_idx
-
-    return current, active
+    del protected, target_rgb, max_lightness
+    return labels.astype(np.int32, copy=True), palette.astype(np.uint8, copy=True)
 
 
 def component_protected(

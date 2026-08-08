@@ -79,6 +79,19 @@ COMPLEXITY_PRESETS: dict[str, dict[str, float | int]] = {
         "line_width": 1,
         "simplify": 1,
     },
+    # Subject integrity band: keep mosaic wedges; pair with a heavier bg preset.
+    "preserve": {
+        "blur_radius": 0.0,
+        "structure_size": 900,
+        "min_area_fraction": 0.0,
+        "max_regions": 2500,
+        "smooth_radius": 0,
+        "morph_radius": 0,
+        "boundary_sigma": 0.0,
+        "line_width": 1,
+        "simplify": 1,
+        "ignore_min_region_mm": 1,
+    },
     "light": {
         "blur_radius": 1.0,
         "structure_size": 520,
@@ -131,7 +144,8 @@ def _preset_simplify_params(
     fraction = float(preset["min_area_fraction"])
     min_area = 1 if fraction <= 0 else max(20, int(width * height * fraction))
     min_thickness: float | None = None
-    if min_region_mm is not None and min_region_mm > 0:
+    respect_mm = not bool(int(preset.get("ignore_min_region_mm", 0)))
+    if respect_mm and min_region_mm is not None and min_region_mm > 0:
         region = min_region_size_for_a4_mm(width, height, min_mm=min_region_mm)
         min_area = max(min_area, region.min_area_px)
         min_thickness = float(max(2, region.min_side_px))
@@ -145,6 +159,8 @@ def _preset_simplify_params(
     }
     if min_thickness is not None:
         params["min_thickness"] = min_thickness
+    elif fraction <= 0:
+        params["min_thickness"] = 1.5
     return params
 
 
@@ -296,6 +312,7 @@ def create_colour_by_numbers(
     palette_mode: str = "standard",
     palette_category: str | None = None,
     min_adjacent_delta_e: float = DEFAULT_MIN_ADJACENT_DELTA_E,
+    max_plate_colours: int | None = None,
     colour_refine: bool = True,
     min_subject_bg_contrast: float | None = None,
     silhouette_outline: bool = False,
@@ -516,6 +533,7 @@ def create_colour_by_numbers(
             background_params=background_params,
             firm_border=firm_border,
             min_adjacent_delta_e=min_adjacent_delta_e,
+            max_colours=max_plate_colours,
         )
         labels = upsample_labels(labels, prepared.size)
         up_h, up_w = labels.shape

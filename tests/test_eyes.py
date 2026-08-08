@@ -64,18 +64,19 @@ def test_full_body_face_mask_includes_side_head() -> None:
     assert face[45, 40]
 
 
-def test_emphasize_protected_pupils_darkens_muddy_eyes() -> None:
+def test_emphasize_protected_pupils_is_disabled() -> None:
+    """Forced pupil recolouring is a no-op (it misplaced eyes / crushed plates)."""
     from colour_by_numbers.eyes import emphasize_protected_pupils
 
     labels = np.zeros((40, 40), dtype=np.int32)
     labels[:, :] = 1
-    labels[12:20, 12:20] = 0  # muddy brown "pupil"
+    labels[12:20, 12:20] = 0
     palette = np.array([[120, 80, 40], [210, 170, 120]], dtype=np.uint8)
     protected = np.zeros_like(labels, dtype=bool)
     protected[12:20, 12:20] = True
     new_labels, new_palette = emphasize_protected_pupils(labels, palette, protected)
-    colour = new_palette[new_labels[15, 15]]
-    assert int(colour.mean()) < 60
+    assert np.array_equal(new_labels, labels)
+    assert np.array_equal(new_palette, palette)
 
 
 def test_absorb_small_respects_protected_pupils() -> None:

@@ -731,6 +731,70 @@ def merge_low_contrast_neighbours(
     return work, pal
 
 
+def merge_similar_colours_budgeted(
+    labels: np.ndarray,
+    palette: np.ndarray,
+    *,
+    max_colours: int,
+    subject_mask: np.ndarray | None = None,
+    start_delta_e: float = 4.0,
+    max_delta_e: float = 14.0,
+    delta_step: float = 2.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Reduce palette size only when over ``max_colours``, favouring background.
+
+    Near-duplicate colours merge first. When ``subject_mask`` is provided,
+    pairs whose smaller paint sits mostly outside the subject are preferred so
+    subject mosaic integrity wins over background clutter.
+    """
+    from .palette import colour_distance_matrix
+
+    if max_colours <= 0 or palette.shape[0] <= max_colours:
+        return labels.astype(np.int32, copy=True), palette.astype(np.uint8, copy=True)
+
+    work = labels.astype(np.int32, copy=True)
+    pal = palette.astype(np.uint8, copy=True)
+    mask = (
+        subject_mask.astype(bool)
+        if subject_mask is not None and subject_mask.shape == work.shape
+        else None
+    )
+    delta = float(start_delta_e)
+
+    while pal.shape[0] > max_colours and delta <= max_delta_e + 1e-6:
+        dist = colour_distance_matrix(pal)
+        best: tuple[float, int, int, int, int, float] | None = None
+        for i in range(pal.shape[0]):
+            for j in range(i + 1, pal.shape[0]):
+                d = float(dist[i, j])
+                if d >= delta:
+                    continue
+                count_i = int((work == i).sum())
+                count_j = int((work == j).sum())
+                if count_i == 0 or count_j == 0:
+                    continue
+                small = (work == i) if count_i <= count_j else (work == j)
+                if mask is not None:
+                    bg_frac = float((small & ~mask).sum()) / max(1, int(small.sum()))
+                    # Hold subject colours until the ΔE band is looser.
+                    if bg_frac < 0.55 and delta < 10.0:
+                        continue
+                else:
+                    bg_frac = 0.5
+                score = d - 6.0 * bg_frac
+                if best is None or score < best[0]:
+                    best = (score, i, j, count_i, count_j, bg_frac)
+        if best is None:
+            delta += delta_step
+            continue
+        _score, i, j, count_i, count_j, _bg = best
+        keep, drop = (i, j) if count_i >= count_j else (j, i)
+        work[work == drop] = keep
+        work, pal = compact_palette(work, pal)
+
+    return work, pal
+
+
 def simplify_labels(
     labels: np.ndarray,
     palette: np.ndarray,
@@ -830,12 +894,16 @@ def simplify_dual(
     background_params: dict,
     firm_border: bool = True,
     min_adjacent_delta_e: float = 18.0,
+    max_colours: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, SimplificationStats, SimplificationStats]:
     """Simplify subject pixels with one preset and background with another.
 
     ``subject_mask`` is a boolean HxW array aligned with ``labels``.
     When ``firm_border`` is True, the hard mask silhouette is preserved with
     no seam softening across the subject edge.
+
+    When ``max_colours`` is set, near-duplicate colours are merged only if the
+    palette is over budget, preferring background paints.
     """
     if subject_mask.shape != labels.shape:
         raise ValueError("subject_mask must match labels shape")
@@ -867,7 +935,14 @@ def simplify_dual(
             softened = smooth_boundaries(combined, sigma=0.8)
             combined = np.where(seam, softened, combined).astype(np.int32)
     combined, new_palette = compact_palette(combined, palette)
-    if min_adjacent_delta_e and min_adjacent_delta_e > 0:
+    if max_colours is not None and max_colours > 0:
+        combined, new_palette = merge_similar_colours_budgeted(
+            combined,
+            new_palette,
+            max_colours=int(max_colours),
+            subject_mask=subject_mask,
+        )
+    elif min_adjacent_delta_e and min_adjacent_delta_e > 0:
         combined, new_palette = merge_low_contrast_neighbours(
             combined, new_palette, min_delta_e=min_adjacent_delta_e
         )

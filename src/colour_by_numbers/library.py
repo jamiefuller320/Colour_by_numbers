@@ -350,6 +350,22 @@ class AssetLibrary:
         self._write_palette_json(pair_path / "palette.json", palette)
 
         plate = preview_from_labels(labels, palette)
+        # Vibrant (and similar) house samples keep the illustration as the
+        # colour plate so subject integrity matches the three reference plates.
+        if style:
+            try:
+                from .style_presets import resolve_style_preset
+
+                if (
+                    resolve_style_preset(style).keep_illustration_plate
+                    and illustration is not None
+                ):
+                    plate = illustration.convert("RGB")
+                    target = (int(labels.shape[1]), int(labels.shape[0]))
+                    if plate.size != target:
+                        plate = plate.resize(target, Image.Resampling.NEAREST)
+            except ValueError:
+                pass
         plate.save(pair_path / "plate.png")
         result.page.outline.save(pair_path / "outline.png")
         result.page.legend.save(pair_path / "legend.png")

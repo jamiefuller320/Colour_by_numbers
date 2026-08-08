@@ -133,7 +133,9 @@ def generate_colouring_page(
     illustration_size: int = DEFAULT_ILLUSTRATION_SIZE,
     max_references: int = 6,
     complexity: str | None = None,
-    subject_mode: str = "off",
+    subject_mode: str | None = None,
+    subject_complexity: str | None = None,
+    background_complexity: str | None = None,
     min_a4_dpi: float | None = None,
     min_region_mm: float | None = None,
     min_adjacent_delta_e: float | None = None,
@@ -156,13 +158,14 @@ def generate_colouring_page(
 ) -> GeneratedPage:
     """Discover type → gather references → illustrate → colour-by-numbers.
 
-    Default ``subject_mode='off'`` because the illustration is already isolated
-    on a flat background with ink outlines; dual rembg is usually unnecessary.
+    ``subject_mode`` defaults from the style preset (``off`` for kids styles;
+    vibrant uses ``dual`` to isolate the subject, preserve subject mosaic, and
+    simplify the background more aggressively).
 
     ``style`` selects a difficulty band (``simple`` / ``standard`` / ``vibrant``).
     ``standard`` is the Phase B kids gate; ``vibrant`` is the adult end-goal band
     (denser fills, up to 32 colours, cooler shadows, exact plate-colour
-    preserve, and a high-region ``vibrant`` complexity pass).
+    preserve, dual subject/background simplify).
 
     Phase B: default backend is ``fal`` (Flux via fal.ai; needs ``FAL_KEY``).
     When ``check_quality`` is True, attach a ``PlateQualityReport``. When
@@ -320,6 +323,9 @@ def generate_colouring_page(
         "colour_refine",
         "min_adjacent_delta_e",
         "complexity",
+        "subject_complexity",
+        "background_complexity",
+        "max_plate_colours",
     ):
         pipeline_kwargs.pop(key, None)
     pipeline_kwargs.setdefault("min_region_mm", min_region_mm)
@@ -327,6 +333,11 @@ def generate_colouring_page(
     # subject silhouette inked so colourists can still see the form.
     pipeline_kwargs.setdefault("silhouette_outline", True)
     resolved_complexity = complexity or preset.complexity
+    resolved_subject_mode = subject_mode or preset.subject_mode
+    resolved_subject_complexity = subject_complexity or preset.subject_complexity
+    resolved_background_complexity = (
+        background_complexity or preset.background_complexity
+    )
     resolved_delta_e = (
         float(min_adjacent_delta_e)
         if min_adjacent_delta_e is not None
@@ -344,19 +355,32 @@ def generate_colouring_page(
         illustration.image,
         n_colours=n_colours,
         complexity=resolved_complexity,
-        subject_mode=subject_mode,
+        subject_mode=resolved_subject_mode,
+        subject_complexity=resolved_subject_complexity,
+        background_complexity=resolved_background_complexity,
         palette_mode=pipeline_palette,
         palette_category=None if preset.cool_shadows else chosen.category,
         firm_border=True,
         colour_refine=False,
         min_a4_dpi=min_a4_dpi,
         min_adjacent_delta_e=resolved_delta_e,
+        max_plate_colours=preset.max_plate_colours,
         source_hit=reference_hit,
         **pipeline_kwargs,
     )
+    quantized = result.quantized
+    if preset.keep_illustration_plate:
+        # Match the three happy vibrant samples: colour plate = illustration.
+        from .quantize import QuantizedImage
+
+        quantized = QuantizedImage(
+            labels=result.page.labels,
+            palette=result.page.palette,
+            preview=illustration.image.convert("RGB"),
+        )
     result = ColourByNumbersResult(
         source=result.source,
-        quantized=result.quantized,
+        quantized=quantized,
         page=result.page,
         printable=result.printable,
         source_hit=result.source_hit,
