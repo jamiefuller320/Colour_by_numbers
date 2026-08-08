@@ -180,9 +180,9 @@ def test_seed_lessons_skip_conflicts_for_vibrant_full_body(tmp_path: Path) -> No
         encoding="utf-8",
     )
     locked = (
-        "COMPOSITION LOCK (must obey): FULL BODY side silhouette of a "
-        "golden retriever; aspect: side profile. golden retriever full body "
-        "side view, adult vibrant paint-by-numbers kit style"
+        "Wide shot of a golden retriever: FULL BODY side silhouette. "
+        "Aspect: side profile. Camera pulled back so the entire golden "
+        "retriever is visible. adult vibrant paint-by-numbers kit style"
     )
     prompt, applied = seed_prompt_with_plate_lessons(
         locked,
@@ -194,4 +194,4 @@ def test_seed_lessons_skip_conflicts_for_vibrant_full_body(tmp_path: Path) -> No
     assert "prefer 12" not in prompt.lower()
     assert "both eyes matching" not in prompt.lower()
     assert "nostril" not in prompt.lower()
-    assert len(applied) <= 2
+    assert len(applied) <= 1

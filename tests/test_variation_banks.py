@@ -65,7 +65,10 @@ def test_plan_balanced_variety_embeds_tags_in_prompt() -> None:
     )
     assert plan.n_plates == 6
     assert all(slot.tags for slot in plan.slots)
-    assert any("variation tags:" in slot.prompt for slot in plan.slots)
+    assert any(
+        "variation tags:" in slot.prompt or "; tags:" in slot.prompt
+        for slot in plan.slots
+    )
     covered = set().union(*(set(slot.tags) for slot in plan.slots))
     assert len(covered) >= 6
 

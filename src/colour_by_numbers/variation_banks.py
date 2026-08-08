@@ -142,8 +142,8 @@ ANIMAL_VARIATIONS: tuple[VariationSlot, ...] = (
     _slot(
         "lying relaxed",
         "soft blanket",
-        "FULL BODY lying down facing viewer, head torso and legs visible, calm pose",
-        "front",
+        "FULL BODY lying stretched along the frame, whole torso and all four legs visible, calm pose",
+        "side",
         "full_body",
         "single",
         "lying",

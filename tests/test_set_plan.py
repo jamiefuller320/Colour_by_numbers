@@ -37,13 +37,23 @@ def test_slot_prompts_include_aspect_and_identity() -> None:
         discover_types=False,
     )
     for slot in plan.slots:
-        assert "aspect:" in slot.prompt
-        assert "scene:" in slot.prompt
+        assert "aspect:" in slot.prompt.lower() or "Aspect:" in slot.prompt
+        assert "scene:" in slot.prompt.lower() or "Scene:" in slot.prompt
         assert "pug" in slot.prompt.lower()
         assert "subject kind: dog" in slot.prompt
         # Pose / composition must lead so fal does not ignore late tags.
-        assert slot.prompt.startswith("COMPOSITION")
-        assert slot.prompt.index("aspect:") < slot.prompt.index("subject kind:")
+        assert slot.prompt.startswith("COMPOSITION") or slot.prompt.startswith(
+            "Wide shot"
+        )
+        aspect_at = min(
+            i
+            for i in (
+                slot.prompt.lower().find("aspect:"),
+                slot.prompt.find("Aspect:"),
+            )
+            if i >= 0
+        )
+        assert aspect_at < slot.prompt.index("subject kind:")
 
 
 def test_compose_slot_prompt_keeps_disambiguation() -> None:
@@ -87,15 +97,13 @@ def test_full_body_slots_drop_portrait_bias() -> None:
         style_preset="vibrant",
         tags=("side", "full_body", "single", "standing"),
     )
-    assert full.startswith("COMPOSITION LOCK")
+    assert full.startswith("Wide shot")
     assert "portrait, centred subject" not in full
-    assert "full body side view" in full.lower() or "entire body" in full.lower()
     assert "NOT a headshot" in full
-    assert "REMEMBER COMPOSITION" in full
-    assert full.index("aspect:") < full.index("subject kind:")
-    assert full.rfind("REMEMBER COMPOSITION") > full.index("subject kind:")
+    assert "REMEMBER: wide shot" in full
+    assert "Aspect: side profile" in full
     # Keep set full-body prompts short enough that fal keeps the pose lock.
-    assert len(full.split()) < 320
+    assert len(full.split()) < 250
 
     portrait = compose_slot_prompt(
         subject,
@@ -106,7 +114,8 @@ def test_full_body_slots_drop_portrait_bias() -> None:
         tags=("front", "portrait", "close", "single"),
     )
     assert "portrait, centred subject" in portrait
-    assert "COMPOSITION LOCK" not in portrait
+    assert portrait.startswith("COMPOSITION:")
+    assert "Wide shot" not in portrait
 
 
 def test_default_bank_used_for_unknown_category() -> None:

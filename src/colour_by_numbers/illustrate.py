@@ -810,11 +810,22 @@ def generate_illustration(
         )
 
     side = max(512, min(int(output_size), 1280))
+    # Square canvases bias fal/Flux toward centred headshots. Full-body set
+    # slots ask for a wide shot — use landscape so the pose can fit.
+    prompt_l = (prompt or "").lower()
+    use_landscape = (
+        "wide shot" in prompt_l
+        or "composition lock" in prompt_l
+        or "full body" in prompt_l
+        or "entire body" in prompt_l
+    )
+    width = int(round(side * 4 / 3)) if use_landscape else side
+    height = side
     if backend == "fal":
         result = generate_illustration_fal(
             prompt or "colouring book illustration of a clear subject",
-            width=side,
-            height=side,
+            width=width,
+            height=height,
             model=fal_model,
             seed=seed,
             api_key=fal_api_key,
@@ -822,8 +833,8 @@ def generate_illustration(
     elif backend == "pollinations":
         result = generate_illustration_pollinations(
             prompt or "colouring book illustration of a clear subject",
-            width=side,
-            height=side,
+            width=width,
+            height=height,
             model=pollinations_model,
             seed=seed,
             api_key=pollinations_api_key,

@@ -8,8 +8,10 @@ from .discover import (
     SubjectType,
     discover_subject_types,
     pick_subject_type,
+    subject_kind_frame,
 )
 from .illustrate import illustration_prompt
+from .style_presets import resolve_style_preset
 from .variation_banks import (
     VariationSlot,
     bank_as_tuples,
@@ -175,15 +177,16 @@ def compose_slot_prompt(
     """
     tag_list = tuple(tags or ())
     framing = framing_from_slot(aspect=aspect, composition=composition, tags=tag_list)
-    base = illustration_prompt(
-        subject_type.label,
-        category=subject_type.category,
-        style_preset=style_preset,
-        framing=framing,
-    )
     label = subject_type.label
-    tag_bit = f"; variation tags: {', '.join(tag_list)}" if tag_list else ""
+    tag_bit = f"; tags: {', '.join(tag_list)}" if tag_list else ""
     if framing == "portrait":
+        # Same house look as curated vibrant singles; pose still leads.
+        base = illustration_prompt(
+            label,
+            category=subject_type.category,
+            style_preset=style_preset,
+            framing="portrait",
+        )
         pose_lock = (
             f"COMPOSITION: {composition}; camera: head-and-shoulders; "
             f"aspect: {aspect}; scene: {scene}{tag_bit}"
@@ -194,23 +197,28 @@ def compose_slot_prompt(
             "subject fills most of the frame"
         )
 
-    # Bookend the pose lock: Flux often drops mid/late tokens on long briefs.
-    pose_lock = (
-        f"COMPOSITION LOCK (must obey): a {label}, {composition}; "
-        f"aspect: {aspect}; scene: {scene}; "
-        f"wide shot, camera pulled back, entire {label} from head to "
-        f"paws/tail and all legs visible in frame, "
-        f"NOT a close-up, NOT a headshot, NOT a face crop{tag_bit}"
+    # Full-body / side / group: keep the prompt SHORT. Long vibrant face-mosaic
+    # briefs drown pose cues on fal Flux schnell (no negative prompt support).
+    preset = resolve_style_preset(style_preset) if style_preset else None
+    style_bit = (
+        preset.prompt_style
+        if preset is not None
+        else "flat colouring-book illustration, bold black outlines, no photorealism"
     )
-    pose_end = (
-        f"REMEMBER COMPOSITION: a {label}, {composition}, wide shot, "
-        f"entire body head-to-paws visible, not a headshot"
-    )
+    kind = subject_kind_frame(subject_type.category)
+    kind_bit = f"{kind}. " if kind else ""
     return (
-        f"{pose_lock}. {base}, "
-        f"same subject identity, distinct pose from other pages in the set, "
-        f"wide shot with the entire body visible and a small margin "
-        f"around the subject. {pose_end}"
+        f"Wide shot of a {label}: {composition}. "
+        f"Aspect: {aspect}. Scene: {scene}. "
+        f"Camera pulled back so the entire {label} is visible from head to "
+        f"paws/tail with all legs shown and space around the subject. "
+        f"NOT a close-up, NOT a headshot, NOT a face crop{tag_bit}. "
+        f"{kind_bit}"
+        f"Recognisable face with clear eyes and nose, dense interlocking "
+        f"colour mosaic across the whole body, cool teal shadow wedges with "
+        f"warm mid-tones. {style_bit}. "
+        f"Same subject identity, distinct pose from other pages in the set. "
+        f"REMEMBER: wide shot, full body of a {label}, {composition}."
     )
 
 

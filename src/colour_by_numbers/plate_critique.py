@@ -511,13 +511,21 @@ def seed_prompt_with_plate_lessons(
     """
     prompt_l = prompt.lower()
     style = (style_preset or "").lower().strip()
-    locked = prompt_l.startswith("composition")
+    locked = (
+        prompt_l.startswith("composition")
+        or prompt_l.startswith("wide shot")
+    )
     vibrant = style == "vibrant" or "vibrant paint-by-numbers" in prompt_l
     full_body = (
-        "composition lock" in prompt_l
-        or "full body" in prompt_l
-        or "entire body" in prompt_l
-        or "head to paws" in prompt_l
+        locked
+        and (
+            "wide shot" in prompt_l
+            or "composition lock" in prompt_l
+            or "full body" in prompt_l
+            or "entire body" in prompt_l
+            or "head to paws" in prompt_l
+            or "head-to-paws" in prompt_l
+        )
     )
     applied: list[str] = []
     for hint in load_plate_lessons(category=category, path=path):
@@ -543,6 +551,8 @@ def seed_prompt_with_plate_lessons(
         ):
             continue
         # Set prompts already carry identity + style; keep lesson appends tiny.
+        if full_body and len(applied) >= 1:
+            break
         if locked and len(applied) >= 2:
             break
         prompt = f"{prompt}, {hint}"
