@@ -206,6 +206,7 @@ def generate_colouring_page(
 
     feedback_result: FeedbackLoopResult | None = None
     effective_prompt = prompt_override
+    paired_mask = None
     use_feedback = (
         subject_feedback
         and backend != "local_stylize"
@@ -274,23 +275,78 @@ def generate_colouring_page(
             notes=notes,
         )
     else:
-        illustration = generate_illustration(
-            reference_image,
-            subject_type_label=chosen.label,
-            category=chosen.category,
-            backend=backend,
-            n_colours=illustration_colours,
-            output_size=illustration_size,
-            openai_api_key=openai_api_key,
-            fal_api_key=fal_api_key,
-            pollinations_api_key=pollinations_api_key,
-            prompt_override=effective_prompt,
-            fal_model=fal_model,
-            pollinations_model=pollinations_model,
-            seed=seed,
-            min_region_mm=min_region_mm,
-            style=preset.name,
+        # Vibrant house style: generate subject+background AND a flat-ground
+        # subject-only companion, then derive the mask from the companion.
+        use_paired = (
+            bool(getattr(preset, "paired_illustration_layers", False))
+            and backend in {"fal", "pollinations", "openai"}
+            and reference_image is None
         )
+        if use_paired:
+            from .illustrate import generate_illustration_pair
+            from .subject import mask_from_subject_layer
+
+            try:
+                pair = generate_illustration_pair(
+                    subject_type_label=chosen.label,
+                    category=chosen.category,
+                    backend=backend,
+                    n_colours=illustration_colours,
+                    output_size=illustration_size,
+                    fal_api_key=fal_api_key,
+                    pollinations_api_key=pollinations_api_key,
+                    openai_api_key=openai_api_key,
+                    scene_prompt=effective_prompt,
+                    fal_model=fal_model,
+                    pollinations_model=pollinations_model,
+                    seed=seed,
+                    min_region_mm=min_region_mm,
+                    style=preset.name,
+                )
+                illustration = IllustrationResult(
+                    image=pair.scene.image,
+                    backend=pair.scene.backend,
+                    subject_type_label=chosen.label,
+                    reference_url=pair.scene.reference_url,
+                    reference_title=pair.scene.reference_title,
+                    n_colours=pair.scene.n_colours,
+                    prompt=pair.scene_prompt,
+                    notes=(
+                        f"{pair.scene.notes} Paired subject-only layer generated "
+                        "for masking (flat studio ground)."
+                    ),
+                )
+                paired_mask = mask_from_subject_layer(
+                    pair.scene.image, pair.subject_only.image
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Paired illustration layers failed (%s); "
+                    "falling back to single plate",
+                    exc,
+                )
+                use_paired = False
+
+        if not use_paired:
+            illustration = generate_illustration(
+                reference_image,
+                subject_type_label=chosen.label,
+                category=chosen.category,
+                backend=backend,
+                n_colours=illustration_colours,
+                output_size=illustration_size,
+                openai_api_key=openai_api_key,
+                fal_api_key=fal_api_key,
+                pollinations_api_key=pollinations_api_key,
+                prompt_override=effective_prompt,
+                fal_model=fal_model,
+                pollinations_model=pollinations_model,
+                seed=seed,
+                min_region_mm=min_region_mm,
+                style=preset.name,
+            )
+            paired_mask = None
+
     if reference_hit is not None:
         illustration = IllustrationResult(
             image=illustration.image,
@@ -354,6 +410,8 @@ def generate_colouring_page(
         )
     else:
         pipeline_palette = "standard"
+    if paired_mask is not None:
+        pipeline_kwargs["subject_mask"] = paired_mask
     result = create_colour_by_numbers(
         illustration.image,
         n_colours=n_colours,

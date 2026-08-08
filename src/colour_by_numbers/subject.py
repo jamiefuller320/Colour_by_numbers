@@ -393,6 +393,127 @@ def subject_bbox(mask: SubjectMask) -> tuple[int, int, int, int] | None:
     return int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
 
 
+def _centroid(binary: np.ndarray) -> tuple[float, float]:
+    ys, xs = np.nonzero(binary)
+    if len(ys) == 0:
+        return 0.0, 0.0
+    return float(ys.mean()), float(xs.mean())
+
+
+def _shift_binary(binary: np.ndarray, dy: int, dx: int) -> np.ndarray:
+    h, w = binary.shape
+    out = np.zeros_like(binary)
+    y0_src = max(0, -dy)
+    y1_src = min(h, h - dy)
+    x0_src = max(0, -dx)
+    x1_src = min(w, w - dx)
+    y0_dst = max(0, dy)
+    x0_dst = max(0, dx)
+    if y1_src <= y0_src or x1_src <= x0_src:
+        return out
+    out[y0_dst : y0_dst + (y1_src - y0_src), x0_dst : x0_dst + (x1_src - x0_src)] = (
+        binary[y0_src:y1_src, x0_src:x1_src]
+    )
+    return out
+
+
+def mask_from_subject_layer(
+    scene: Image.Image,
+    subject_only: Image.Image,
+    *,
+    model_name: str = "u2net",
+    firm: bool = True,
+    absdiff_boost: bool = True,
+) -> SubjectMask:
+    """Build a subject mask from a flat-ground companion illustration.
+
+    Primary signal: rembg on ``subject_only`` (easy on a studio ground).
+    The mask is resized to the scene and centroid-aligned to a quick rembg
+    pass on the scene so small fal pose drift does not leave the cutout
+    floating. Optional abs-diff against the scene reinforces edges when the
+    two plates stay roughly registered.
+    """
+    from scipy import ndimage
+
+    from .quantize import resize_for_processing
+
+    scene_rgb = scene.convert("RGB")
+    only_rgb = subject_only.convert("RGB")
+    if only_rgb.size != scene_rgb.size:
+        only_rgb = only_rgb.resize(scene_rgb.size, Image.Resampling.BILINEAR)
+
+    only_seg = resize_for_processing(only_rgb, max_size=1024)
+    only_mask = estimate_subject_mask(only_seg, model_name=model_name)
+    only_mask = align_mask(only_mask, scene_rgb.size, firm=True)
+    only_bin = silhouette_binary_from_mask(only_mask, threshold=64)
+
+    scene_seg = resize_for_processing(scene_rgb, max_size=1024)
+    try:
+        scene_mask = estimate_subject_mask(scene_seg, model_name=model_name)
+        scene_mask = align_mask(scene_mask, scene_rgb.size, firm=True)
+        scene_bin = silhouette_binary_from_mask(scene_mask, threshold=64)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Scene rembg failed during paired mask (%s); using layer only", exc)
+        scene_bin = only_bin
+
+    # Centroid-align the clean layer mask onto the scene silhouette.
+    cy_o, cx_o = _centroid(only_bin)
+    cy_s, cx_s = _centroid(scene_bin)
+    dy = int(round(cy_s - cy_o))
+    dx = int(round(cx_s - cx_o))
+    aligned = _shift_binary(only_bin, dy, dx) if (dy or dx) else only_bin
+
+    if absdiff_boost:
+        a = np.asarray(scene_rgb, dtype=np.int16)
+        b = np.asarray(only_rgb, dtype=np.int16)
+        # After alignment of the mask we still absdiff the unshifted pixels —
+        # use difference mainly to fill holes inside the aligned silhouette.
+        delta = np.mean(np.abs(a - b), axis=-1)
+        # Pixels that differ and sit near the aligned subject reinforce it.
+        near = ndimage.binary_dilation(aligned, iterations=6)
+        boost = near & (delta >= 18)
+        aligned = aligned | boost
+
+    aligned = ndimage.binary_fill_holes(
+        ndimage.binary_closing(aligned, iterations=5)
+    )
+    # Keep the largest component.
+    labelled, count = ndimage.label(aligned)
+    if count > 1:
+        sizes = np.bincount(labelled.ravel())
+        sizes[0] = 0
+        aligned = labelled == int(sizes.argmax())
+
+    # Prefer layer mask when it still overlaps the scene rembg well; otherwise
+    # fall back to the scene rembg (pose may have drifted too far).
+    inter = float((aligned & scene_bin).sum())
+    union = float((aligned | scene_bin).sum()) or 1.0
+    iou = inter / union
+    if iou < 0.25 and scene_bin.any():
+        logger.warning(
+            "Paired-layer mask IoU≈%.2f with scene rembg; falling back to scene mask",
+            iou,
+        )
+        aligned = scene_bin
+
+    if firm:
+        alpha = np.where(aligned, 255, 0).astype(np.uint8)
+    else:
+        alpha = (aligned.astype(np.uint8) * 255)
+    logger.info(
+        "Paired-layer subject mask: fg %.1f%% (IoU≈%.2f vs scene rembg, shift %+d,%+d)",
+        100.0 * aligned.mean(),
+        iou,
+        dy,
+        dx,
+    )
+    return SubjectMask(
+        alpha=alpha,
+        model=f"paired:{model_name}",
+        foreground_fraction=float(aligned.mean()),
+    )
+
+
 def prepare_subject_image(
     image: Image.Image,
     *,
@@ -405,6 +526,7 @@ def prepare_subject_image(
     firm_border: bool = True,
     segment_max_size: int = 1024,
     colour_refine: bool = True,
+    subject_mask: SubjectMask | None = None,
 ) -> tuple[Image.Image, SubjectMask | None]:
     """Prepare an image for colour-by-numbers with optional subject isolation.
 
@@ -412,6 +534,9 @@ def prepare_subject_image(
     back and the crop is taken from the **full-resolution** source so native
     print DPI is preserved. When ``colour_refine`` is True, silhouette pixels
     near the edge are snapped using subject vs background colour contrast.
+
+    When ``subject_mask`` is provided (e.g. from a paired subject-only fal
+    layer), rembg on ``image`` is skipped and that mask is used instead.
 
     Modes:
       - ``off``: unchanged image
@@ -427,12 +552,17 @@ def prepare_subject_image(
     if mode in {"off", "none", "false", "0"}:
         return rgb, None
 
-    # rembg on a moderate canvas, then lift the mask to native resolution.
-    seg = resize_for_processing(rgb, max_size=segment_max_size)
-    mask = estimate_subject_mask(seg, model_name=model_name)
-    if firm_border:
-        mask = harden_mask(mask)
-    mask = align_mask(mask, rgb.size, firm=firm_border)
+    if subject_mask is not None:
+        mask = align_mask(subject_mask, rgb.size, firm=firm_border)
+        if firm_border:
+            mask = harden_mask(mask)
+    else:
+        # rembg on a moderate canvas, then lift the mask to native resolution.
+        seg = resize_for_processing(rgb, max_size=segment_max_size)
+        mask = estimate_subject_mask(seg, model_name=model_name)
+        if firm_border:
+            mask = harden_mask(mask)
+        mask = align_mask(mask, rgb.size, firm=firm_border)
     if colour_refine:
         from .contrast import refine_mask_by_colour
 

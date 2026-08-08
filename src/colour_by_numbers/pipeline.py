@@ -321,11 +321,13 @@ def create_colour_by_numbers(
     silhouette_outline: bool = False,
     seed: int = 42,
     source_hit: ImageHit | None = None,
+    subject_mask: SubjectMask | None = None,
 ) -> ColourByNumbersResult:
     """Quantize an image, simplify regions, and produce a numbered outline page.
 
     Default ``subject_mode='dual'``:
-      1. rembg subject mask (firm binary by default)
+      1. rembg subject mask (firm binary by default), or a precomputed
+         ``subject_mask`` from a paired subject-only illustration layer
       2. crop full-resolution source so the subject fills ``subject_fill``
       3. reject plates below ``min_a4_dpi`` when printed to A4
       4. shared standardised palette of at most ``n_colours`` (default 32)
@@ -359,6 +361,7 @@ def create_colour_by_numbers(
         subject_fill=subject_fill,
         firm_border=firm_border,
         colour_refine=colour_refine,
+        subject_mask=subject_mask,
     )
     firm_mask = harden_mask(subject_mask) if subject_mask is not None else None
 
