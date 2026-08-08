@@ -564,9 +564,10 @@ def prepare_subject_image(
             mask = harden_mask(mask)
         mask = align_mask(mask, rgb.size, firm=firm_border)
     if colour_refine:
-        from .contrast import refine_mask_by_colour
+        from .contrast import heal_mask_notches, refine_mask_by_colour
 
         mask = refine_mask_by_colour(rgb, mask)
+        mask = heal_mask_notches(mask)
     # Fill holes and reclaim truncated bodies (e.g. pale chest treated as bg).
     from .contrast import recover_subject_mask, recolour_reclaimed_subject_pixels
 
@@ -588,9 +589,10 @@ def prepare_subject_image(
         else:
             cropped, mask = rgb, mask
         if colour_refine:
-            from .contrast import refine_mask_by_colour
+            from .contrast import heal_mask_notches, refine_mask_by_colour
 
             mask = refine_mask_by_colour(cropped, mask)
+            mask = heal_mask_notches(mask)
         pre_recover = mask
         mask = recover_subject_mask(cropped, mask)
         if mask.foreground_fraction > pre_recover.foreground_fraction + 0.01:

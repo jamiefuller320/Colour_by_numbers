@@ -187,12 +187,24 @@ def compose_slot_prompt(
             style_preset=style_preset,
             framing="portrait",
         )
+        preset = resolve_style_preset(style_preset) if style_preset else None
+        scene_lock = (
+            f"scene mood: {scene} (cool abstract panels only)"
+            if (preset is not None and preset.name == "vibrant")
+            else f"scene: {scene}"
+        )
         pose_lock = (
             f"COMPOSITION: {composition}; camera: head-and-shoulders; "
-            f"aspect: {aspect}; scene: {scene}{tag_bit}"
+            f"aspect: {aspect}; {scene_lock}{tag_bit}"
+        )
+        clean_face = (
+            ", clean muzzle with no random spots on the nose leather, "
+            "cool abstract blue/teal background panels only"
+            if (preset is not None and preset.name == "vibrant")
+            else ""
         )
         return (
-            f"{pose_lock}. {base}, "
+            f"{pose_lock}. {base}{clean_face}, "
             "same subject identity, distinct pose from other pages in the set, "
             "subject fills most of the frame"
         )
@@ -208,18 +220,27 @@ def compose_slot_prompt(
     kind = subject_kind_frame(subject_type.category)
     kind_bit = f"{kind}. " if kind else ""
     bg_bit = (
-        "Cool abstract background (blue/teal/sage), not the subject's coat colours. "
+        "Background MUST be 2–4 large flat cool abstract colour panels "
+        "(blue/teal/sage only) — NO grass, dirt, blankets, furniture, cream "
+        "or tan fills, and never the subject's coat colours. "
         if (preset is not None and preset.name == "vibrant")
         else "High subject-background contrast. "
     )
+    # Vibrant treats scene tags as mood only; do not let literal props paint.
+    scene_bit = (
+        f"Scene mood: {scene} (abstract cool panels only, not a literal set). "
+        if (preset is not None and preset.name == "vibrant")
+        else f"Scene: {scene}. "
+    )
     return (
         f"Wide shot of a {label}: {composition}. "
-        f"Aspect: {aspect}. Scene: {scene}. "
+        f"Aspect: {aspect}. {scene_bit}"
         f"Camera pulled back so the entire {label} is visible from head to "
         f"paws/tail with all legs shown and space around the subject. "
         f"NOT a close-up, NOT a headshot, NOT a face crop{tag_bit}. "
         f"{kind_bit}"
-        f"Recognisable face with clear eyes and nose, dense interlocking "
+        f"Recognisable face with clear eyes and nose, clean muzzle with no "
+        f"random spots or blemishes on the nose leather, dense interlocking "
         f"colour mosaic across the whole body, cool teal shadow wedges with "
         f"warm mid-tones. {bg_bit}{style_bit}. "
         f"Same subject identity, distinct pose from other pages in the set. "

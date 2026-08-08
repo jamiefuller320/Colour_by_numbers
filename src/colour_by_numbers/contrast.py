@@ -58,6 +58,17 @@ def subject_background_contrast(
     return contrast_delta_e(mean_rgb(rgb[fg]), mean_rgb(rgb[bg]))
 
 
+def _warm_fur_pixels(rgb: np.ndarray) -> np.ndarray:
+    """True for warm / cream coat-like pixels that must not be carved to bg."""
+    r = rgb[:, :, 0].astype(np.int16)
+    g = rgb[:, :, 1].astype(np.int16)
+    b = rgb[:, :, 2].astype(np.int16)
+    warm = (r > g + 6) & (r > b + 8) & (r > 90)
+    # Pale cream highlights: high L, still warmer than cool sheet greys.
+    cream = (r >= 170) & (g >= 140) & (b >= 100) & (r >= b + 10) & (r >= g - 5)
+    return warm | cream
+
+
 def refine_mask_by_colour(
     image: Image.Image,
     mask: SubjectMask,
@@ -70,6 +81,10 @@ def refine_mask_by_colour(
     In a band around the firm edge, assign each pixel to subject if it is
     closer (Lab) to the subject mean than the background mean. Helps golden
     fur against green foliage where rembg mattes are fuzzy.
+
+    Warm / cream coat pixels are never carved out — pale fur against a light
+    sheet is often closer to the background mean and would otherwise notch
+    the silhouette (then cool separation paints those notches blue).
     """
     from scipy import ndimage
 
@@ -94,11 +109,15 @@ def refine_mask_by_colour(
     bg_lab = rgb_to_lab(bg_u8)[0]
     d_subj = np.sqrt(np.sum((lab - subj_lab) ** 2, axis=-1))
     d_bg = np.sqrt(np.sum((lab - bg_lab) ** 2, axis=-1))
+    warm = _warm_fur_pixels(rgb)
 
     refined = hard.copy()
     # Prefer subject when clearly closer; prefer background when clearly closer.
     refined[band & (d_subj + min_advantage < d_bg)] = True
-    refined[band & (d_bg + min_advantage < d_subj)] = False
+    carve = band & (d_bg + min_advantage < d_subj) & ~warm
+    refined[carve] = False
+    # Pull warm edge pixels that rembg dropped back into the subject.
+    refined[band & warm & (d_subj < d_bg + 8.0)] = True
 
     alpha = np.where(refined, 255, 0).astype(np.uint8)
     logger.info(
@@ -110,6 +129,79 @@ def refine_mask_by_colour(
         alpha=alpha,
         model=mask.model,
         foreground_fraction=float(refined.mean()),
+    )
+
+
+def heal_mask_notches(
+    mask: SubjectMask,
+    *,
+    close_iterations: int = 8,
+    max_fill_px: int | None = None,
+) -> SubjectMask:
+    """Fill small concave bites in the subject silhouette.
+
+    Open crown notches are not closed by morphology (they open to the
+    exterior). Instead, fill compact background pockets that see subject on
+    opposite sides (or on ≥3 sides) within ``close_iterations`` px. Long
+    corridors (leg gaps) are rejected by a bbox-extent cap.
+    """
+    from scipy import ndimage
+
+    hard = harden_mask(mask).binary
+    if not hard.any() or hard.all():
+        return mask
+    r = max(1, int(close_iterations))
+    left = np.zeros_like(hard)
+    right = np.zeros_like(hard)
+    up = np.zeros_like(hard)
+    down = np.zeros_like(hard)
+    for i in range(1, r + 1):
+        left[:, i:] |= hard[:, :-i]
+        right[:, :-i] |= hard[:, i:]
+        up[i:, :] |= hard[:-i, :]
+        down[:-i, :] |= hard[i:, :]
+    pinch = (left & right) | (up & down)
+    dirs = left.astype(np.uint8) + right + up + down
+    cupped = (~hard) & (pinch | (dirs >= 3))
+    # Tiny internal pinholes only — large closing bridges leg gaps.
+    closed = ndimage.binary_closing(hard, iterations=1)
+    candidates = cupped | (closed & ~hard)
+    if not candidates.any():
+        return mask
+    limit = (
+        int(max_fill_px)
+        if max_fill_px is not None
+        else int(r * r * 4)
+    )
+    max_extent = 2 * r + 2
+    labelled, n = ndimage.label(candidates)
+    healed = hard.copy()
+    filled = 0
+    for comp_id in range(1, n + 1):
+        comp = labelled == comp_id
+        area = int(comp.sum())
+        if area <= 0 or area > limit:
+            continue
+        ys, xs = np.where(comp)
+        if (int(ys.max()) - int(ys.min()) + 1) > max_extent:
+            continue
+        if (int(xs.max()) - int(xs.min()) + 1) > max_extent:
+            continue
+        healed |= comp
+        filled += area
+    if filled == 0:
+        return mask
+    alpha = np.where(healed, 255, 0).astype(np.uint8)
+    logger.info(
+        "Healed subject mask notches: +%d px (fg %.1f%% → %.1f%%)",
+        filled,
+        100 * hard.mean(),
+        100 * healed.mean(),
+    )
+    return SubjectMask(
+        alpha=alpha,
+        model=mask.model,
+        foreground_fraction=float(healed.mean()),
     )
 
 
@@ -364,13 +456,14 @@ def _contrasting_background_family(
             dtype=np.uint8,
         )
     elif mean_l <= 50:
+        # Keep the pool cool — cream/warm greys compete with animal coats.
         pool = np.array(
             [
                 [230, 236, 245],
                 [210, 220, 235],
-                [245, 240, 230],
                 [200, 210, 220],
                 [180, 195, 215],
+                [160, 180, 205],
             ],
             dtype=np.uint8,
         )
@@ -438,6 +531,16 @@ def _nearest_family_swatch(rgb: np.ndarray, family: np.ndarray) -> np.ndarray:
     return best
 
 
+def _is_warm_coat_like_rgb(rgb: np.ndarray) -> bool:
+    """True for cream/tan/gold paints that must not survive as background."""
+    r, g, b = (int(x) for x in np.asarray(rgb, dtype=np.int16).reshape(3))
+    if r < 120:
+        return False
+    warm = r > g + 6 and r > b + 8
+    cream = r >= 170 and g >= 140 and b >= 100 and r >= b + 8
+    return bool(warm or cream)
+
+
 def enforce_subject_background_separation(
     labels: np.ndarray,
     palette: np.ndarray,
@@ -453,6 +556,10 @@ def enforce_subject_background_separation(
        distant subject-coloured islands as well as edge bleed).
     2. Within ``separation_mm`` of the subject on A4, a background fill may not
        use a *different* colour within ``min_delta_e`` of any subject paint.
+
+    Warm cream/tan background fills are always offenders (even when Lab ΔE to
+    every subject swatch is ≥ ``min_delta_e``) — those blocks look like
+    leftover sheet/path geometry behind golden coats.
 
     Offending background pixels are remapped onto a small cool abstract family
     (not a single flat wash) so multi-block backgrounds can survive; subject
@@ -496,7 +603,7 @@ def enforce_subject_background_separation(
         if c in subj_colours:
             continue
         min_de = min(float(dist[c, s]) for s in subj_colours)
-        if min_de < float(min_delta_e):
+        if min_de < float(min_delta_e) or _is_warm_coat_like_rgb(pal[c]):
             offenders.add(c)
     # Local reinforcement: anything left in the separation band that still
     # sits too close after palette edits is also an offender.
@@ -506,7 +613,7 @@ def enforce_subject_background_separation(
             if c in subj_colours:
                 continue
             min_de = min(float(dist[c, s]) for s in subj_colours)
-            if min_de < float(min_delta_e):
+            if min_de < float(min_delta_e) or _is_warm_coat_like_rgb(pal[c]):
                 offenders.add(c)
 
     if not offenders:
@@ -519,6 +626,8 @@ def enforce_subject_background_separation(
     safe_indices: list[int] = []
     for idx, rgb in enumerate(pal):
         if idx in subj_colours or idx in offenders:
+            continue
+        if _is_warm_coat_like_rgb(rgb):
             continue
         stacked = np.vstack([rgb, subj_pal])
         if float(colour_distance_matrix(stacked)[0, 1:].min()) >= float(min_delta_e):
