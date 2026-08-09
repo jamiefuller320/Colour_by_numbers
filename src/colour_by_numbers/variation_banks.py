@@ -63,7 +63,7 @@ ANIMAL_VARIATIONS: tuple[VariationSlot, ...] = (
     ),
     _slot(
         "oblique three-quarter",
-        "simple yard",
+        "cool abstract panels",
         "FULL BODY angled toward viewer, three-quarter standing pose, legs and tail visible",
         "oblique",
         "full_body",
@@ -112,7 +112,7 @@ ANIMAL_VARIATIONS: tuple[VariationSlot, ...] = (
     ),
     _slot(
         "action stride",
-        "open field",
+        "cool abstract field panels",
         "FULL BODY mid-stride or playful motion, all legs visible, simple ground",
         "side",
         "full_body",
@@ -141,7 +141,7 @@ ANIMAL_VARIATIONS: tuple[VariationSlot, ...] = (
     ),
     _slot(
         "lying relaxed",
-        "soft blanket",
+        "cool abstract colour panels",
         "FULL BODY lying stretched along the frame, whole torso and all four legs visible, calm pose",
         "side",
         "full_body",
@@ -203,7 +203,7 @@ HORSE_VARIATIONS: tuple[VariationSlot, ...] = (
     ),
     _slot(
         "canter",
-        "open field",
+        "cool abstract field panels",
         "horse in canter mid-stride, simple horizon",
         "side",
         "full_body",

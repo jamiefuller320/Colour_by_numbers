@@ -329,6 +329,15 @@ def build_outline_page(
                 working_labels = absorb_small_regions(
                     working_labels, min_area=up_min, protected=eye_mask
                 )
+            from .eyes import absorb_muzzle_specks
+
+            working_labels = absorb_muzzle_specks(
+                working_labels,
+                working_palette,
+                category=palette_category,
+                protected=eye_mask,
+                max_area=max(up_min * 2, 48),
+            )
 
     # Colourable blocks: ≥min wide AND high on the final canvas, fitting a
     # min-diameter tip circle. Anything smaller becomes black line detail.

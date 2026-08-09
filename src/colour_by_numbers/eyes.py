@@ -247,6 +247,121 @@ def relaxed_eye_thresholds(
     )
 
 
+def absorb_muzzle_specks(
+    labels: np.ndarray,
+    palette: np.ndarray,
+    *,
+    category: str | None,
+    protected: np.ndarray | None = None,
+    max_area: int | None = None,
+) -> np.ndarray:
+    """Absorb small nose/snout blemishes that survive general region cleanup.
+
+    Fal illustrations often leave a light fleck on the nose leather or a dark
+    island on the bridge. Eyes stay protected; the main nose leather block is
+    kept; only compact high-contrast speckles in the snout neighbourhood merge
+    into their longest-border neighbour.
+    """
+    from .simplify import _neighbour_colour_votes
+
+    if not portrait_subject(category):
+        return labels.astype(np.int32, copy=True)
+
+    current = labels.astype(np.int32, copy=True)
+    h, w = current.shape
+    face = face_region_mask((h, w))
+    if not face.any():
+        return current
+
+    # Include the lower muzzle under the classic eye band.
+    ys, xs = np.where(face)
+    y0, y1 = int(ys.min()), int(ys.max())
+    x0, x1 = int(xs.min()), int(xs.max())
+    bh = max(1, y1 - y0 + 1)
+    snout = face.copy()
+    snout[y0 + int(bh * 0.35) : min(h, y1 + int(bh * 0.55) + 1), x0 : x1 + 1] = True
+
+    lab = rgb_to_lab(palette)
+    luma = lab[:, 0]
+    structure = np.ones((3, 3), dtype=bool)
+    protect = (
+        protected.astype(bool)
+        if protected is not None and protected.shape == current.shape and protected.any()
+        else None
+    )
+
+    # Largest dark face blob ≈ nose leather (keep it).
+    nose = np.zeros((h, w), dtype=bool)
+    best_area = 0
+    for colour in np.unique(current):
+        idx = int(colour)
+        if idx >= len(luma) or float(luma[idx]) > 42.0:
+            continue
+        for component in _iter_components(current, idx, structure):
+            part = component & snout
+            area = int(part.sum())
+            if area > best_area:
+                best_area = area
+                nose = part
+    if best_area < 8:
+        return current
+
+    zone = ndimage.binary_dilation(nose, iterations=10) | snout
+    area_cap = (
+        int(max_area)
+        if max_area is not None
+        else max(48, min(int(best_area * 0.85), int(h * w * 0.012)))
+    )
+    luma_map = luma[np.clip(current, 0, len(luma) - 1)]
+    # Halo around the nose leather catches bridge flecks behind the tip.
+    nose_halo = ndimage.binary_dilation(nose, iterations=8)
+
+    absorbed = 0
+    for colour in list(np.unique(current)):
+        idx = int(colour)
+        for component in list(_iter_components(current, idx, structure)):
+            part = component & zone
+            if not part.any():
+                continue
+            # Require most of the component to sit in the snout zone.
+            if int(part.sum()) < int(0.55 * component.sum()):
+                continue
+            area = int(component.sum())
+            if area <= 0 or area > area_cap:
+                continue
+            if protect is not None and (protect & component).any():
+                continue
+            # Keep the main nose leather.
+            if nose.any() and int((component & nose).sum()) >= int(0.7 * best_area):
+                continue
+            contrast = abs(_local_darkness_score(component, luma_map))
+            on_nose = bool((nose_halo & component).any())
+            # Light fleck on dark nose, or dark fleck on the bridge/snout.
+            dark_fleck = float(luma[idx]) <= 48.0 and on_nose
+            if contrast < 6.0 and not on_nose and not dark_fleck:
+                continue
+            if not on_nose and contrast < 10.0:
+                continue
+            votes = _neighbour_colour_votes(current, component)
+            if votes.size == 0:
+                continue
+            if idx < votes.size:
+                votes = votes.copy()
+                votes[idx] = 0
+            if votes.max() == 0:
+                continue
+            current[component] = int(votes.argmax())
+            absorbed += 1
+
+    if absorbed:
+        import logging
+
+        logging.getLogger(__name__).info(
+            "Absorbed %d muzzle speck component(s)", absorbed
+        )
+    return current
+
+
 def emphasize_protected_pupils(
     labels: np.ndarray,
     palette: np.ndarray,

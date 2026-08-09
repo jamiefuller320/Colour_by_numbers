@@ -563,13 +563,21 @@ def prepare_subject_image(
         if firm_border:
             mask = harden_mask(mask)
         mask = align_mask(mask, rgb.size, firm=firm_border)
+    from .contrast import (
+        heal_mask_notches,
+        recover_subject_mask,
+        recolour_reclaimed_subject_pixels,
+        refine_mask_by_colour,
+    )
+
     if colour_refine:
-        from .contrast import refine_mask_by_colour
-
         mask = refine_mask_by_colour(rgb, mask)
+        pre_heal = mask
+        mask = heal_mask_notches(mask)
+        if mask.foreground_fraction > pre_heal.foreground_fraction + 0.001:
+            # Cool teal bites in the fal plate must become fur once healed.
+            rgb = recolour_reclaimed_subject_pixels(rgb, pre_heal, mask)
     # Fill holes and reclaim truncated bodies (e.g. pale chest treated as bg).
-    from .contrast import recover_subject_mask, recolour_reclaimed_subject_pixels
-
     pre_recover = mask
     mask = recover_subject_mask(rgb, mask)
     if mask.foreground_fraction > pre_recover.foreground_fraction + 0.01:
@@ -588,9 +596,11 @@ def prepare_subject_image(
         else:
             cropped, mask = rgb, mask
         if colour_refine:
-            from .contrast import refine_mask_by_colour
-
             mask = refine_mask_by_colour(cropped, mask)
+            pre_heal = mask
+            mask = heal_mask_notches(mask)
+            if mask.foreground_fraction > pre_heal.foreground_fraction + 0.001:
+                cropped = recolour_reclaimed_subject_pixels(cropped, pre_heal, mask)
         pre_recover = mask
         mask = recover_subject_mask(cropped, mask)
         if mask.foreground_fraction > pre_recover.foreground_fraction + 0.01:

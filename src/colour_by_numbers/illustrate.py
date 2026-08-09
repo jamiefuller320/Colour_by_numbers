@@ -141,8 +141,10 @@ def illustration_prompt(
             f"{region_mm:g}mm high when printed on A4 where possible "
             f"(finer accents as black line), "
             "prefer many small interlocking wedges over large flat areas, "
-            "background fills must stay a different hue family from the subject "
+            "background fills must be 2–4 large cool abstract panels "
+            "(blue/teal/sage) — never cream, tan, grass, dirt, or coat colours — "
             "so the silhouette reads clearly, "
+            "clean muzzle with no random spots or blemishes on the nose, "
             "no gradients, no photorealism, no text, "
             "full subject in frame with a small margin, not over-cropped"
         )
@@ -549,6 +551,16 @@ def prepare_illustration_for_colouring(
         labels, min_area=region.min_area_px, protected=eye_mask
     )
     labels = absorb_thin_regions(labels, min_thickness=tip, protected=eye_mask)
+    # Nose flecks / bridge islands that are large enough to survive A4 absorb.
+    from .eyes import absorb_muzzle_specks
+
+    labels = absorb_muzzle_specks(
+        labels,
+        active,
+        category=category,
+        protected=eye_mask,
+        max_area=max(region.min_area_px * 2, int(tip * tip * 3)),
+    )
     # Recompute after absorb so catchlights / merged lids stay covered.
     eye_protected = compute_eye_protection_mask(
         labels,
