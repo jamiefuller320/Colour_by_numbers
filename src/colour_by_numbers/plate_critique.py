@@ -28,6 +28,10 @@ PLATE_ISSUE_TAGS: dict[str, str] = {
     "colours": "Palette too flat, muddy, or too few regions",
     "proportions": "Head/body proportions or pose wrong",
     "background": "Background too busy or poor contrast",
+    "silhouette_notch": "Background block eats into the subject silhouette (crown/ear notch)",
+    "cream_background": "Warm cream/tan fills left in the background behind a warm subject",
+    "busy_background": "Background has too many figurative or fragmented blocks",
+    "muzzle_fleck": "Random spot or blemish on the nose / muzzle carried into the plate",
     "missing_detail": "Important feature missing (generic)",
     "too_simple": "Over-simplified — lost character",
     "wrong_subject": "Wrong subject or unrecognisable",
@@ -35,9 +39,24 @@ PLATE_ISSUE_TAGS: dict[str, str] = {
     "other": "Other (describe in notes)",
 }
 
+# Tags produced by the rules-based batch auto-tagger (subset of PLATE_ISSUE_TAGS).
+AUTO_ISSUE_TAGS = frozenset(
+    {
+        "silhouette_notch",
+        "cream_background",
+        "busy_background",
+        "muzzle_fleck",
+        "background",
+        "outline",
+        "nose_detail",
+    }
+)
+
 # Tags that only make sense for animal / people faces. Never become global
 # hints applied to boats, aircraft, cars, flowers, etc.
-MAMMAL_FACE_TAGS = frozenset({"nose_detail", "mouth_detail", "ears"})
+MAMMAL_FACE_TAGS = frozenset(
+    {"nose_detail", "mouth_detail", "ears", "muzzle_fleck"}
+)
 ANIMAL_OR_PEOPLE_TAGS = frozenset({"eyes", "proportions", *MAMMAL_FACE_TAGS})
 VEHICLE_CATEGORIES = frozenset({"aircraft", "cars", "boats", "vehicles", "trains"})
 FLOWER_CATEGORIES = frozenset({"flowers", "plants"})
@@ -78,6 +97,22 @@ TAG_PROMPT_HINTS: dict[str, str] = {
     ),
     "proportions": "accurate breed proportions and recognisable pose",
     "background": "plain white or pale background, strong subject contrast",
+    "silhouette_notch": (
+        "smooth unbroken subject silhouette — no background colour blocks "
+        "cutting into the crown, ears, or outer outline"
+    ),
+    "cream_background": (
+        "background fills must be cool blue/teal/sage panels only — never "
+        "cream, tan, or coat-coloured blocks behind the subject"
+    ),
+    "busy_background": (
+        "2–4 large flat cool abstract colour panels only — no grass, dirt, "
+        "blankets, furniture, or busy figurative scenery"
+    ),
+    "muzzle_fleck": (
+        "clean muzzle and nose leather with no random spots, flecks, or "
+        "blemish islands on the bridge of the nose"
+    ),
     "missing_detail": "include all diagnostic breed or subject features as colour blocks",
     "too_simple": (
         "enough distinct colour regions to show form and depth; preserve "

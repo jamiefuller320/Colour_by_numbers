@@ -1,0 +1,26 @@
+{
+  "set_id": "dogs-golden-retriever-20260808-5d1654",
+  "source": "user feedback 2026-08-08",
+  "slots": {
+    "p01": {
+      "rating": "fail",
+      "issues": ["silhouette_notch", "outline"],
+      "notes": "Strange blue block above the head eating into the correct outline"
+    },
+    "p02": {
+      "rating": "needs_work",
+      "issues": ["cream_background", "background"],
+      "notes": "Body better but cream block in background a bit odd"
+    },
+    "p04": {
+      "rating": "fail",
+      "issues": ["busy_background", "background"],
+      "notes": "Better but strange background; not attractive even unfiltered"
+    },
+    "p06": {
+      "rating": "needs_work",
+      "issues": ["muzzle_fleck", "nose_detail"],
+      "notes": "Good overall but original shows blemish on nose that carries through"
+    }
+  }
+}
