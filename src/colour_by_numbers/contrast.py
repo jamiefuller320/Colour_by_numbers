@@ -116,8 +116,8 @@ def refine_mask_by_colour(
     refined[band & (d_subj + min_advantage < d_bg)] = True
     carve = band & (d_bg + min_advantage < d_subj) & ~warm
     refined[carve] = False
-    # Pull warm edge pixels that rembg dropped back into the subject.
-    refined[band & warm & (d_subj < d_bg + 8.0)] = True
+    # Pull warm edge pixels that rembg dropped — only when nearer subject than bg.
+    refined[band & warm & (d_subj + 1.0 < d_bg)] = True
 
     alpha = np.where(refined, 255, 0).astype(np.uint8)
     logger.info(
@@ -326,10 +326,9 @@ def recover_subject_mask(
         g = rgb[:, :, 1].astype(np.int16)
         b = rgb[:, :, 2].astype(np.int16)
         warm = (r > g + 8) & (r > b + 8) & (r > 100)
-        # Only reclaim subject-like / warm torso pixels — never the whole ground.
-        # Slightly permissive on d_subj vs d_bg so pale chest wash under a
-        # portrait head can rejoin before hole-fill bridges the warm accents.
-        like = (d_subj < d_bg + 6.0) | (warm & (d_subj < 42))
+        # Only reclaim subject-like / warm torso pixels — never cream side panels.
+        # Require nearer-to-subject than background (no absolute Lab radius).
+        like = (d_subj + 1.5 < d_bg) | (warm & (d_subj + 2.0 < d_bg))
         under_keep = under & like
         # Geodesic grow from the current silhouette into those candidates.
         grown = filled.copy()
@@ -339,23 +338,9 @@ def recover_subject_mask(
             if not take.any():
                 break
             grown |= take
-        # Portrait torso completion: fill the under-chin column, but drop any
-        # component that touches the left/right frame (true side background).
-        inset = int(0.05 * max(1, x1e - x0e))
-        col = np.zeros_like(filled)
-        col[y_med:, max(0, x0e + inset) : max(0, x1e - inset)] = True
-        extra = col & ~grown
-        if extra.any():
-            labelled_extra, n_extra = ndimage.label(extra)
-            keep_extra = np.zeros_like(extra)
-            for idx in range(1, n_extra + 1):
-                comp = labelled_extra == idx
-                if comp[:, 0].any() or comp[:, -1].any():
-                    continue
-                keep_extra |= comp
-            grown |= keep_extra
+        # Mild close/fill only — avoid flooding cream portrait backgrounds.
         grown = ndimage.binary_fill_holes(
-            ndimage.binary_closing(grown, iterations=max(8, close_iterations // 2))
+            ndimage.binary_closing(grown, iterations=max(3, close_iterations // 3))
         )
         logger.info(
             "Recovered truncated subject mask: fg %.1f%% → %.1f%%",
@@ -482,18 +467,23 @@ def _contrasting_background_family(
 
     subj = np.asarray(subject_palette, dtype=np.uint8).reshape(-1, 3)
     kept: list[np.ndarray] = []
+    best_fallback: np.ndarray | None = None
+    best_de = -1.0
     for cand in pool:
         if subj.size == 0:
             kept.append(cand)
             continue
         stacked = np.vstack([cand, subj])
-        if float(colour_distance_matrix(stacked)[0, 1:].min()) >= float(min_delta_e):
+        min_de = float(colour_distance_matrix(stacked)[0, 1:].min())
+        if min_de >= float(min_delta_e):
             kept.append(cand)
+        elif min_de > best_de:
+            best_de = min_de
+            best_fallback = cand
     if not kept:
-        fallback = _contrasting_background_rgb(
-            subject_mean, subject_palette, min_delta_e=min_delta_e
-        )
-        kept = [fallback]
+        # Do not recurse through `_contrasting_background_rgb` — pick the
+        # farthest pool swatch even when every candidate is under budget.
+        kept = [best_fallback if best_fallback is not None else pool[0]]
     # Prefer a small multi-block set (light / mid / deep cool).
     if len(kept) > 4:
         kept = kept[:4]
@@ -529,6 +519,75 @@ def _nearest_family_swatch(rgb: np.ndarray, family: np.ndarray) -> np.ndarray:
             best = cand
             best_d = d
     return best
+
+
+def reclaim_warm_subject_edge(
+    image: Image.Image,
+    labels: np.ndarray,
+    palette: np.ndarray,
+    subject_mask: np.ndarray,
+    *,
+    band_px: int = 14,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Pull warm source pixels just outside the mask back into the subject.
+
+    Stops cool separation from painting crown/ear notches that were still fur
+    in the illustration but fell outside a slightly under-covering mask.
+    Limited to a dilation band so large cream background panels stay out.
+    """
+    from scipy import ndimage
+
+    work = labels.astype(np.int32, copy=True)
+    pal = palette.astype(np.uint8, copy=True)
+    mask = subject_mask.astype(bool)
+    rgb = np.asarray(image.convert("RGB"), dtype=np.uint8)
+    if rgb.shape[:2] != work.shape:
+        rgb = np.asarray(
+            image.convert("RGB").resize(
+                (work.shape[1], work.shape[0]), Image.Resampling.BILINEAR
+            ),
+            dtype=np.uint8,
+        )
+    if mask.shape != work.shape or not mask.any() or bool(mask.all()):
+        return work, pal, mask
+
+    band = ndimage.binary_dilation(mask, iterations=max(1, int(band_px))) & ~mask
+    warm = _warm_fur_pixels(rgb)
+    if not (band & warm).any():
+        return work, pal, mask
+
+    subj_cols = [int(c) for c in np.unique(work[mask])]
+    if not subj_cols:
+        return work, pal, mask
+    # Only reclaim when the source pixel is nearer the subject mean than bg.
+    lab = rgb_to_lab(rgb)
+    subj_mean = mean_rgb(rgb[mask])
+    bg_mean = mean_rgb(rgb[~mask]) if (~mask).any() else subj_mean
+    subj_lab = rgb_to_lab(
+        np.clip(np.round(subj_mean), 0, 255).astype(np.uint8).reshape(1, 3)
+    )[0]
+    bg_lab = rgb_to_lab(
+        np.clip(np.round(bg_mean), 0, 255).astype(np.uint8).reshape(1, 3)
+    )[0]
+    d_subj = np.sqrt(np.sum((lab - subj_lab) ** 2, axis=-1))
+    d_bg = np.sqrt(np.sum((lab - bg_lab) ** 2, axis=-1))
+    hit = band & warm & (d_subj + 2.0 < d_bg)
+    if not hit.any():
+        return work, pal, mask
+
+    subj_rgb = pal[subj_cols]
+    swatch_lab = rgb_to_lab(subj_rgb)
+    hit_lab = lab[hit]
+    d = ((hit_lab[:, None, :] - swatch_lab[None, :, :]) ** 2).sum(-1)
+    nearest = np.asarray(subj_cols, dtype=np.int32)[d.argmin(axis=1)]
+    work[hit] = nearest
+    new_mask = mask | hit
+    logger.info(
+        "Reclaimed %d warm edge px into subject (band %dpx)",
+        int(hit.sum()),
+        band_px,
+    )
+    return work, pal, new_mask
 
 
 def _is_warm_coat_like_rgb(rgb: np.ndarray) -> bool:

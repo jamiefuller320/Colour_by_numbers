@@ -310,9 +310,11 @@ def absorb_muzzle_specks(
     area_cap = (
         int(max_area)
         if max_area is not None
-        else max(24, min(int(best_area * 0.55), int(h * w * 0.008)))
+        else max(48, min(int(best_area * 0.85), int(h * w * 0.012)))
     )
     luma_map = luma[np.clip(current, 0, len(luma) - 1)]
+    # Halo around the nose leather catches bridge flecks behind the tip.
+    nose_halo = ndimage.binary_dilation(nose, iterations=8)
 
     absorbed = 0
     for colour in list(np.unique(current)):
@@ -322,7 +324,7 @@ def absorb_muzzle_specks(
             if not part.any():
                 continue
             # Require most of the component to sit in the snout zone.
-            if int(part.sum()) < int(0.7 * component.sum()):
+            if int(part.sum()) < int(0.55 * component.sum()):
                 continue
             area = int(component.sum())
             if area <= 0 or area > area_cap:
@@ -333,9 +335,12 @@ def absorb_muzzle_specks(
             if nose.any() and int((component & nose).sum()) >= int(0.7 * best_area):
                 continue
             contrast = abs(_local_darkness_score(component, luma_map))
-            # Light fleck on dark nose or dark fleck on mid fur.
-            on_nose = bool((ndimage.binary_dilation(nose, iterations=2) & component).any())
-            if contrast < 8.0 and not on_nose:
+            on_nose = bool((nose_halo & component).any())
+            # Light fleck on dark nose, or dark fleck on the bridge/snout.
+            dark_fleck = float(luma[idx]) <= 48.0 and on_nose
+            if contrast < 6.0 and not on_nose and not dark_fleck:
+                continue
+            if not on_nose and contrast < 10.0:
                 continue
             votes = _neighbour_colour_votes(current, component)
             if votes.size == 0:

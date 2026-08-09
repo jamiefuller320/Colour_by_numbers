@@ -493,6 +493,22 @@ def create_colour_by_numbers(
             (width, height), resample
         )
         mask_bool = np.asarray(mask_img, dtype=np.uint8) >= 128
+        # Pull warm illustration fur just outside the matte back into the
+        # subject before dual simplify / cool separation can notch it blue.
+        from .contrast import reclaim_warm_subject_edge
+
+        q_labels, q_palette, mask_bool = reclaim_warm_subject_edge(
+            prepared,
+            quantized.labels,
+            quantized.palette,
+            mask_bool,
+            band_px=max(6, int(round(min(width, height) * 0.015))),
+        )
+        quantized = QuantizedImage(
+            labels=q_labels,
+            palette=q_palette,
+            preview=preview_from_labels(q_labels, q_palette),
+        )
         override_kwargs = dict(
             min_region_area=min_region_area,
             max_regions=max_regions,
@@ -549,6 +565,18 @@ def create_colour_by_numbers(
                 (up_w, up_h), Image.Resampling.NEAREST
             )
         ) > 0
+        # Full-res warm-edge reclaim (upsample can reintroduce thin notches).
+        from .contrast import reclaim_warm_subject_edge
+
+        labels, palette, mask_up = reclaim_warm_subject_edge(
+            prepared,
+            labels,
+            palette,
+            mask_up,
+            band_px=max(8, int(round(min(up_w, up_h) * 0.018))),
+        )
+        if silhouette_outline:
+            silhouette_bool = mask_up
         up_stroke = (
             int(line_width)
             if line_width is not None

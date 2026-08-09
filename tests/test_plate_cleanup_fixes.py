@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw
 from colour_by_numbers.contrast import (
     enforce_subject_background_separation,
     heal_mask_notches,
+    reclaim_warm_subject_edge,
     refine_mask_by_colour,
 )
 from colour_by_numbers.eyes import absorb_muzzle_specks
@@ -43,6 +44,38 @@ def test_heal_mask_notches_fills_small_crown_bite() -> None:
     assert healed.foreground_fraction > mask.foreground_fraction
 
 
+def test_contrasting_family_no_recursion_when_pool_blocked() -> None:
+    """Subject paints that defeat every pool swatch must not recurse forever."""
+    from colour_by_numbers.contrast import _contrasting_background_family
+
+    # Include every cool-pool neighbour so ΔE gates fail for all candidates.
+    subj = np.array(
+        [
+            [70, 95, 125],
+            [55, 75, 105],
+            [100, 120, 140],
+            [120, 145, 170],
+            [45, 65, 90],
+            [230, 236, 245],
+            [210, 220, 235],
+            [200, 210, 220],
+            [180, 195, 215],
+            [160, 180, 205],
+            [210, 222, 235],
+            [180, 200, 220],
+            [140, 165, 195],
+            [100, 125, 155],
+            [160, 185, 210],
+        ],
+        dtype=np.uint8,
+    )
+    family = _contrasting_background_family(
+        subj.mean(axis=0), subj, min_delta_e=80.0
+    )
+    assert family.shape[0] >= 1
+    assert family.shape[1] == 3
+
+
 def test_separation_remaps_warm_cream_background() -> None:
     labels = np.zeros((40, 60), dtype=np.int32)
     labels[:, :] = 1  # cool bg
@@ -65,6 +98,25 @@ def test_separation_remaps_warm_cream_background() -> None:
     rgb = new_pal[cream_idx]
     # Cream must not survive as a warm coat-like background fill.
     assert not (int(rgb[0]) >= 170 and int(rgb[0]) >= int(rgb[2]) + 8)
+
+
+def test_reclaim_warm_edge_repairs_crown_notch() -> None:
+    image = Image.new("RGB", (60, 60), (90, 120, 150))
+    draw = ImageDraw.Draw(image)
+    draw.ellipse((10, 10, 50, 50), fill=(210, 160, 90))
+    labels = np.zeros((60, 60), dtype=np.int32)
+    labels[:, :] = 1
+    labels[15:50, 15:50] = 0
+    # Notch already painted cool in labels.
+    labels[10:16, 25:35] = 1
+    palette = np.array([[210, 160, 90], [90, 120, 150]], dtype=np.uint8)
+    mask = np.zeros((60, 60), dtype=bool)
+    mask[15:50, 15:50] = True
+    new_labels, _pal, new_mask = reclaim_warm_subject_edge(
+        image, labels, palette, mask, band_px=10
+    )
+    assert bool(new_mask[12, 30])
+    assert int(new_labels[12, 30]) == 0
 
 
 def test_absorb_muzzle_specks_removes_nose_fleck() -> None:
