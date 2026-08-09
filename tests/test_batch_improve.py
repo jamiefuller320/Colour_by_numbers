@@ -16,7 +16,9 @@ from colour_by_numbers.batch_improve import (
     detect_muzzle_fleck,
     detect_silhouette_notch,
     format_batch_report_md,
+    select_regen_slots,
     BatchImproveReport,
+    SlotAssessment,
 )
 from colour_by_numbers.plate_critique import PLATE_ISSUE_TAGS, collate_critiques
 
@@ -145,6 +147,51 @@ def test_assessments_to_critiques_and_collate(tmp_path: Path) -> None:
     assert report.by_tag.get("silhouette_notch", 0) >= 1
     dog_hints = " ".join(l.prompt_hint for l in report.lessons if l.category == "dogs")
     assert "silhouette" in dog_hints.lower() or "crown" in dog_hints.lower()
+
+
+def test_select_regen_slots_prefers_force_slots() -> None:
+    assessments = [
+        SlotAssessment(
+            plate_id="s/p02",
+            slot="p02",
+            category="dogs",
+            subject="golden retriever",
+            rating="fail",
+            issues=["cream_background"],
+            weak=True,
+        ),
+        SlotAssessment(
+            plate_id="s/p06",
+            slot="p06",
+            category="dogs",
+            subject="golden retriever",
+            rating="needs_work",
+            issues=["silhouette_notch"],
+            weak=True,
+        ),
+        SlotAssessment(
+            plate_id="s/p01",
+            slot="p01",
+            category="dogs",
+            subject="golden retriever",
+            rating="fail",
+            issues=["silhouette_notch"],
+            weak=True,
+        ),
+    ]
+    # Without prefer: fails first → p01, p02 (p06 needs_work loses).
+    plain = [a.slot for a in select_regen_slots(assessments, max_slots=2)]
+    assert plain == ["p01", "p02"]
+    # With prefer: forced p06 wins a seat even vs other fails.
+    forced = [
+        a.slot
+        for a in select_regen_slots(
+            assessments, max_slots=2, prefer_slots={"p06", "p01"}
+        )
+    ]
+    assert forced[0] in {"p01", "p06"}
+    assert "p06" in forced
+    assert "p02" not in forced
 
 
 def test_format_batch_report_md() -> None:

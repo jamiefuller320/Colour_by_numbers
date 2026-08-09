@@ -622,6 +622,34 @@ def _load_manifest_slots(manifest_path: Path) -> list[dict]:
     return list(plan.get("slots") or [])
 
 
+def select_regen_slots(
+    assessments: list[SlotAssessment],
+    *,
+    max_slots: int = 3,
+    prefer_slots: set[str] | None = None,
+) -> list[SlotAssessment]:
+    """Pick weak slots to regenerate; forced slots win over severity ranking."""
+    weak = [a for a in assessments if a.weak]
+    prefer = prefer_slots or set()
+    # Prefer explicitly forced slots, then fail > needs_work, then structural tags.
+    rank = {"fail": 0, "needs_work": 1, "pass": 2}
+
+    def _severity(item: SlotAssessment) -> tuple:
+        structural = [
+            t
+            for t in item.issues
+            if t in {"silhouette_notch", "cream_background", "busy_background"}
+        ]
+        return (
+            0 if item.slot in prefer else 1,
+            rank.get(item.rating, 9),
+            -len(structural),
+            item.slot,
+        )
+
+    return sorted(weak, key=_severity)[: max(0, int(max_slots))]
+
+
 def regenerate_weak_slots(
     *,
     set_dir: Path,
@@ -633,24 +661,15 @@ def regenerate_weak_slots(
     seed_base: int = 200,
     output_dir: Path | None = None,
     max_slots: int = 3,
+    prefer_slots: set[str] | None = None,
 ) -> list[str]:
     """Re-fal weak slots with lesson-seeded prompts; write into set_dir pairs."""
     from .discover import SubjectType
     from .generate import generate_colouring_page
 
-    weak = [a for a in assessments if a.weak]
-    # Prefer fail > needs_work, then more primary structural issues.
-    rank = {"fail": 0, "needs_work": 1, "pass": 2}
-
-    def _severity(item: SlotAssessment) -> tuple:
-        structural = [
-            t
-            for t in item.issues
-            if t in {"silhouette_notch", "cream_background", "busy_background"}
-        ]
-        return (rank.get(item.rating, 9), -len(structural), item.slot)
-
-    weak = sorted(weak, key=_severity)[: max(0, int(max_slots))]
+    weak = select_regen_slots(
+        assessments, max_slots=max_slots, prefer_slots=prefer_slots
+    )
     if not weak:
         return []
 
@@ -797,6 +816,7 @@ def run_batch_improve_slice(
             subject=subject,
             output_dir=report_dir / "regenerated",
             max_slots=max_regenerate,
+            prefer_slots=force_slots,
         )
 
     # Reassess with auto-tags only so known-issue seeds do not mask improvement.
