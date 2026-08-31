@@ -254,6 +254,31 @@ result = create_colour_by_numbers(image, n_colours=16, subject_mode="isolate")
 - Always respect copyright and licensing of source photos before publishing a book.
 - Prefer images you own, public-domain sources, or material with a clear commercial licence.
 
+## Off-repo weekly code backup
+
+A Sunday GitHub Action (`.github/workflows/code-backup.yml`) snapshots tracked source plus a `git bundle --all` and uploads it to S3 using the **same credential names as [value_investor](https://github.com/jamiefuller320/value_investor)**. Copy those repository secrets here:
+
+| Secret | Notes |
+|--------|--------|
+| `BACKUP_S3_URI` | Same value as value_investor (e.g. `s3://your-bucket/ftse-value-investor/backups/`). Objects are written under `s3://<bucket>/colour-by-numbers/code/` so they stay isolated from FTSE data. |
+| `AWS_ACCESS_KEY_ID` | Same IAM user/key as value_investor |
+| `AWS_SECRET_ACCESS_KEY` | Same IAM user/key as value_investor |
+| `AWS_DEFAULT_REGION` | Same region (e.g. `eu-west-2`) |
+
+```bash
+# Local snapshot (gitignored under output/backups/)
+python src/colour_by_numbers/code_backup_cli.py snapshot
+
+# Upload when the AWS env vars / BACKUP_S3_URI are set
+python src/colour_by_numbers/code_backup_cli.py snapshot --upload --upload-monthly
+
+# Verify + extract
+python src/colour_by_numbers/code_backup_cli.py verify output/backups/colour-by-numbers-code-*.tar.gz
+python src/colour_by_numbers/code_backup_cli.py restore output/backups/colour-by-numbers-code-*.tar.gz --dest /tmp/restore
+```
+
+Weekly timestamped archives expire with your bucket lifecycle (value_investor uses 90 days on the weekly prefix; monthly pins under `monthly/` use 365 days). Run **Weekly code backup** from the Actions tab to test a first upload.
+
 ## Tests
 
 ```bash
