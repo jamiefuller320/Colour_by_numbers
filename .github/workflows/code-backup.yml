@@ -1,0 +1,166 @@
+name: Weekly code backup
+
+# Sunday snapshot of this repository uploaded to S3 with the same
+# credential names as jamiefuller320/value_investor (BACKUP_S3_URI + AWS_*).
+# Objects land under s3://<bucket>/colour-by-numbers/code/ unless BACKUP_S3_URI
+# already contains "colour-by-numbers".
+on:
+  schedule:
+    - cron: "15 13 * * 0"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Run even if a code backup already succeeded today"
+        type: boolean
+        default: false
+      upload_s3:
+        description: "Upload to BACKUP_S3_URI when configured"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: colour-by-numbers-code-backup
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.gate.outputs.should_run }}
+    steps:
+      - name: Skip if code backup already ran today
+        id: gate
+        uses: actions/github-script@v7
+        env:
+          FORCE: ${{ github.event.inputs.force || 'false' }}
+        with:
+          script: |
+            const force = process.env.FORCE === 'true';
+            if (force) {
+              core.setOutput('should_run', 'true');
+              return;
+            }
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const workflow_id = 'code-backup.yml';
+            const runId = context.runId;
+            const dayStart = new Date(Date.UTC(
+              new Date().getUTCFullYear(),
+              new Date().getUTCMonth(),
+              new Date().getUTCDate(),
+            )).toISOString();
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              owner, repo, workflow_id, per_page: 20,
+            });
+            const prior = (data.workflow_runs || []).filter((r) =>
+              r.id !== runId
+              && r.created_at >= dayStart
+              && (r.event === 'workflow_dispatch' || r.event === 'schedule')
+            );
+            const succeeded = prior.find((r) => r.conclusion === 'success');
+            if (succeeded) {
+              core.info(`Skipping — code backup already succeeded today (run ${succeeded.id})`);
+              core.setOutput('should_run', 'false');
+              return;
+            }
+            core.setOutput('should_run', 'true');
+
+  backup:
+    needs: check
+    if: needs.check.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Create code snapshot
+        id: snap
+        run: |
+          set -euo pipefail
+          python src/colour_by_numbers/code_backup_cli.py snapshot --json > /tmp/backup.json
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          data = json.loads(Path("/tmp/backup.json").read_text())
+          out = Path(os.environ["GITHUB_OUTPUT"])
+          with out.open("a", encoding="utf-8") as handle:
+              handle.write(f"archive_path={data['archive_path']}\n")
+              handle.write(f"manifest_path={data['manifest_path']}\n")
+          PY
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: colour-by-numbers-code-backup
+          path: |
+            output/backups/colour-by-numbers-code-*.tar.gz
+            output/backups/colour-by-numbers-code-*.manifest.json
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Install AWS CLI
+        if: ${{ github.event_name != 'workflow_dispatch' || format('{0}', github.event.inputs.upload_s3) != 'false' }}
+        run: |
+          set -euo pipefail
+          if ! command -v aws >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y awscli
+          fi
+          aws --version
+
+      - name: Upload to S3 (value_investor credentials)
+        if: ${{ github.event_name != 'workflow_dispatch' || format('{0}', github.event.inputs.upload_s3) != 'false' }}
+        continue-on-error: true
+        env:
+          BACKUP_S3_URI: ${{ secrets.BACKUP_S3_URI }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+        run: |
+          set -euo pipefail
+          python src/colour_by_numbers/code_backup_cli.py deliver --from-json /tmp/backup.json --upload --upload-monthly --json
+
+      - name: Backup delivery summary
+        if: always()
+        run: |
+          if [ ! -f /tmp/backup.json ]; then
+            echo "No backup.json — snapshot step did not complete"
+            exit 0
+          fi
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path("/tmp/backup.json").read_text())
+          upload = payload.get("upload") or {}
+          upload_monthly = payload.get("upload_monthly") or {}
+          manifest = payload.get("manifest") or {}
+          print(
+              f"Snapshot ok: {manifest.get('archive_name')} "
+              f"({manifest.get('bytes', 0):,} bytes, {manifest.get('file_count', 0)} files, "
+              f"commit {manifest.get('commit', '')[:12]})"
+          )
+          if upload.get("uploaded"):
+              print(f"S3 upload ok: {upload.get('archive_dest')}")
+          elif upload:
+              detail = upload.get("reason") or upload.get("error") or "not requested"
+              print(f"S3 upload skipped/failed: {detail}")
+          else:
+              print("S3 upload not attempted")
+          if upload_monthly.get("uploaded"):
+              print(
+                  f"S3 monthly pin ok: {upload_monthly.get('archive_dest')} "
+                  f"(month {upload_monthly.get('month_key')})"
+              )
+          elif upload_monthly:
+              detail = upload_monthly.get("reason") or upload_monthly.get("error") or "not requested"
+              print(f"S3 monthly pin skipped/failed: {detail}")
+          PY
