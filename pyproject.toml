@@ -20,11 +20,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "ruff>=0.4", "pre-commit>=3.0"]
 subject = ["rembg[cpu]>=2.0.50", "onnxruntime>=1.16"]
 
 [project.scripts]
 colour-by-numbers = "colour_by_numbers.cli:main"
+cbn-gha-secret-hygiene = "colour_by_numbers.gha_secret_hygiene_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
