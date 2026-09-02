@@ -1,0 +1,11 @@
+# Optional local hook — run: pre-commit install
+# CI still uses scoped ruff on changed files; this catches issues before push.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.10
+    hooks:
+      - id: ruff
+        types_or: [python, pyi]
+        args: [--fix]
+      - id: ruff-format
+        types_or: [python, pyi]
